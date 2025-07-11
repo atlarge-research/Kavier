@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kavier"
+version = "0.1.0"
+description = "Kavier: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Radu Nicolae", email = "mail@radu-nicolae.com" },
+    { name = "AtLarge Research", email = "info@atlarge-research.com" }
+]
+requires-python = ">=3.9"
+dependencies = [
+    "pydantic>=2.7",
+    "pandas>=2.2",
+    "pyarrow>=16.0",
+    "numpy",
+    "tqdm",
+    "cachetools>=5.3",
+    "rich>=13",
+    "pytest>=8.2",
+    "hypothesis>=6.102",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "hypothesis>=6.102",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "types-cachetools",
+]
+
+[project.scripts]
+kavier-perf = "performance.main:main"
+kavier-eff  = "efficiency.main:main"
+
+# ------------------------------------------------------------------
+#  Tooling
+# ------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = []
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+packages = ["simulator", "outputter", "performance", "efficiency", "library", "cli"]
+exclude = ["tests/"]

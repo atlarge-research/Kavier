@@ -1,0 +1,38 @@
+# all python specifics
+__pycache__
+
+# all macos specifics
+.DS_Store
+
+# ── Python build / packaging ─────────────
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Byte-code & caches ───────────────────
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+
+# ── Editable-install artefacts ───────────
+*.pth
+*.egg
+
+# ── Virtual-envs ─────────────────────────
+.venv/
+env/
+venv/
+
+# ── IDE / OS clutter ─────────────────────
+.vscode/
+.idea/
+
+# ── Simulator output ─────────────────────
+data/output_traces/
+**/tasks.parquet
+**/fragments.parquet
+_sim_results.txt
+
+src/reader/

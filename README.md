@@ -17,6 +17,8 @@ Kavier helps operators, researchers, and engineers predict:
 * **Sustainability** — energy, Wh/Mtoken/s, carbon emissions (kgCO2/Mtoken/s)  
 * **Financial efficiency** — €/Mtoken/s given GPU-hour prices
 
+## Structure
+
 
 ## Documentation
 

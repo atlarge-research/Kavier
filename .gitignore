@@ -35,4 +35,7 @@ data/output_traces/
 **/fragments.parquet
 _sim_results.txt
 
+# ── Fine-tuning data (private) ───────────
+finetuning-data/
+
 src/reader/

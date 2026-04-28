@@ -35,8 +35,9 @@ dev = [
 ]
 
 [project.scripts]
-kavier-perf = "performance.main:main"
-kavier-eff  = "efficiency.main:main"
+kavier-perf  = "performance.main:main"
+kavier-train = "training.main:main"
+kavier-eff   = "efficiency.main:main"
 
 # ------------------------------------------------------------------
 #  Tooling
@@ -61,5 +62,5 @@ where = ["src"]
 python_version = "3.11"
 strict = true
 mypy_path = "src"
-packages = ["simulator", "outputter", "performance", "efficiency", "library", "cli"]
+packages = ["simulator", "outputter", "performance", "training", "efficiency", "library", "cli"]
 exclude = ["tests/"]

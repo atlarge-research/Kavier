@@ -73,4 +73,32 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=1785,
         base_power_w=700,
     ),
+    # GPUs from ado-sfttrainer dataset
+    "NVIDIA-A100-80GB-PCIe": GPUSpec(
+        gpu_name="NVIDIA-A100-80GB-PCIe",
+        memory_gb=80,
+        memory_bandwidth_gbps=1935,
+        fp_16_tensor_core_tflops=312,
+        gpu_cores=6912,
+        gpu_core_max_mhz=1410,
+        base_power_w=300,
+    ),
+    "NVIDIA-H100-PCIe": GPUSpec(
+        gpu_name="NVIDIA-H100-PCIe",
+        memory_gb=80,
+        memory_bandwidth_gbps=2000,
+        fp_16_tensor_core_tflops=1513,
+        gpu_cores=14592,
+        gpu_core_max_mhz=1755,
+        base_power_w=350,
+    ),
+    "NVIDIA-A100-SXM4-80GB": GPUSpec(
+        gpu_name="NVIDIA-A100-SXM4-80GB",
+        memory_gb=80,
+        memory_bandwidth_gbps=2039,
+        fp_16_tensor_core_tflops=312,
+        gpu_cores=6912,
+        gpu_core_max_mhz=1410,
+        base_power_w=400,
+    ),
 }

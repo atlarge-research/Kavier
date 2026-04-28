@@ -68,4 +68,4 @@ def calculate_optimizer_step(
     
     return optimizer_time_s, optimizer_memory_gb
 
-# Made with Bob
+

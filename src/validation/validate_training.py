@@ -192,4 +192,4 @@ if __name__ == "__main__":
         metric_name = col.replace("_mape", "")
         print(f"{metric_name:40s}: {avg_mape:6.2f}%")
 
-# Made with Bob
+

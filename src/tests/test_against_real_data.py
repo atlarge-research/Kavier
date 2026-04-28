@@ -19,6 +19,7 @@ from library.gpu_library import GPU_SPEC_LIBRARY
 from simulator.training.forward_pass import calculate_forward_pass
 from simulator.training.backward_pass import calculate_backward_pass
 from simulator.training.optimizer import calculate_optimizer_step
+from simulator.training.overhead import calculate_training_overhead
 
 
 def load_real_data():
@@ -75,8 +76,11 @@ def simulate_training_step(row):
         gpu=gpu,
     )
     
+    # Training overhead
+    overhead_time_s = calculate_training_overhead(batch_size)
+    
     # Total
-    total_step_time_s = forward_time_s + backward_time_s + optimizer_time_s
+    total_step_time_s = forward_time_s + backward_time_s + optimizer_time_s + overhead_time_s
     
     # Calculate throughput (tokens per second)
     tokens_per_step = batch_size * seq_length
@@ -196,4 +200,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# Made with Bob
+

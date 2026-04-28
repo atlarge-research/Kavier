@@ -13,6 +13,7 @@ from library.gpu_library import GPU_SPEC_LIBRARY
 from simulator.training.forward_pass import calculate_forward_pass
 from simulator.training.backward_pass import calculate_backward_pass
 from simulator.training.optimizer import calculate_optimizer_step
+from simulator.training.overhead import calculate_training_overhead
 
 
 def test_forward_pass():
@@ -134,8 +135,11 @@ def test_full_training_step():
         gpu=gpu,
     )
     
+    # Training overhead
+    overhead_time_s = calculate_training_overhead(batch_size)
+    
     # Total
-    total_time_s = forward_time_s + backward_time_s + optimizer_time_s
+    total_time_s = forward_time_s + backward_time_s + optimizer_time_s + overhead_time_s
     total_memory_gb = activation_memory_gb + gradient_memory_gb + optimizer_memory_gb
     
     # Model memory (parameters in fp16)
@@ -153,6 +157,7 @@ def test_full_training_step():
     print(f"{'Forward pass':<20} {forward_time_s * 1000:>10.2f} ms   {activation_memory_gb:>10.2f} GB")
     print(f"{'Backward pass':<20} {backward_time_s * 1000:>10.2f} ms   {gradient_memory_gb:>10.2f} GB")
     print(f"{'Optimizer step':<20} {optimizer_time_s * 1000:>10.2f} ms   {optimizer_memory_gb:>10.2f} GB")
+    print(f"{'Training overhead':<20} {overhead_time_s * 1000:>10.2f} ms   {'':>10} ")
     print(f"{'-'*50}")
     print(f"{'TOTAL':<20} {total_time_s * 1000:>10.2f} ms   {total_memory_gb:>10.2f} GB")
     print(f"\n{'Model parameters':<20} {'':>15} {model_memory_gb:>10.2f} GB")
@@ -190,4 +195,4 @@ if __name__ == "__main__":
     print("✅ All tests passed!")
     print("=" * 60)
 
-# Made with Bob
+

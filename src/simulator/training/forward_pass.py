@@ -60,4 +60,4 @@ def calculate_forward_pass(
     
     return forward_time_s, activation_memory_gb
 
-# Made with Bob
+

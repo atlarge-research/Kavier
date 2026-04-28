@@ -53,4 +53,4 @@ def calculate_backward_pass(
     
     return backward_time_s, gradient_memory_gb
 
-# Made with Bob
+

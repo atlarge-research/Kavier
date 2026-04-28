@@ -1,0 +1,18 @@
+services:
+  kavier:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kavier:latest
+    container_name: kavier
+    volumes:
+      - .:/app
+      - /app/.venv
+      - /app/__pycache__
+    working_dir: /app
+    stdin_open: true
+    tty: true
+    environment:
+      - PYTHONPATH=/app/src
+
+

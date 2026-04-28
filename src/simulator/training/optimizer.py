@@ -1,48 +1,71 @@
 """
-Optimizer step simulation for training.
+Optimizer step simulation for training (AdamW).
 
-Simulates optimizer updates (AdamW, SGD, etc.).
+References:
+- Kingma & Ba 2015: "Adam: A Method for Stochastic Optimization" - Original Adam algorithm
+- Loshchilov & Hutter 2019: "Decoupled Weight Decay Regularization" - AdamW variant
+- Rajbhandari et al. 2020: "ZeRO" - Optimizer state memory analysis
 """
 
-from __future__ import annotations
-
-from typing import Dict, Any
+from simulator.performance.util.specs import GPUSpec, LLMSpec
 
 
-def simulate_optimizer_step(
-    model_spec: Dict[str, Any],
-    gpu_spec: Dict[str, Any],
-    trainable_params: int,
-    optimizer: str = "adamw",
-) -> Dict[str, float]:
+def calculate_optimizer_step(
+    llm: LLMSpec,
+    gpu: GPUSpec,
+) -> tuple[float, float]:
     """
-    Simulate optimizer step (parameter update).
+    Calculate optimizer step time and memory for AdamW (full fine-tuning).
     
-    Optimizer updates parameters using computed gradients.
-    AdamW: maintains momentum and variance (2x param memory)
-    SGD: maintains only momentum (1x param memory)
+    AdamW maintains two state tensors per parameter:
+    - Momentum (first moment): exponential moving average of gradients
+    - Variance (second moment): exponential moving average of squared gradients
+    
+    The optimizer step is memory-bandwidth limited, not compute-limited.
+    It must read gradients, read/update states, and write new parameters.
+    
+    Time Calculation:
+    - Memory-bandwidth limited operation
+    - Must transfer: gradients (read) + 2 states (read/write) + parameters (write)
+    - Total: 4 reads + 2 writes = 6 memory operations per parameter
+    - Formula: T = (6 × params × bytes_per_param) / memory_bandwidth
+    
+    Memory Calculation:
+    - Based on Rajbhandari et al. 2020 (ZeRO paper) [3]
+    - Optimizer states stored in fp32 for numerical stability
+    - Formula: optimizer_memory = 2 × params × 4 bytes (fp32)
     
     Args:
-        model_spec: Model specifications
-        gpu_spec: GPU specifications
-        trainable_params: Number of trainable parameters
-        optimizer: Optimizer name ("adamw", "sgd", etc.)
+        llm: LLM specifications
+        gpu: GPU specifications
         
     Returns:
-        Dictionary with:
-        - time_ms: Optimizer step time
-        - memory_gb: Optimizer state memory
-        - compute_overhead: Overhead factor (e.g., 1.05 = 5% overhead)
+        Tuple of (optimizer_time_s, optimizer_memory_gb)
+        
+    References:
+        [1] Kingma & Ba 2015: "Adam: A Method for Stochastic Optimization"
+        [2] Loshchilov & Hutter 2019: "Decoupled Weight Decay Regularization" (AdamW)
+        [3] Rajbhandari et al. 2020: "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models"
     """
-    # TODO: Implement optimizer simulation
-    # Key considerations:
-    # - AdamW: 2x params for momentum + variance states
-    # - SGD: 1x params for momentum only
-    # - Time: ~5% overhead on top of forward+backward
-    return {
-        "time_ms": 0.0,
-        "memory_gb": 0.0,
-        "compute_overhead": 1.05,
-    }
+    # Optimizer memory: 2 state tensors (momentum + variance) in fp32 (from ZeRO [3])
+    optimizer_memory_bytes = 2 * llm.m_params * 4  # 4 bytes for fp32
+    optimizer_memory_gb = optimizer_memory_bytes / (1024**3)
+    
+    # Optimizer time: memory-bandwidth limited
+    # Memory operations per parameter:
+    # - Read gradient (fp16): 2 bytes
+    # - Read momentum state (fp32): 4 bytes
+    # - Read variance state (fp32): 4 bytes
+    # - Write updated momentum (fp32): 4 bytes
+    # - Write updated variance (fp32): 4 bytes
+    # - Write updated parameter (fp16): 2 bytes
+    # Total: 20 bytes per parameter
+    bytes_per_param_transfer = 20
+    total_bytes_transferred = llm.m_params * bytes_per_param_transfer
+    
+    # Time = bytes / bandwidth
+    optimizer_time_s = total_bytes_transferred / gpu.bandwidth_bps
+    
+    return optimizer_time_s, optimizer_memory_gb
 
-
+# Made with Bob

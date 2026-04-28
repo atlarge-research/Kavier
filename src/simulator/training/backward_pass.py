@@ -1,53 +1,56 @@
 """
 Backward pass simulation for training.
 
-Computes gradients through backpropagation.
-Rule of thumb: backward pass takes ~2x forward pass time.
+References:
+- Shoeybi et al. 2019: "Megatron-LM" - Backward pass ~2x forward pass FLOPs
+- Narayanan et al. 2021: "Pipeline Parallelism" - Uses 2x multiplier in timing models
+- Rajbhandari et al. 2020: "ZeRO" - Gradient memory equals parameter memory
 """
 
-from __future__ import annotations
-
-from typing import Dict, Any
+from simulator.performance.util.specs import LLMSpec
 
 
-def simulate_backward_pass(
-    model_spec: Dict[str, Any],
-    gpu_spec: Dict[str, Any],
-    batch_size: int,
-    sequence_length: int,
-    method: str = "full",
-    forward_time_ms: float = 0.0,
-) -> Dict[str, float]:
+def calculate_backward_pass(
+    forward_time_s: float,
+    llm: LLMSpec,
+) -> tuple[float, float]:
     """
-    Simulate backward pass (gradient computation).
+    Calculate backward pass time and gradient memory for training.
     
-    Backward pass computes gradients for all trainable parameters.
-    Empirically: backward_time ≈ 2.0 * forward_time
+    The backward pass computes gradients for all model parameters using
+    backpropagation. Standard practice in literature is to model this as
+    approximately 2x the forward pass computation.
+    
+    Time Calculation:
+    - Based on Shoeybi et al. 2019 (Megatron-LM) [1] and Narayanan et al. 2021 [2]
+    - Backward pass performs ~2x the FLOPs of forward pass
+    - Formula: T_backward = 2.0 × T_forward
+    
+    Memory Calculation:
+    - Based on Rajbhandari et al. 2020 (ZeRO paper) [3]
+    - Gradient memory equals parameter memory
+    - Formula: gradient_memory = model_params × bytes_per_param
     
     Args:
-        model_spec: Model specifications
-        gpu_spec: GPU specifications
-        batch_size: Batch size
-        sequence_length: Sequence length
-        method: Training method ("full" or "lora")
-        forward_time_ms: Forward pass time (for estimation)
+        forward_time_s: Forward pass time in seconds
+        llm: LLM specifications
         
     Returns:
-        Dictionary with:
-        - time_ms: Backward pass time
-        - memory_gb: Gradient memory
-        - trainable_params: Number of trainable parameters
+        Tuple of (backward_time_s, gradient_memory_gb)
+        
+    References:
+        [1] Shoeybi et al. 2019: "Megatron-LM: Training Multi-Billion Parameter Language Models"
+        [2] Narayanan et al. 2021: "Efficient Large-Scale Language Model Training on GPU Clusters"
+        [3] Rajbhandari et al. 2020: "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models"
     """
-    # TODO: Implement backward pass simulation
-    # Key considerations:
-    # - Full fine-tuning: all params get gradients
-    # - LoRA: only ~1% of params get gradients
-    # - Memory: store gradients (FP32, 4 bytes per param)
-    # - Time: ~2x forward pass
-    return {
-        "time_ms": 0.0,
-        "memory_gb": 0.0,
-        "trainable_params": 0,
-    }
+    # Backward pass time: 2x forward pass (from Megatron-LM [1] and Pipeline Parallelism [2])
+    backward_time_s = 2.0 * forward_time_s
+    
+    # Gradient memory: same size as model parameters (from ZeRO paper [3])
+    # Each parameter needs a gradient of the same size
+    gradient_memory_bytes = llm.m_params * llm.p_bytes
+    gradient_memory_gb = gradient_memory_bytes / (1024**3)
+    
+    return backward_time_s, gradient_memory_gb
 
-
+# Made with Bob

@@ -1,195 +1,102 @@
 """
-Validation script for training predictions.
-
-Compares Kavier predictions against real measurements from ado-sfttrainer dataset.
+Validator for Kavier training predictions against ground truth.
 """
 
-from __future__ import annotations
-
+import pandas as pd
 from pathlib import Path
 from typing import Dict, Any
+from tqdm import tqdm
 
-import pandas as pd
-
-from library.training_metrics import TRAINING_PERFORMANCE_METRICS, TRAINING_ENERGY_METRICS
-
-
-def load_dataset(dataset_path: str) -> pd.DataFrame:
-    """
-    Load validation dataset.
-    
-    Args:
-        dataset_path: Path to ado-sfttrainer_valid_runs.csv
-        
-    Returns:
-        DataFrame with validation data
-    """
-    df = pd.read_csv(dataset_path)
-    return df
+from kavier_training.core.engine import simulate_full_training
 
 
-def calculate_mape(actual: float, predicted: float) -> float:
-    """
-    Calculate Mean Absolute Percentage Error.
-    
-    MAPE = |actual - predicted| / actual * 100
-    
-    Args:
-        actual: Actual measured value
-        predicted: Predicted value
-        
-    Returns:
-        MAPE percentage
-    """
-    if actual == 0:
-        return 0.0
-    return abs(actual - predicted) / actual * 100
-
-
-def calculate_total_energy(power_watts: float, runtime_seconds: float) -> float:
-    """
-    Calculate total energy consumption.
-    
-    Energy (Wh) = Power (W) * Time (h)
-    
-    Args:
-        power_watts: Average power consumption in watts
-        runtime_seconds: Training runtime in seconds
-        
-    Returns:
-        Total energy in Wh
-    """
-    runtime_hours = runtime_seconds / 3600.0
-    return power_watts * runtime_hours
-
-
-def validate_single_run(
-    model_name: str,
-    method: str,
-    gpu_model: str,
-    tokens_per_sample: int,
-    batch_size: int,
-    number_gpus: int,
-    number_nodes: int,
-    actual_metrics: Dict[str, float],
+def validate_predictions(
+    validation_csv: str = "src/kavier_training/data/input/validation.csv",
+    output_csv: str = "src/kavier_training/data/output/validation_results.csv",
 ) -> Dict[str, Any]:
     """
-    Validate a single training run.
+    Validate training predictions against ground truth.
     
     Args:
-        model_name: LLM model name
-        method: Fine-tuning method (full/lora)
-        gpu_model: GPU model
-        tokens_per_sample: Sequence length
-        batch_size: Batch size per GPU
-        number_gpus: Number of GPUs
-        number_nodes: Number of nodes
-        actual_metrics: Actual measured metrics from dataset
+        validation_csv: Path to validation data
+        output_csv: Path to save results
         
     Returns:
-        Dictionary with predictions and errors
+        Dictionary with accuracy metrics
     """
-    # TODO: Call simulator to get predictions
-    # from simulator.training.simulate import simulate_full_training
-    # predictions = simulate_full_training(...)
-    
-    # Placeholder predictions
-    predictions = {
-        "dataset_tokens_per_second": 0.0,
-        "train_runtime": 0.0,
-        "gpu_compute_utilization_avg": 0.0,
-        "gpu_power_watts_avg": 0.0,
-        "total_energy_wh": 0.0,
-    }
-    
-    # Calculate errors for performance metrics
-    errors = {}
-    for metric in TRAINING_PERFORMANCE_METRICS:
-        if metric in actual_metrics and metric in predictions:
-            errors[f"{metric}_mape"] = calculate_mape(
-                actual_metrics[metric], predictions[metric]
-            )
-    
-    # Calculate errors for energy metrics
-    for metric in TRAINING_ENERGY_METRICS:
-        if metric in actual_metrics and metric in predictions:
-            errors[f"{metric}_mape"] = calculate_mape(
-                actual_metrics[metric], predictions[metric]
-            )
-    
-    return {
-        "predictions": predictions,
-        "actual": actual_metrics,
-        "errors": errors,
-    }
-
-
-def validate_dataset(dataset_path: str) -> pd.DataFrame:
-    """
-    Validate all runs in dataset.
-    
-    Args:
-        dataset_path: Path to validation dataset
-        
-    Returns:
-        DataFrame with validation results
-    """
-    df = load_dataset(dataset_path)
+    df = pd.read_csv(validation_csv)
     
     results = []
-    for _, row in df.iterrows():
-        # Calculate total energy from power and runtime
-        total_energy_wh = calculate_total_energy(
-            float(row["gpu_power_watts_avg"]),
-            float(row["train_runtime"])
-        )
-        
-        actual_metrics = {
-            "dataset_tokens_per_second": float(row["dataset_tokens_per_second"]),
-            "train_runtime": float(row["train_runtime"]),
-            "gpu_compute_utilization_avg": float(row["gpu_compute_utilization_avg"]),
-            "gpu_power_watts_avg": float(row["gpu_power_watts_avg"]),
-            "total_energy_wh": total_energy_wh,
-        }
-        
-        result = validate_single_run(
-            model_name=str(row["model_name"]),
-            method=str(row["method"]),
-            gpu_model=str(row["gpu_model"]),
-            tokens_per_sample=int(float(row["tokens_per_sample"])),
-            batch_size=int(float(row["batch_size"])),
-            number_gpus=int(float(row["number_gpus"])),
-            number_nodes=int(float(row["number_nodes"])),
-            actual_metrics=actual_metrics,
-        )
-        
-        results.append({
-            "identifier": row["identifier"],
-            "model_name": row["model_name"],
-            "method": row["method"],
-            **result["predictions"],
-            **result["errors"],
-        })
+    errors = []
     
-    return pd.DataFrame(results)
+    for idx, row in tqdm(df.iterrows(), total=len(df), desc="Validating"):
+        try:
+            pred = simulate_full_training(
+                model_name=row['model_name'],
+                method=row['method'],
+                gpu_model=row['gpu_model'],
+                tokens_per_sample=int(row['tokens_per_sample']),
+                batch_size=int(row['batch_size']),
+                number_gpus=int(row['number_gpus']),
+                number_nodes=int(row['number_nodes']),
+            )
+            
+            actual_throughput = row['measured_throughput']
+            predicted_throughput = pred['train_tokens_per_second']
+            error_pct = abs(predicted_throughput - actual_throughput) / actual_throughput * 100
+            
+            results.append({
+                'model_name': row['model_name'],
+                'method': row['method'],
+                'gpu_model': row['gpu_model'],
+                'tokens_per_sample': row['tokens_per_sample'],
+                'batch_size': row['batch_size'],
+                'number_gpus': row['number_gpus'],
+                'number_nodes': row['number_nodes'],
+                'actual_throughput': actual_throughput,
+                'predicted_throughput': predicted_throughput,
+                'error_pct': error_pct,
+            })
+            
+        except Exception as e:
+            errors.append({
+                'index': idx,
+                'model': row['model_name'],
+                'error': str(e)
+            })
+    
+    df_results = pd.DataFrame(results)
+    df_results.to_csv(output_csv, index=False)
+    
+    metrics = {
+        'total_samples': len(df),
+        'successful': len(results),
+        'failed': len(errors),
+        'mean_error_pct': df_results['error_pct'].mean(),
+        'median_error_pct': df_results['error_pct'].median(),
+        'min_error_pct': df_results['error_pct'].min(),
+        'max_error_pct': df_results['error_pct'].max(),
+        'std_error_pct': df_results['error_pct'].std(),
+    }
+    
+    return metrics
 
 
 if __name__ == "__main__":
-    dataset_path = "finetuning-data/in/curated/ado-sfttrainer_valid_runs.csv"
-    results_df = validate_dataset(dataset_path)
+    metrics = validate_predictions()
     
-    print("Validation Results:")
-    print(results_df.head())
-    
-    # Calculate average MAPE for each metric
     print("\n" + "="*60)
-    print("Average MAPE by Metric:")
+    print("VALIDATION RESULTS")
     print("="*60)
-    
-    mape_cols = [col for col in results_df.columns if col.endswith("_mape")]
-    for col in mape_cols:
-        avg_mape = results_df[col].mean()
-        metric_name = col.replace("_mape", "")
-        print(f"{metric_name:40s}: {avg_mape:6.2f}%")
+    print(f"Total samples: {metrics['total_samples']}")
+    print(f"Successful: {metrics['successful']}")
+    print(f"Failed: {metrics['failed']}")
+    print(f"\nError Statistics:")
+    print(f"  Mean: {metrics['mean_error_pct']:.2f}%")
+    print(f"  Median: {metrics['median_error_pct']:.2f}%")
+    print(f"  Std Dev: {metrics['std_error_pct']:.2f}%")
+    print(f"  Min: {metrics['min_error_pct']:.2f}%")
+    print(f"  Max: {metrics['max_error_pct']:.2f}%")
+    print("="*60)
 
-
+# Made with Bob

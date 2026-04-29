@@ -7,9 +7,9 @@ References:
 - Rajbhandari et al. 2020: "ZeRO" - Memory optimizations and activation memory
 """
 
-from kavier_inference.stages.prefill import get_prefill_time_s
 from library.specs.GPUSpec import GPUSpec
 from library.specs.LLMSpec import LLMSpec
+from kavier_training.core.config import get_training_compute_efficiency, TRAINING_OVERHEAD_S
 
 
 def calculate_forward_pass(
@@ -48,10 +48,19 @@ def calculate_forward_pass(
         [2] Shoeybi et al. 2019: "Megatron-LM: Training Multi-Billion Parameter Language Models"
         [3] Rajbhandari et al. 2020: "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models"
     """
-    # Calculate forward pass time using inference prefill logic
-    # Forward pass in training = prefill in inference (same computation)
+    # Calculate forward pass time with training-specific MFU
+    # Training has lower MFU than inference due to activation checkpointing
     total_tokens = batch_size * seq_length
-    forward_time_s = get_prefill_time_s(total_tokens, llm, gpu)
+    
+    # FLOPs: 2 operations per parameter per token (Shoeybi et al. 2019)
+    flops_required = 2.0 * llm.m_params * total_tokens
+    
+    # Achieved FLOPS based on batch size, GPU specs, and architecture
+    mfu = get_training_compute_efficiency(batch_size, seq_length, gpu)
+    achieved_flops = gpu.fp_16_tensor_core_tflops * 1e12 * mfu
+    
+    # Time = FLOPs / achieved_FLOPS + overhead
+    forward_time_s = (flops_required / achieved_flops) + TRAINING_OVERHEAD_S
     
     # Calculate activation memory (from ZeRO paper [3])
     # Activations must be stored for backward pass gradient computation

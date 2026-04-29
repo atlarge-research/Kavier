@@ -9,3 +9,4 @@
 9. Validate predictions against ground truth - Ensures model reliability
 10. !IMPORTANT: keep replies to the user of under 100 words per reply. This will encourage concise communication and make it easier for the user to understand and respond to the information provided. If more information is needed, the user can always ask follow-up questions.
 11. Do not output any additional e.g., markdown files in the project directory. Keeep all organized.
+12. Do not be superficial, aiming to have scientifically rigorous and detailed explanations for all design choices, assumptions, and methodologies used in the simulation. This will ensure that the simulation is based on sound scientific principles and can be trusted by users and other researchers in the field.

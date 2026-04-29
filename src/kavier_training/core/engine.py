@@ -17,6 +17,7 @@ from kavier_training.components.forward_pass import calculate_forward_pass
 from kavier_training.components.backward_pass import calculate_backward_pass
 from kavier_training.components.optimizer import calculate_optimizer_step
 from kavier_training.components.lora import compute_lora_trainable_params
+from kavier_training.components.communication import simulate_allreduce
 
 
 def simulate_training_step(
@@ -25,6 +26,7 @@ def simulate_training_step(
     tokens_per_sample: int,
     batch_size: int,
     method: str,
+    num_gpus: int = 1,
 ) -> Dict[str, float]:
     """
     Simulate a single training step (forward + backward + optimizer).
@@ -55,9 +57,16 @@ def simulate_training_step(
     backward_time, _ = calculate_backward_pass(forward_time, llm)
     optimizer_time, _ = calculate_optimizer_step(llm, gpu)
     
-    step_time_s = forward_time + backward_time + optimizer_time
-    tokens_per_step = batch_size * tokens_per_sample
-    tokens_per_second = tokens_per_step / step_time_s if step_time_s > 0 else 0
+    # Add communication time for multi-GPU training
+    comm_time = simulate_allreduce(int(trainable_params), num_gpus) if num_gpus > 1 else 0.0
+    
+    step_time_s = forward_time + backward_time + optimizer_time + comm_time
+    
+    # In data parallel training, each GPU processes its own batch
+    # Total throughput = tokens per GPU × number of GPUs
+    tokens_per_gpu = batch_size * tokens_per_sample
+    total_tokens_per_step = tokens_per_gpu * num_gpus
+    tokens_per_second = total_tokens_per_step / step_time_s if step_time_s > 0 else 0
     
     return {
         "step_time_ms": step_time_s * 1000,
@@ -109,13 +118,12 @@ def simulate_full_training(
     gpu = GPU_SPEC_LIBRARY[gpu_model]
     total_gpus = number_gpus * number_nodes
     
-    step_result = simulate_training_step(model_name, gpu_model, tokens_per_sample, batch_size, method)
-    single_gpu_throughput = step_result["tokens_per_second"]
+    step_result = simulate_training_step(
+        model_name, gpu_model, tokens_per_sample, batch_size, method, total_gpus
+    )
+    total_throughput = step_result["tokens_per_second"]
     
-    scaling_efficiency = _compute_scaling_efficiency(total_gpus, number_nodes)
-    total_throughput = single_gpu_throughput * total_gpus * scaling_efficiency
-    
-    tokens_per_gpu = total_throughput / total_gpus if total_gpus > 0 else 0
+    tokens_per_gpu = total_throughput / total_gpus if total_gpus > 0 else total_throughput
     samples_per_second = total_throughput / tokens_per_sample if tokens_per_sample > 0 else 0
     steps_per_second = samples_per_second / batch_size if batch_size > 0 else 0
     

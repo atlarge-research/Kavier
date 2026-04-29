@@ -8,24 +8,29 @@ class GPUSpec:
             memory_gb: float,
             gpu_core_max_mhz,
             base_power_w: float,
+            mfu_factor: float = 0.45,
     ):
         """
-        Initialize GPU specifications for LLM inference simulation.
+        Initialize GPU specifications for LLM inference and training simulation.
 
         Parameters:
             gpu_name (str): Name of the GPU.
             memory_bandwidth_gbps (int): Memory bandwidth in GB/s.
             fp_16_tensor_core_tflops (int): FP16 tensor core performance in TFLOPS.
             gpu_cores (int): Number of GPU cores.
-            boost_clock_mhz (int): Boost clock speed in MHz.
-            prefill_speed_tps (float): Prefill speed in tokens per second.
-            decode_speed_tps (float): Decode speed in tokens per second.
-            num_streaming_multiprocessors (int): Number of streaming multiprocessors.
-            flops_per_token_1b (float): FLOPs required per token.
             memory_gb (float): GPU memory in GB.
+            gpu_core_max_mhz (int): GPU core max clock speed in MHz.
             base_power_w (float): Base power consumption in watts.
+            mfu_factor (float): Model FLOPs Utilization factor (fraction of peak FLOPS achieved).
+                Default 0.45. Represents achieved_FLOPS / peak_FLOPS during training.
+                Varies by architecture due to memory bandwidth and kernel efficiency:
+                - Ampere (A100): ~0.40-0.45 (memory-bound)
+                - Hopper (H100): ~0.15-0.20 (higher peak FLOPS, still memory-bound)
+                - Ada/Lovelace: ~0.38-0.48
+                
+                Reference: Chowdhery et al. 2022 (PaLM paper) - "Model FLOPs Utilization"
 
-            -- some were removed as they are not used in the simulation, may be added later --
+            -- some parameters were removed as they are not used in the simulation, may be added later --
         """
         self.name = gpu_name
         self.cores = gpu_cores
@@ -33,3 +38,4 @@ class GPUSpec:
         self.bandwidth_bps = memory_bandwidth_gbps * 1e9  # Convert to bytes/sec
         self.memory_gb = memory_gb
         self.core_max_mhz = gpu_core_max_mhz
+        self.mfu_factor = mfu_factor

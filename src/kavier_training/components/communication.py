@@ -10,50 +10,44 @@ from typing import Dict, Any
 
 
 def simulate_allreduce(
-    model_spec: Dict[str, Any],
-    gpu_spec: Dict[str, Any],
-    num_gpus: int,
     trainable_params: int,
+    num_gpus: int,
     network_bandwidth_gbps: float = 400.0,
-) -> Dict[str, Any]:
+) -> float:
     """
-    Simulate all-reduce for gradient synchronization.
+    Simulate all-reduce communication time for gradient synchronization.
     
-    Uses ring all-reduce algorithm (standard in PyTorch DDP).
+    Based on ring all-reduce algorithm (Baidu 2017, PyTorch DDP).
     Communication volume: 2 * (N-1)/N * gradient_size
     
+    Reference:
+    - Patarasuk & Yuan 2009: "Bandwidth Optimal All-reduce Algorithms for Clusters"
+    
     Args:
-        model_spec: Model specifications
-        gpu_spec: GPU specifications
-        num_gpus: Total number of GPUs
         trainable_params: Number of trainable parameters
-        network_bandwidth_gbps: Network bandwidth in Gbps
+        num_gpus: Total number of GPUs
+        network_bandwidth_gbps: Network bandwidth in Gbps (default: 400 for InfiniBand)
         
     Returns:
-        Dictionary with:
-        - time_ms: Communication time
-        - volume_gb: Data volume transferred
-        - algorithm: "ring-allreduce"
+        Communication time in seconds
     """
-    # TODO: Implement all-reduce simulation
-    # Key considerations:
-    # - Ring all-reduce: 2 * (N-1)/N rounds
-    # - Gradient size: trainable_params * 4 bytes (FP32)
-    # - Time = volume / bandwidth
-    # - Single GPU: no communication needed
-    
     if num_gpus == 1:
-        return {
-            "time_ms": 0.0,
-            "volume_gb": 0.0,
-            "algorithm": "none",
-        }
+        return 0.0
     
-    return {
-        "time_ms": 0.0,
-        "volume_gb": 0.0,
-        "algorithm": "ring-allreduce",
-    }
+    # Gradient size in bytes (FP32 = 4 bytes per parameter)
+    gradient_bytes = trainable_params * 4
+    
+    # Ring all-reduce: 2 * (N-1)/N communication rounds
+    communication_factor = 2.0 * (num_gpus - 1) / num_gpus
+    total_bytes = gradient_bytes * communication_factor
+    
+    # Convert bandwidth from Gbps to bytes/sec
+    bandwidth_bytes_per_sec = network_bandwidth_gbps * (10**9) / 8
+    
+    # Communication time
+    comm_time_s = total_bytes / bandwidth_bytes_per_sec
+    
+    return comm_time_s
 
 
 def simulate_fsdp_communication(

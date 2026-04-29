@@ -9,6 +9,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=9216,
         gpu_core_max_mhz=1695,
         base_power_w=150,
+        mfu_factor=0.40,
     ),
     "A100-40GB": GPUSpec(
         gpu_name="A100-40GB",
@@ -18,6 +19,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=6912,
         gpu_core_max_mhz=1410,
         base_power_w=250,
+        mfu_factor=0.42,
     ),
     "A100-80GB": GPUSpec(
         gpu_name="A100-80GB",
@@ -27,6 +29,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=6912,
         gpu_core_max_mhz=1410,
         base_power_w=300,
+        mfu_factor=0.45,
     ),
     "L4": GPUSpec(
         gpu_name="L4",
@@ -36,6 +39,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=7424,
         gpu_core_max_mhz=2040,
         base_power_w=72,
+        mfu_factor=0.38,
     ),
     "L40S": GPUSpec(
         gpu_name="L40S",
@@ -45,6 +49,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=18176,
         gpu_core_max_mhz=2520,
         base_power_w=350,
+        mfu_factor=0.48,
     ),
     "H100-PCIe": GPUSpec(
         gpu_name="H100-PCIe",
@@ -54,6 +59,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=14592,
         gpu_core_max_mhz=1755,
         base_power_w=350,
+        mfu_factor=0.1554,  # Calibrated via least-squares
     ),
     "H100-SXM": GPUSpec(
         gpu_name="H100-SXM",
@@ -63,6 +69,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=16896,
         gpu_core_max_mhz=1830,
         base_power_w=700,
+        mfu_factor=0.55,
     ),
     "H200 SXM": GPUSpec(
         gpu_name="H200 SXM",
@@ -72,6 +79,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=16896,
         gpu_core_max_mhz=1785,
         base_power_w=700,
+        mfu_factor=0.58,
     ),
     # GPUs from ado-sfttrainer dataset
     "NVIDIA-A100-80GB-PCIe": GPUSpec(
@@ -82,6 +90,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=6912,
         gpu_core_max_mhz=1410,
         base_power_w=300,
+        mfu_factor=0.4513,  # Calibrated via least-squares
     ),
     "NVIDIA-H100-PCIe": GPUSpec(
         gpu_name="NVIDIA-H100-PCIe",
@@ -91,6 +100,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=14592,
         gpu_core_max_mhz=1755,
         base_power_w=350,
+        mfu_factor=0.1554,  # Calibrated via least-squares
     ),
     "NVIDIA-A100-SXM4-80GB": GPUSpec(
         gpu_name="NVIDIA-A100-SXM4-80GB",
@@ -100,5 +110,6 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=6912,
         gpu_core_max_mhz=1410,
         base_power_w=400,
+        mfu_factor=0.05,  # Calibrated (data quality issue suspected)
     ),
 }

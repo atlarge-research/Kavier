@@ -15,18 +15,24 @@ def simulate_allreduce(
     network_bandwidth_gbps: float = 400.0,
 ) -> float:
     """
-    Simulate all-reduce communication time for gradient synchronization.
+    Simulate all-reduce using LogP model for distributed training.
     
-    Based on ring all-reduce algorithm (Baidu 2017, PyTorch DDP).
-    Communication volume: 2 * (N-1)/N * gradient_size
+    LogP Model (Culler et al. 1993):
+    - L: Latency (network round-trip time)
+    - o: Overhead (CPU time per message)
+    - g: Gap (minimum time between messages)
+    - P: Number of processors
     
-    Reference:
-    - Patarasuk & Yuan 2009: "Bandwidth Optimal All-reduce Algorithms for Clusters"
+    For all-reduce: T = L×log(P) + o×(P-1) + g×(message_size/P)
+    
+    References:
+    - Culler et al. 1993: "LogP: Towards a Realistic Model of Parallel Computation"
+    - Thakur et al. 2005: "Optimization of Collective Communication Operations"
     
     Args:
         trainable_params: Number of trainable parameters
         num_gpus: Total number of GPUs
-        network_bandwidth_gbps: Network bandwidth in Gbps (default: 400 for InfiniBand)
+        network_bandwidth_gbps: Network bandwidth in Gbps
         
     Returns:
         Communication time in seconds
@@ -36,16 +42,21 @@ def simulate_allreduce(
     
     # Gradient size in bytes (FP32 = 4 bytes per parameter)
     gradient_bytes = trainable_params * 4
+    message_size_per_gpu = gradient_bytes / num_gpus
     
-    # Ring all-reduce: 2 * (N-1)/N communication rounds
-    communication_factor = 2.0 * (num_gpus - 1) / num_gpus
-    total_bytes = gradient_bytes * communication_factor
-    
-    # Convert bandwidth from Gbps to bytes/sec
+    # LogP parameters (typical for InfiniBand/NVLink)
+    L = 5e-6  # 5 microseconds latency
+    o = 2e-6  # 2 microseconds overhead per message
     bandwidth_bytes_per_sec = network_bandwidth_gbps * (10**9) / 8
+    g = 1.0 / bandwidth_bytes_per_sec  # gap per byte
     
-    # Communication time
-    comm_time_s = total_bytes / bandwidth_bytes_per_sec
+    # LogP all-reduce time
+    import math
+    latency_term = L * math.log2(num_gpus)
+    overhead_term = o * (num_gpus - 1)
+    gap_term = g * message_size_per_gpu
+    
+    comm_time_s = latency_term + overhead_term + gap_term
     
     return comm_time_s
 

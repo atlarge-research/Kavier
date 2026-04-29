@@ -9,42 +9,62 @@ from __future__ import annotations
 from typing import Dict, Any
 
 
-def apply_lora_efficiency(
-    forward_result: Dict[str, float],
-    backward_result: Dict[str, float],
-    lora_rank: int = 8,
-) -> tuple[Dict[str, float], Dict[str, float]]:
+def calculate_lora_backward_pass(
+    forward_time_s: float,
+    trainable_params: int,
+    total_params: int,
+) -> tuple[float, float]:
     """
-    Apply LoRA efficiency gains to forward and backward pass results.
+    Calculate backward pass for LoRA training.
     
-    LoRA reduces:
-    - Compute time: ~1.5-2x speedup (fewer trainable params)
-    - Memory: ~0.3x (only LoRA gradients, not full model gradients)
+    LoRA backpropagates through full model (same compute as full fine-tuning),
+    but only computes/stores gradients for adapter params (~0.1-1%).
+    Time is dominated by backprop, not gradient computation.
     
     Args:
-        forward_result: Forward pass results
-        backward_result: Backward pass results
-        lora_rank: LoRA rank (higher rank = more params = less speedup)
+        forward_time_s: Forward pass time
+        trainable_params: LoRA trainable parameters
+        total_params: Total model parameters
         
     Returns:
-        Tuple of (modified_forward_result, modified_backward_result)
+        Tuple of (backward_time_s, gradient_memory_gb)
     """
-    # TODO: Implement LoRA efficiency modeling
-    # Key considerations:
-    # - Speedup factor depends on rank (rank 8 vs 64)
-    # - Memory reduction: only ~1% of params need gradients
-    # - Forward pass: minimal change
-    # - Backward pass: significant speedup
+    # LoRA backward: full backprop (2x forward), minimal gradient savings
+    backward_time_s = 2.0 * forward_time_s
     
-    # Empirical speedup factors
-    speedup_factor = 1.7  # ~1.7x faster than full fine-tuning
-    memory_factor = 0.3   # ~30% of full fine-tuning memory
+    # Gradient memory only for LoRA params (fp16)
+    gradient_memory_bytes = trainable_params * 2  # 2 bytes for fp16
+    gradient_memory_gb = gradient_memory_bytes / (1024**3)
     
-    # Apply to results (dummy implementation)
-    modified_forward = forward_result.copy()
-    modified_backward = backward_result.copy()
+    return backward_time_s, gradient_memory_gb
+
+
+def calculate_lora_optimizer_step(
+    trainable_params: int,
+    gpu_bandwidth_bps: float,
+) -> tuple[float, float]:
+    """
+    Calculate optimizer step for LoRA training.
     
-    return modified_forward, modified_backward
+    AdamW only updates LoRA parameters, not full model.
+    
+    Args:
+        trainable_params: LoRA trainable parameters
+        gpu_bandwidth_bps: GPU memory bandwidth
+        
+    Returns:
+        Tuple of (optimizer_time_s, optimizer_memory_gb)
+    """
+    # Optimizer memory: 2 states (momentum + variance) in fp32
+    optimizer_memory_bytes = 2 * trainable_params * 4
+    optimizer_memory_gb = optimizer_memory_bytes / (1024**3)
+    
+    # Optimizer time: 20 bytes per param (same as full)
+    bytes_per_param_transfer = 20
+    total_bytes = trainable_params * bytes_per_param_transfer
+    optimizer_time_s = total_bytes / gpu_bandwidth_bps
+    
+    return optimizer_time_s, optimizer_memory_gb
 
 
 def compute_lora_trainable_params(

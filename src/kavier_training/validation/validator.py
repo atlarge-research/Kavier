@@ -13,6 +13,9 @@ from kavier_training.core.engine import simulate_full_training
 def validate_predictions(
     validation_csv: str = "src/kavier_training/data/input/validation.csv",
     output_csv: str = "src/kavier_training/data/output/validation_results.csv",
+    method: str = None,
+    num_gpus: int = None,
+    max_samples: int = None,
 ) -> Dict[str, Any]:
     """
     Validate training predictions against ground truth.
@@ -20,11 +23,22 @@ def validate_predictions(
     Args:
         validation_csv: Path to validation data
         output_csv: Path to save results
+        method: Filter by training method ('full', 'lora', 'gptq-lora')
+        num_gpus: Filter by number of GPUs
+        max_samples: Limit number of samples to validate
         
     Returns:
         Dictionary with accuracy metrics
     """
     df = pd.read_csv(validation_csv)
+    
+    # Apply filters
+    if method:
+        df = df[df['method'] == method]
+    if num_gpus:
+        df = df[df['number_gpus'] == num_gpus]
+    if max_samples:
+        df = df.head(max_samples)
     
     results = []
     errors = []
@@ -83,7 +97,19 @@ def validate_predictions(
 
 
 if __name__ == "__main__":
-    metrics = validate_predictions()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Validate Kavier training predictions')
+    parser.add_argument('--method', type=str, help='Filter by method (full, lora, gptq-lora)')
+    parser.add_argument('--num_gpus', type=int, help='Filter by number of GPUs')
+    parser.add_argument('--max_samples', type=int, help='Limit number of samples')
+    args = parser.parse_args()
+    
+    metrics = validate_predictions(
+        method=args.method,
+        num_gpus=args.num_gpus,
+        max_samples=args.max_samples,
+    )
     
     print("\n" + "="*60)
     print("VALIDATION RESULTS")

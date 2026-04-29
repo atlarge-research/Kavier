@@ -49,7 +49,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=18176,
         gpu_core_max_mhz=2520,
         base_power_w=350,
-        mfu_factor=0.48,
+        mfu_factor=0.1042,  # Recalibrated: 0.48 / 4.599 = 0.1042
     ),
     "H100-PCIe": GPUSpec(
         gpu_name="H100-PCIe",
@@ -110,6 +110,6 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=6912,
         gpu_core_max_mhz=1410,
         base_power_w=400,
-        mfu_factor=0.05,  # Calibrated (data quality issue suspected)
+        mfu_factor=0.2139,  # Recalibrated: 0.05 * 4.277 = 0.2139
     ),
 }

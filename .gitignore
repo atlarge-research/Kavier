@@ -41,4 +41,10 @@ finetuning-data/
 # ── Analysis / diagnostics (local only) ──
 analysis/
 
+# ── Validation helper scripts (local only) ──────
+src/kavier_training/validation/*
+!src/kavier_training/validation/__init__.py
+!src/kavier_training/validation/validator.py
+!src/kavier_training/validation/run_benchmarks.py
+
 src/reader/

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kavier"
-version = "0.1.0"
-description = "Kavier: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference"
+version = "0.2.0"
+description = "Kavier: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference and Training"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -35,9 +35,9 @@ dev = [
 ]
 
 [project.scripts]
-kavier-perf  = "performance.main:main"
-kavier-train = "training.main:main"
-kavier-eff   = "efficiency.main:main"
+kavier-perf  = "kavier_inference.cli:main"
+kavier-train = "kavier_training.cli:main"
+kavier-eff   = "kavier_inference.cli:main_efficiency"
 
 # ------------------------------------------------------------------
 #  Tooling
@@ -57,10 +57,11 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["kavier_inference*", "kavier_training*", "library*", "kavier_io*", "opendc*", "efficiency*", "tests*"]
 
 [tool.mypy]
 python_version = "3.11"
 strict = true
 mypy_path = "src"
-packages = ["simulator", "outputter", "performance", "training", "efficiency", "library", "cli"]
+packages = ["kavier_inference", "kavier_training", "library", "io", "opendc", "efficiency"]
 exclude = ["tests/"]

@@ -24,4 +24,3 @@ def main_efficiency() -> None:
 if __name__ == "__main__":
     main()
 
-# Made with Bob

@@ -125,4 +125,3 @@ if __name__ == "__main__":
     print(f"  Max: {metrics['max_error_pct']:.2f}%")
     print("="*60)
 
-# Made with Bob

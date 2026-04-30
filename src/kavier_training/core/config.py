@@ -80,4 +80,3 @@ TRAINING_OVERHEAD_S = 0.05  # 50ms per step
 # Backward pass multiplier (from Megatron-LM paper)
 BACKWARD_MULTIPLIER = 2.0
 
-# Made with Bob

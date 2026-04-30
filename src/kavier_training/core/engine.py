@@ -201,23 +201,4 @@ def simulate_full_training(
     }
 
 
-def _compute_scaling_efficiency(total_gpus: int, number_nodes: int) -> float:
-    """
-    Compute multi-GPU scaling efficiency.
-    
-    Efficiency decreases with more GPUs due to communication overhead.
-    Single-node: ~98% efficiency, Multi-node: ~90-95% efficiency.
-    """
-    if total_gpus == 1:
-        return 1.0
-    
-    if number_nodes == 1:
-        base_efficiency = 0.98
-        gpu_penalty = (total_gpus - 1) * 0.005
-    else:
-        base_efficiency = 0.95
-        gpu_penalty = (total_gpus - number_nodes) * 0.008
-    
-    return max(0.85, base_efficiency - gpu_penalty)
-
 

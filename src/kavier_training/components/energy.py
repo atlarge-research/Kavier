@@ -85,7 +85,8 @@ def estimate_memory_bandwidth_usage(
     model_params: float,
     batch_size: int,
     seq_length: int,
-    step_time_s: float
+    step_time_s: float,
+    hidden_dim: int = 4096
 ) -> float:
     """
     Estimate memory bandwidth usage during training.
@@ -101,6 +102,7 @@ def estimate_memory_bandwidth_usage(
         batch_size: Training batch size
         seq_length: Sequence length
         step_time_s: Time for one training step
+        hidden_dim: Model hidden dimension (default: 4096 for typical 7-8B models)
         
     Returns:
         Estimated bandwidth usage in GB/s
@@ -116,7 +118,8 @@ def estimate_memory_bandwidth_usage(
     param_traffic = model_params * bytes_per_param * (2 + 1 + 2)
     
     # Activation traffic (rough estimate)
-    activation_traffic = batch_size * seq_length * 4096 * bytes_per_param
+    # NOTE: hidden_dim parameter added to avoid hardcoding 4096
+    activation_traffic = batch_size * seq_length * hidden_dim * bytes_per_param
     
     total_bytes = param_traffic + activation_traffic
     total_gb = total_bytes / (1024**3)
@@ -126,4 +129,3 @@ def estimate_memory_bandwidth_usage(
     
     return bandwidth_gbs
 
-# Made with Bob

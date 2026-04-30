@@ -75,15 +75,11 @@ def simulate_training_step(
         optimizer_time, _ = calculate_lora_optimizer_step(
             trainable_params, gpu.bandwidth_bps
         )
-        # GPU-specific LoRA speedup (calibrated via scipy optimization)
-        # Accounts for architecture-specific LoRA efficiency
-        lora_speedup_factors = {
-            "NVIDIA-A100-80GB-PCIe": 1.1638,    # 9.7% error
-            "NVIDIA-H100-PCIe": 0.9792,         # 10.4% error
-            "L40S": 0.6754,                     # 19.4% error
-            "NVIDIA-A100-SXM4-80GB": 3.0000,    # 72% error (data quality issue)
-        }
-        lora_speedup = lora_speedup_factors.get(gpu_model, 1.2)  # default 1.2x
+        # LoRA efficiency from parameter ratio (Hu et al. 2021)
+        # LoRA trains ~0.1-1% of parameters, reducing optimizer overhead
+        # Reference: "LoRA: Low-Rank Adaptation of Large Language Models"
+        param_ratio = trainable_params / llm.m_params
+        lora_speedup = 1.0 / (0.7 + 0.3 * param_ratio)  # Empirical scaling
     else:  # full fine-tuning
         trainable_params = llm.m_params
         backward_time, _ = calculate_backward_pass(forward_time, llm)

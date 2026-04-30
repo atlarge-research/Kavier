@@ -91,6 +91,7 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=1410,
         base_power_w=300,
         mfu_factor=0.4513,  # Calibrated via least-squares
+        network_bandwidth_gbps=64.0,  # PCIe 4.0 x16
     ),
     "NVIDIA-H100-PCIe": GPUSpec(
         gpu_name="NVIDIA-H100-PCIe",
@@ -101,6 +102,7 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=1755,
         base_power_w=350,
         mfu_factor=0.1554,  # Calibrated via least-squares
+        network_bandwidth_gbps=64.0,  # PCIe 4.0 x16
     ),
     "NVIDIA-A100-SXM4-80GB": GPUSpec(
         gpu_name="NVIDIA-A100-SXM4-80GB",
@@ -110,6 +112,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=6912,
         gpu_core_max_mhz=1410,
         base_power_w=400,
-        mfu_factor=0.2139,  # Recalibrated: 0.05 * 4.277 = 0.2139
+        mfu_factor=0.4513,  # Reset to PCIe baseline for recalibration
+        network_bandwidth_gbps=4800.0,  # NVLink 3.0: 600 GB/s = 4800 Gbps
     ),
 }

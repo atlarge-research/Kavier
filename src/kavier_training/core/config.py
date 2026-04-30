@@ -44,20 +44,32 @@ def get_training_compute_efficiency(
     # Calibrated via least-squares optimization on validation data
     base_mfu = gpu_spec.mfu_factor
     
-    # MFU improves with larger batches (better parallelism)
-    # Batch-size scaling factors
-    if total_work < 1024:
-        # Very small batches: poor GPU utilization
-        mfu = base_mfu * 0.6
-    elif total_work < 4096:
-        # Small batches: moderate utilization
-        mfu = base_mfu * 0.8
-    elif total_work < 16384:
-        # Medium batches: good utilization
-        mfu = base_mfu * 0.95
+    # Batch-size scaling: MFU improves with larger batches (better parallelism)
+    if batch_size == 1:
+        batch_scale = 0.5  # Single sample: very poor utilization
+    elif batch_size == 2:
+        batch_scale = 0.65
+    elif batch_size == 4:
+        batch_scale = 0.8
+    elif batch_size <= 8:
+        batch_scale = 0.9
+    elif batch_size <= 16:
+        batch_scale = 0.95
     else:
-        # Large batches: near-optimal utilization
-        mfu = base_mfu * 1.0
+        batch_scale = 1.0  # Large batches: optimal
+    
+    # Sequence-length scaling: Short sequences have higher overhead
+    if seq_length <= 512:
+        seq_scale = 0.7  # High kernel launch overhead relative to compute
+    elif seq_length <= 1024:
+        seq_scale = 0.85
+    elif seq_length <= 2048:
+        seq_scale = 0.95
+    else:
+        seq_scale = 1.0  # Long sequences: overhead amortized
+    
+    # Combined MFU with both scaling factors
+    mfu = base_mfu * batch_scale * seq_scale
     
     return mfu
 

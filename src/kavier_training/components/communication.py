@@ -12,7 +12,7 @@ from typing import Dict, Any
 def simulate_allreduce(
     trainable_params: int,
     num_gpus: int,
-    network_bandwidth_gbps: float = 400.0,
+    network_bandwidth_gbps: float,
 ) -> float:
     """
     Simulate all-reduce using LogP model for distributed training.
@@ -32,7 +32,10 @@ def simulate_allreduce(
     Args:
         trainable_params: Number of trainable parameters
         num_gpus: Total number of GPUs
-        network_bandwidth_gbps: Network bandwidth in Gbps
+        network_bandwidth_gbps: GPU-specific network bandwidth in Gbps
+            - PCIe: ~64 Gbps
+            - NVLink 3.0 (A100 SXM): ~4800 Gbps
+            - NVLink 4.0 (H100 SXM): ~7200 Gbps
         
     Returns:
         Communication time in seconds

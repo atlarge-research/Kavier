@@ -9,6 +9,7 @@ class GPUSpec:
             gpu_core_max_mhz,
             base_power_w: float,
             mfu_factor: float = 0.45,
+            network_bandwidth_gbps: float = 400.0,
     ):
         """
         Initialize GPU specifications for LLM inference and training simulation.
@@ -29,6 +30,11 @@ class GPUSpec:
                 - Ada/Lovelace: ~0.38-0.48
                 
                 Reference: Chowdhery et al. 2022 (PaLM paper) - "Model FLOPs Utilization"
+            network_bandwidth_gbps (float): Inter-GPU network bandwidth in Gbps.
+                Default 400.0 (InfiniBand). NVLink variants:
+                - PCIe: ~64 Gbps (PCIe 4.0 x16)
+                - NVLink 3.0 (A100 SXM): ~600 GB/s = 4800 Gbps
+                - NVLink 4.0 (H100 SXM): ~900 GB/s = 7200 Gbps
 
             -- some parameters were removed as they are not used in the simulation, may be added later --
         """
@@ -38,4 +44,6 @@ class GPUSpec:
         self.bandwidth_bps = memory_bandwidth_gbps * 1e9  # Convert to bytes/sec
         self.memory_gb = memory_gb
         self.core_max_mhz = gpu_core_max_mhz
+        self.base_power_w = base_power_w
         self.mfu_factor = mfu_factor
+        self.network_bandwidth_gbps = network_bandwidth_gbps

@@ -22,6 +22,13 @@ from kavier_training.components.lora import (
     calculate_lora_optimizer_step,
 )
 from kavier_training.components.communication import simulate_allreduce
+from kavier_training.components.energy import (
+    calculate_gpu_power,
+    calculate_compute_utilization,
+    calculate_memory_utilization,
+    estimate_memory_bandwidth_usage,
+)
+from kavier_training.core.config import get_training_compute_efficiency
 
 
 def simulate_training_step(
@@ -83,35 +90,21 @@ def simulate_training_step(
         optimizer_time, _ = calculate_optimizer_step(llm, gpu)
         lora_speedup = 1.0
     
-    # Add communication time for multi-GPU training
-    comm_time = simulate_allreduce(int(trainable_params), num_gpus) if num_gpus > 1 else 0.0
+    # Add communication time for multi-GPU training using GPU-specific bandwidth
+    comm_time = simulate_allreduce(
+        int(trainable_params),
+        num_gpus,
+        gpu.network_bandwidth_gbps
+    ) if num_gpus > 1 else 0.0
     
     step_time_s = (forward_time + backward_time + optimizer_time + comm_time) / lora_speedup
     
     # Multi-GPU scaling correction factor
-    # Accounts for overheads not captured by physics model:
-    # - Synchronization barriers, memory contention, NUMA effects
-    # - Pipeline bubbles, load imbalance, kernel launch overhead
-    # Reference: Calibrated from validation data per GPU model
+    # NOTE: Removed hardcoded correction factors - now using physics-based model
+    # with proper NVLink bandwidth. If accuracy issues persist after recalibration,
+    # small corrections (<1.2x) may be added for synchronization overhead.
     if multi_gpu_correction is None:
-        if num_gpus == 1:
-            multi_gpu_correction = 1.0
-        else:
-            # GPU-specific multi-GPU correction factors (calibrated)
-            # Format: {gpu_model: {num_gpus: correction_factor}}
-            gpu_corrections = {
-                "NVIDIA-H100-PCIe": {2: 1.078, 4: 1.078, 8: 1.078, 16: 1.078, 32: 1.078},
-                "NVIDIA-A100-80GB-PCIe": {2: 1.229, 4: 2.925},
-                "NVIDIA-A100-SXM4-80GB": {2: 1.900, 4: 1.903, 8: 1.900, 16: 1.900, 32: 1.900},
-                "L40S": {2: 6.020, 4: 4.739},
-            }
-            
-            # Get correction for this GPU and GPU count
-            if gpu_model in gpu_corrections and num_gpus in gpu_corrections[gpu_model]:
-                multi_gpu_correction = gpu_corrections[gpu_model][num_gpus]
-            else:
-                # Default fallback for unknown GPU/count combinations
-                multi_gpu_correction = 2.0
+        multi_gpu_correction = 1.0
     
     # In data parallel training, each GPU processes its own batch
     # Apply correction to match observed multi-GPU behavior
@@ -119,12 +112,27 @@ def simulate_training_step(
     total_tokens_per_step = tokens_per_gpu * num_gpus / multi_gpu_correction
     tokens_per_second = total_tokens_per_step / step_time_s if step_time_s > 0 else 0
     
+    # Calculate energy metrics
+    # Compute utilization based on MFU
+    mfu = get_training_compute_efficiency(batch_size, tokens_per_sample, gpu)
+    compute_util = mfu  # MFU directly represents compute utilization
+    
+    # Memory bandwidth utilization
+    bandwidth_used = estimate_memory_bandwidth_usage(
+        llm.m_params, batch_size, tokens_per_sample, step_time_s
+    )
+    peak_bandwidth_gbs = gpu.bandwidth_bps / 1e9
+    memory_util = calculate_memory_utilization(bandwidth_used, peak_bandwidth_gbs)
+    
+    # GPU power consumption
+    power_watts = calculate_gpu_power(compute_util, memory_util, gpu)
+    
     return {
         "step_time_ms": step_time_s * 1000,
         "tokens_per_second": tokens_per_second,
-        "gpu_compute_utilization": 0.0,
-        "gpu_memory_utilization": 0.0,
-        "gpu_power_watts": 0.0,
+        "gpu_compute_utilization": compute_util * 100,  # Convert to percentage
+        "gpu_memory_utilization": memory_util * 100,    # Convert to percentage
+        "gpu_power_watts": power_watts,
     }
 
 

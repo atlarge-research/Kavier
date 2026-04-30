@@ -6,12 +6,9 @@ This script validates the training simulator against real data.
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import sys
 from typing import Dict, List
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-
-from src.kavier_training.core.engine import simulate_training_step
+from kavier_training.core.engine import simulate_training_step
 
 
 def calculate_mape(predicted: List[float], actual: List[float]) -> float:

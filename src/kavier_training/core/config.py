@@ -65,9 +65,6 @@ def get_training_compute_efficiency(
     """
     import math
     
-    # Total work: batch_size × seq_length
-    total_work = batch_size * seq_length
-    
     # Use GPU-specific MFU factor (varies by architecture)
     # Calibrated via least-squares optimization on validation data
     base_mfu = gpu_spec.mfu_factor

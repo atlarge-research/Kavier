@@ -1,5 +1,9 @@
 from library.specs.GPUSpec import GPUSpec
 
+# ============================================================================
+# INFERENCE GPUs (8 GPUs for Kavier Inference Baseline)
+# ============================================================================
+
 GPU_SPEC_LIBRARY = {
     "A10": GPUSpec(
         gpu_name="A10",
@@ -81,7 +85,11 @@ GPU_SPEC_LIBRARY = {
         base_power_w=700,
         mfu_factor=0.58,
     ),
-    # GPUs from ado-sfttrainer dataset
+    
+    # ============================================================================
+    # TRAINING GPUs (3 GPUs from ado-sfttrainer dataset for Training)
+    # ============================================================================
+    
     "NVIDIA-A100-80GB-PCIe": GPUSpec(
         gpu_name="NVIDIA-A100-80GB-PCIe",
         memory_gb=80,
@@ -91,7 +99,7 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=1410,
         base_power_w=300,
         mfu_factor=0.4513,  # Calibrated via least-squares
-        network_bandwidth_gbps=64.0,  # PCIe 4.0 x16
+        network_bandwidth_gbps=512.0,  # PCIe 4.0 x16: 64 GB/s = 512 Gbps
     ),
     "NVIDIA-H100-PCIe": GPUSpec(
         gpu_name="NVIDIA-H100-PCIe",
@@ -102,7 +110,7 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=1755,
         base_power_w=350,
         mfu_factor=0.1554,  # Calibrated via least-squares
-        network_bandwidth_gbps=64.0,  # PCIe 4.0 x16
+        network_bandwidth_gbps=1024.0,  # PCIe 5.0 x16: 128 GB/s = 1024 Gbps
     ),
     "NVIDIA-A100-SXM4-80GB": GPUSpec(
         gpu_name="NVIDIA-A100-SXM4-80GB",

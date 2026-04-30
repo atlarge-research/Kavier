@@ -65,8 +65,8 @@ def simulate_training_step(
     forward_time, _ = calculate_forward_pass(batch_size, tokens_per_sample, llm, gpu)
     
     # Calculate backward and optimizer based on method
-    if method == "lora":
-        # LoRA: reduced trainable parameters
+    if method == "lora" or method == "gptq-lora":
+        # LoRA/GPTQ-LoRA: reduced trainable parameters
         # The speedup is already captured in the component functions:
         # - calculate_lora_backward_pass() uses reduced params
         # - calculate_lora_optimizer_step() uses reduced params

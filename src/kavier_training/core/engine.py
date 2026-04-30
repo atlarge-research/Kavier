@@ -66,6 +66,11 @@ def simulate_training_step(
     
     # Calculate backward and optimizer based on method
     if method == "lora":
+        # LoRA: reduced trainable parameters
+        # The speedup is already captured in the component functions:
+        # - calculate_lora_backward_pass() uses reduced params
+        # - calculate_lora_optimizer_step() uses reduced params
+        # No additional speedup divisor needed (would be double-counting)
         trainable_params = compute_lora_trainable_params(
             int(llm.m_params), llm.d_model, llm.n_layers
         )
@@ -75,16 +80,10 @@ def simulate_training_step(
         optimizer_time, _ = calculate_lora_optimizer_step(
             trainable_params, gpu.bandwidth_bps
         )
-        # LoRA efficiency from parameter ratio (Hu et al. 2021)
-        # LoRA trains ~0.1-1% of parameters, reducing optimizer overhead
-        # Reference: "LoRA: Low-Rank Adaptation of Large Language Models"
-        param_ratio = trainable_params / llm.m_params
-        lora_speedup = 1.0 / (0.7 + 0.3 * param_ratio)  # Empirical scaling
     else:  # full fine-tuning
         trainable_params = llm.m_params
         backward_time, _ = calculate_backward_pass(forward_time, llm)
         optimizer_time, _ = calculate_optimizer_step(llm, gpu)
-        lora_speedup = 1.0
     
     # Add communication time for multi-GPU training using GPU-specific bandwidth
     comm_time = simulate_allreduce(
@@ -93,7 +92,7 @@ def simulate_training_step(
         gpu.network_bandwidth_gbps
     ) if num_gpus > 1 else 0.0
     
-    step_time_s = (forward_time + backward_time + optimizer_time + comm_time) / lora_speedup
+    step_time_s = forward_time + backward_time + optimizer_time + comm_time
     
     # Multi-GPU scaling correction factor
     # NOTE: Removed hardcoded correction factors - now using physics-based model
@@ -115,7 +114,7 @@ def simulate_training_step(
     
     # Memory bandwidth utilization
     bandwidth_used = estimate_memory_bandwidth_usage(
-        llm.m_params, batch_size, tokens_per_sample, step_time_s
+        llm.m_params, batch_size, tokens_per_sample, step_time_s, hidden_dim=llm.d_model
     )
     peak_bandwidth_gbs = gpu.bandwidth_bps / 1e9
     memory_util = calculate_memory_utilization(bandwidth_used, peak_bandwidth_gbs)
@@ -140,6 +139,7 @@ def simulate_full_training(
     batch_size: int,
     number_gpus: int,
     number_nodes: int,
+    total_tokens: int | None = None,
     metrics: str = "both",
 ) -> Dict[str, Any]:
     """
@@ -155,6 +155,7 @@ def simulate_full_training(
         batch_size: Batch size per GPU
         number_gpus: Number of GPUs
         number_nodes: Number of nodes
+        total_tokens: Total tokens to train on (optional, for runtime calculation)
         metrics: "performance", "energy", or "both"
         
     Returns:
@@ -163,7 +164,7 @@ def simulate_full_training(
         - train_tokens_per_gpu_per_second
         - train_samples_per_second
         - train_steps_per_second
-        - train_runtime (seconds)
+        - train_runtime (seconds, if total_tokens provided)
         - gpu_compute_utilization_avg/min/max
         - gpu_memory_utilization_avg/min/peak/max
         - gpu_power_watts_avg/min/max (if metrics includes "energy")
@@ -182,12 +183,15 @@ def simulate_full_training(
     samples_per_second = total_throughput / tokens_per_sample if tokens_per_sample > 0 else 0
     steps_per_second = samples_per_second / batch_size if batch_size > 0 else 0
     
+    # Calculate runtime if total_tokens provided
+    train_runtime = (total_tokens / total_throughput) if (total_tokens and total_throughput > 0) else 0.0
+    
     return {
         "train_tokens_per_second": total_throughput,
         "train_tokens_per_gpu_per_second": tokens_per_gpu,
         "train_samples_per_second": samples_per_second,
         "train_steps_per_second": steps_per_second,
-        "train_runtime": 0.0,
+        "train_runtime": train_runtime,
         "model_name": model_name,
         "gpu_name": gpu_model,
         "method": method,

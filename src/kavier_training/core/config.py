@@ -7,6 +7,32 @@ Based on empirical observations and roofline model analysis.
 from library.specs.GPUSpec import GPUSpec
 
 
+# ============================================================================
+# MFU Scaling Constants
+# ============================================================================
+# Roofline-based batch scaling (Williams et al. 2009)
+# Formula: scale = min(1.0, BATCH_ALPHA × log2(batch_size) + BATCH_BETA)
+BATCH_ALPHA = 0.15  # Logarithmic coefficient for batch scaling
+BATCH_BETA = 0.70   # Base efficiency at batch_size=1
+
+# Sequence-length scaling based on arithmetic intensity
+# Formula: scale = min(1.0, SEQ_GAMMA × log2(seq_length/512) + SEQ_DELTA)
+SEQ_GAMMA = 0.10    # Logarithmic coefficient for sequence scaling
+SEQ_DELTA = 0.85    # Base efficiency at 512 tokens
+
+# ============================================================================
+# Training Overhead Constants
+# ============================================================================
+# Training overhead (kernel launch, synchronization, logging)
+# Based on PyTorch profiling studies and production workloads
+TRAINING_OVERHEAD_S = 0.05  # 50ms per step
+
+# Backward pass multiplier
+# Reference: Shoeybi et al. 2019 "Megatron-LM: Training Multi-Billion Parameter Language Models"
+# Backward pass requires ~2x forward pass compute (gradient computation)
+BACKWARD_MULTIPLIER = 2.0
+
+
 def get_training_compute_efficiency(
     batch_size: int,
     seq_length: int,
@@ -37,6 +63,8 @@ def get_training_compute_efficiency(
         - Williams et al. 2009: "Roofline: An Insightful Visual Performance Model"
         - Chowdhery et al. 2022: "PaLM: Scaling Language Modeling with Pathways" (MFU definition)
     """
+    import math
+    
     # Total work: batch_size × seq_length
     total_work = batch_size * seq_length
     
@@ -44,35 +72,14 @@ def get_training_compute_efficiency(
     # Calibrated via least-squares optimization on validation data
     base_mfu = gpu_spec.mfu_factor
     
-    # Roofline-based batch scaling (Williams et al. 2009)
-    # MFU improves logarithmically with batch size due to better parallelism
-    # Formula: scale = min(1.0, α × log2(batch_size) + β)
-    import math
-    alpha = 0.15  # Logarithmic coefficient
-    beta = 0.70   # Base efficiency
-    batch_scale = min(1.0, alpha * math.log2(max(1, batch_size)) + beta)
+    # Apply batch scaling using centralized constants
+    batch_scale = min(1.0, BATCH_ALPHA * math.log2(max(1, batch_size)) + BATCH_BETA)
     
-    # Sequence-length scaling: Continuous model based on arithmetic intensity
-    # Longer sequences → higher compute/memory ratio → better GPU utilization
-    # Formula: scale = min(1.0, γ × log2(seq_length / 512) + δ)
-    gamma = 0.10  # Logarithmic coefficient
-    delta = 0.85  # Base efficiency at 512 tokens
-    seq_scale = min(1.0, gamma * math.log2(max(1, seq_length / 512)) + delta)
+    # Apply sequence-length scaling using centralized constants
+    seq_scale = min(1.0, SEQ_GAMMA * math.log2(max(1, seq_length / 512)) + SEQ_DELTA)
     
     # Combined MFU with both scaling factors
     mfu = base_mfu * batch_scale * seq_scale
     
     return mfu
-
-
-# Training overhead (kernel launch, synchronization)
-# Based on empirical observations from production workloads
-# Includes: kernel launch overhead, CUDA synchronization, logging
-# Reference: Typical overhead observed in distributed training systems
-TRAINING_OVERHEAD_S = 0.05  # 50ms per step
-
-# Backward pass multiplier
-# Reference: Shoeybi et al. 2019 "Megatron-LM: Training Multi-Billion Parameter Language Models"
-# Backward pass requires ~2x forward pass compute (gradient computation)
-BACKWARD_MULTIPLIER = 2.0
 

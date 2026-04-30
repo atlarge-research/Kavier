@@ -51,11 +51,20 @@ def test_forward_pass():
     return forward_time_s, activation_memory_gb
 
 
-def test_backward_pass(forward_time_s):
+def test_backward_pass():
     """Test backward pass calculation."""
     print("\n=== Testing Backward Pass ===")
     
     llm = LLM_SPEC_LIBRARY["Llama-3-8B"]
+    gpu = GPU_SPEC_LIBRARY["A100-80GB"]
+    
+    # Calculate forward time first
+    forward_time_s, _ = calculate_forward_pass(
+        batch_size=8,
+        seq_length=2048,
+        llm=llm,
+        gpu=gpu,
+    )
     
     backward_time_s, gradient_memory_gb = calculate_backward_pass(
         forward_time_s=forward_time_s,
@@ -179,8 +188,8 @@ if __name__ == "__main__":
     print("=" * 60)
     
     # Test individual components
-    forward_time_s, _ = test_forward_pass()
-    test_backward_pass(forward_time_s)
+    test_forward_pass()
+    test_backward_pass()
     test_optimizer_step()
     
     # Test full training step

@@ -13,12 +13,12 @@ from library.specs.GPUSpec import GPUSpec
 # Batch scaling: MFU increases with batch_size because larger batches
 # improve arithmetic intensity (compute / memory-access ratio).
 # Reaches 1.0 around bs=64; small batches (bs<8) have significantly lower MFU.
-BATCH_ALPHA = 0.0671
-BATCH_BETA = 0.8148
+BATCH_ALPHA = 0.0341
+BATCH_BETA = 0.8147
 
 # Sequence-length scaling: longer sequences amortise attention overhead.
-SEQ_GAMMA = 0.1761
-SEQ_DELTA = 1.0049
+SEQ_GAMMA = 0.1781
+SEQ_DELTA = 3.5714
 
 # ============================================================================
 # Training Overhead Constants

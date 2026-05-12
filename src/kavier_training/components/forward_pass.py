@@ -10,7 +10,7 @@ References:
 from library.specs.GPUSpec import GPUSpec
 from library.specs.LLMSpec import LLMSpec
 from kavier_training.core.config import get_training_compute_efficiency
-from kavier_training.core.calibration import get_training_overhead_s, get_model_fwd_scale
+from kavier_training.core.calibration import get_training_overhead_s
 
 
 def calculate_forward_pass(
@@ -55,8 +55,7 @@ def calculate_forward_pass(
     
     # FLOPs: 2 operations per parameter per token (Shoeybi et al. 2019)
     # For MoE models, use active_params (only active experts contribute FLOPs)
-    # model_fwd_scale tunes effective param count per model (hyperparameter)
-    flops_required = 2.0 * llm.active_params * total_tokens * get_model_fwd_scale(llm.name)
+    flops_required = 2.0 * llm.active_params * total_tokens
     
     # Achieved FLOPS based on batch size, GPU specs, and architecture
     mfu = get_training_compute_efficiency(batch_size, seq_length, gpu)

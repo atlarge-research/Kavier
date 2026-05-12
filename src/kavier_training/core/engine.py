@@ -31,9 +31,6 @@ from kavier_training.components.energy import (
 from kavier_training.core.config import get_training_compute_efficiency
 from kavier_training.core.calibration import (
     get_multi_gpu_correction, get_method_scale, get_model_scale,
-    get_version_scale, get_dtype_scale, get_model_method_scale,
-    get_batch_size_correction, get_model_method_version_scale,
-    get_model_method_gpucount_scale,
 )
 
 
@@ -47,7 +44,7 @@ def simulate_training_step(
     num_nodes: int = 1,
     multi_gpu_correction: float | None = None,
     fms_version: str | None = None,
-    torch_dtype: str | None = None,
+    torch_dtype: str | None = None,  # kept for API compat; unused in physics
 ) -> Dict[str, float]:
     """
     Simulate a single training step (forward + backward + optimizer).
@@ -105,14 +102,7 @@ def simulate_training_step(
     if multi_gpu_correction is None:
         multi_gpu_correction = get_multi_gpu_correction(num_gpus)
     
-    # Throughput scales capturing kernel/framework/software-version efficiency
-    version_s = get_version_scale(fms_version) if fms_version else 1.0
-    dtype_s = get_dtype_scale(torch_dtype) if torch_dtype else 1.0
-    mm_s = get_model_method_scale(model_name, method)
-    bs_s = get_batch_size_correction(batch_size)
-    mmv_s = get_model_method_version_scale(model_name, method, fms_version) if fms_version else 1.0
-    mmg_s = get_model_method_gpucount_scale(model_name, method, num_gpus)
-    throughput_scale = get_method_scale(method) * get_model_scale(model_name) * version_s * dtype_s * mm_s * bs_s * mmv_s * mmg_s
+    throughput_scale = get_method_scale(method) * get_model_scale(model_name)
 
     # dataset_tokens_per_second in the training data reports per-node throughput
     # for multi-node jobs (= per_gpu_tps * gpus_per_node).

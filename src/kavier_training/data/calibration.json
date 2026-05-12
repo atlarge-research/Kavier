@@ -1,93 +1,31 @@
 {
-  "version": 1,
-  "comm_scale": 1.0008656195474823,
-  "training_overhead_s": 0.009984168439532943,
+  "version": 2,
+  "comm_scale": 0.8223,
+  "training_overhead_s": 0.0,
   "mfu_multiplier": {
-    "NVIDIA-A100-SXM4-80GB": 1.1357279976592136,
-    "NVIDIA-A100-80GB-PCIe": 0.8264936850659241,
-    "L40S": 1.0589921250999033
+    "NVIDIA-A100-SXM4-80GB": 1.2328,
+    "NVIDIA-A100-80GB-PCIe": 1.1605,
+    "L40S": 1.0241
   },
   "multi_gpu_correction": {
     "default": 1.0,
     "by_num_gpus": {
-      "2": 1.0103703872934198,
-      "4": 1.034776669493751,
-      "8": 1.021606890597983,
-      "32": 1.099802544635688,
-      "128": 0.9999999999999998
+      "2": 1.0803,
+      "4": 1.1057,
+      "8": 1.1312,
+      "32": 1.2927,
+      "128": 4.2471
     }
   },
-  "method_scale": {},
-  "model_scale": {},
-  "model_method_scale": {
-    "granite-3.1-3b-a800m-instruct:full": 0.9994605363069387,
-    "llama3.1-70b:lora": 1.2936128724155171,
-    "mistral-7b-v0.1:full": 1.017575357473091,
-    "mistral-7b-v0.1:gptq-lora": 1.0800051781414144,
-    "mistral-7b-v0.1:lora": 0.9727879441842004,
-    "mixtral-8x7b-instruct-v0.1:full": 0.22763064535322106,
-    "mixtral-8x7b-instruct-v0.1:gptq-lora": 1.0023914809204453,
-    "mixtral-8x7b-instruct-v0.1:lora": 0.8922678514186513
+  "method_scale": {
+    "full": 0.8348,
+    "gptq-lora": 1.0951,
+    "lora": 0.9888
   },
-  "version_scale": {
-    "0.4.0.1.0": 1.024628066242776,
-    "2.0.1": 5.518527693548612,
-    "2.1.0": 1.0139547824361013,
-    "2.4.0": 0.9217028102134395,
-    "2.7.1": 0.9057742300243555,
-    "2.8.2": 0.30255208139029677
-  },
-  "dtype_scale": {
-    "bfloat16": 1.010556571764755,
-    "float16": 1.0045371161432541
-  },
-  "batch_size_correction": {},
-  "model_fwd_scale": {},
-  "model_method_version_scale": {
-    "llama3.1-70b:lora:2.4.0": 0.9806196412889444,
-    "llama3.1-70b:lora:2.7.1": 1.0968136130990271,
-    "mistral-7b-v0.1:full:0.4.0.1.0": 0.9654831207664022,
-    "mistral-7b-v0.1:gptq-lora:2.0.1": 1.0022844151099157,
-    "mistral-7b-v0.1:gptq-lora:2.1.0": 0.9938730268604203,
-    "mistral-7b-v0.1:lora:0.4.0.1.0": 1.2662060101862247,
-    "mistral-7b-v0.1:lora:2.0.1": 0.9982148596329727,
-    "mistral-7b-v0.1:lora:2.1.0": 0.9705655378002084,
-    "mixtral-8x7b-instruct-v0.1:full:2.7.1": 0.9971910812552107,
-    "mixtral-8x7b-instruct-v0.1:gptq-lora:2.0.1": 0.7067160677445926,
-    "mixtral-8x7b-instruct-v0.1:gptq-lora:2.1.0": 1.0304675541775583,
-    "mixtral-8x7b-instruct-v0.1:lora:0.4.0.1.0": 0.6672698156076059,
-    "mixtral-8x7b-instruct-v0.1:lora:2.1.0": 0.6615695097686983,
-    "mixtral-8x7b-instruct-v0.1:lora:2.4.0": 1.0027054610856614,
-    "mixtral-8x7b-instruct-v0.1:lora:2.7.1": 1.1383028788297704
-  },
-  "model_method_gpucount_scale": {
-    "llama3.1-70b:lora:2": 0.6876566201587996,
-    "llama3.1-70b:lora:32": 1.042041963646787,
-    "llama3.1-70b:lora:4": 1.011796448155865,
-    "llama3.1-70b:lora:8": 0.9910354162506751,
-    "mistral-7b-v0.1:full:1": 1.1427952860277264,
-    "mistral-7b-v0.1:full:2": 0.9751954138928316,
-    "mistral-7b-v0.1:full:4": 0.9867000122782223,
-    "mistral-7b-v0.1:gptq-lora:1": 1.06049524844689,
-    "mistral-7b-v0.1:gptq-lora:2": 1.0157308489574004,
-    "mistral-7b-v0.1:gptq-lora:4": 0.9861166889246875,
-    "mistral-7b-v0.1:gptq-lora:8": 0.9178810450136257,
-    "mistral-7b-v0.1:lora:1": 1.066429420836764,
-    "mistral-7b-v0.1:lora:2": 0.9811254743907352,
-    "mistral-7b-v0.1:lora:4": 0.9642608960444414,
-    "mistral-7b-v0.1:lora:8": 0.9264997898830125,
-    "mixtral-8x7b-instruct-v0.1:full:8": 1.000621328738268,
-    "mixtral-8x7b-instruct-v0.1:gptq-lora:1": 1.0739911991522577,
-    "mixtral-8x7b-instruct-v0.1:gptq-lora:2": 1.0014298459580613,
-    "mixtral-8x7b-instruct-v0.1:gptq-lora:4": 1.0028496963680973,
-    "mixtral-8x7b-instruct-v0.1:gptq-lora:8": 0.967946818875547,
-    "mixtral-8x7b-instruct-v0.1:lora:2": 1.1038366462903348,
-    "mixtral-8x7b-instruct-v0.1:lora:32": 0.8740687998964458,
-    "mixtral-8x7b-instruct-v0.1:lora:4": 1.0005576536917604,
-    "mixtral-8x7b-instruct-v0.1:lora:8": 0.9500897449868257,
-    "llama3.1-70b:full:128": 0.6131190657108048,
-    "llama3.1-70b:lora:128": 0.40194148301451543,
-    "mixtral-8x7b-instruct-v0.1:full:128": 0.34940517269763754,
-    "mixtral-8x7b-instruct-v0.1:lora:128": 0.15903745312270406
+  "model_scale": {
+    "granite-3.1-3b-a800m-instruct": 1.0235,
+    "llama3.1-70b": 1.2900,
+    "mistral-7b-v0.1": 0.9688,
+    "mixtral-8x7b-instruct-v0.1": 0.9799
   }
 }

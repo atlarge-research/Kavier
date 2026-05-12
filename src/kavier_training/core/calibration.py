@@ -15,7 +15,7 @@ _CALIBRATION_PATH = Path(__file__).resolve().parent.parent / "data" / "calibrati
 
 # Defaults = physics-only (matches pre-calibration behavior)
 _DEFAULT: Dict[str, Any] = {
-    "version": 1,
+    "version": 2,
     "comm_scale": 1.0,
     "training_overhead_s": 0.05,
     "mfu_multiplier": {},
@@ -25,13 +25,6 @@ _DEFAULT: Dict[str, Any] = {
     },
     "method_scale": {},
     "model_scale": {},
-    "model_method_scale": {},
-    "version_scale": {},
-    "dtype_scale": {},
-    "batch_size_correction": {},
-    "model_fwd_scale": {},
-    "model_method_version_scale": {},
-    "model_method_gpucount_scale": {},
 }
 
 _active: Dict[str, Any] | None = None
@@ -104,44 +97,6 @@ def get_method_scale(method: str) -> float:
 def get_model_scale(model_name: str) -> float:
     m = get_active().get("model_scale") or {}
     return float(m.get(model_name, 1.0))
-
-
-def get_model_method_scale(model_name: str, method: str) -> float:
-    m = get_active().get("model_method_scale") or {}
-    return float(m.get(f"{model_name}:{method}", 1.0))
-
-
-def get_version_scale(fms_version: str) -> float:
-    m = get_active().get("version_scale") or {}
-    return float(m.get(fms_version, 1.0))
-
-
-def get_dtype_scale(torch_dtype: str) -> float:
-    m = get_active().get("dtype_scale") or {}
-    return float(m.get(torch_dtype, 1.0))
-
-
-def get_batch_size_correction(batch_size: int) -> float:
-    m = get_active().get("batch_size_correction") or {}
-    return float(m.get(str(batch_size), 1.0))
-
-
-def get_model_fwd_scale(model_name: str) -> float:
-    """Multiplier on forward-pass compute time (tunes effective param count)."""
-    m = get_active().get("model_fwd_scale") or {}
-    return float(m.get(model_name, 1.0))
-
-
-def get_model_method_version_scale(model_name: str, method: str, version: str) -> float:
-    """Interaction: model x method x fms_version."""
-    m = get_active().get("model_method_version_scale") or {}
-    return float(m.get(f"{model_name}:{method}:{version}", 1.0))
-
-
-def get_model_method_gpucount_scale(model_name: str, method: str, num_gpus: int) -> float:
-    """Interaction: model x method x gpu_count."""
-    m = get_active().get("model_method_gpucount_scale") or {}
-    return float(m.get(f"{model_name}:{method}:{num_gpus}", 1.0))
 
 
 def save_calibration(data: Dict[str, Any], path: Path | None = None) -> None:

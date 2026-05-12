@@ -29,6 +29,12 @@ from kavier_training.components.energy import (
     estimate_memory_bandwidth_usage,
 )
 from kavier_training.core.config import get_training_compute_efficiency
+from kavier_training.core.calibration import (
+    get_multi_gpu_correction, get_method_scale, get_model_scale,
+    get_version_scale, get_dtype_scale, get_model_method_scale,
+    get_batch_size_correction, get_model_method_version_scale,
+    get_model_method_gpucount_scale,
+)
 
 
 def simulate_training_step(
@@ -38,7 +44,10 @@ def simulate_training_step(
     batch_size: int,
     method: str,
     num_gpus: int = 1,
+    num_nodes: int = 1,
     multi_gpu_correction: float | None = None,
+    fms_version: str | None = None,
+    torch_dtype: str | None = None,
 ) -> Dict[str, float]:
     """
     Simulate a single training step (forward + backward + optimizer).
@@ -49,11 +58,14 @@ def simulate_training_step(
         tokens_per_sample: Sequence length
         batch_size: Batch size per GPU
         method: Training method ("full" or "lora")
+        num_gpus: Total number of GPUs across all nodes.
+        num_nodes: Number of physical nodes (default 1).
         
     Returns:
         Dictionary with step metrics:
         - step_time_ms: Time for one training step
-        - tokens_per_second: Throughput
+        - tokens_per_second: Throughput (matches dataset_tokens_per_second,
+          which reports per-node throughput for multi-node jobs)
         - gpu_compute_utilization: GPU utilization %
         - gpu_memory_utilization: Memory utilization %
         - gpu_power_watts: Power consumption
@@ -66,11 +78,6 @@ def simulate_training_step(
     
     # Calculate backward and optimizer based on method
     if method == "lora" or method == "gptq-lora":
-        # LoRA/GPTQ-LoRA: reduced trainable parameters
-        # The speedup is already captured in the component functions:
-        # - calculate_lora_backward_pass() uses reduced params
-        # - calculate_lora_optimizer_step() uses reduced params
-        # No additional speedup divisor needed (would be double-counting)
         trainable_params = compute_lora_trainable_params(
             int(llm.m_params), llm.d_model, llm.n_layers
         )
@@ -85,27 +92,34 @@ def simulate_training_step(
         backward_time, _ = calculate_backward_pass(forward_time, llm)
         optimizer_time, _ = calculate_optimizer_step(llm, gpu)
     
-    # Add communication time for multi-GPU training using GPU-specific bandwidth
+    # Communication: hierarchical allreduce (intra-node NVLink, inter-node IB)
     comm_time = simulate_allreduce(
         int(trainable_params),
         num_gpus,
-        gpu.network_bandwidth_gbps
+        gpu.network_bandwidth_gbps,
+        num_nodes=num_nodes,
     ) if num_gpus > 1 else 0.0
     
     step_time_s = forward_time + backward_time + optimizer_time + comm_time
     
-    # Multi-GPU scaling correction factor
-    # NOTE: Removed hardcoded correction factors - now using physics-based model
-    # with proper NVLink bandwidth. If accuracy issues persist after recalibration,
-    # small corrections (<1.2x) may be added for synchronization overhead.
     if multi_gpu_correction is None:
-        multi_gpu_correction = 1.0
+        multi_gpu_correction = get_multi_gpu_correction(num_gpus)
     
-    # In data parallel training, each GPU processes its own batch
-    # Apply correction to match observed multi-GPU behavior
+    # Throughput scales capturing kernel/framework/software-version efficiency
+    version_s = get_version_scale(fms_version) if fms_version else 1.0
+    dtype_s = get_dtype_scale(torch_dtype) if torch_dtype else 1.0
+    mm_s = get_model_method_scale(model_name, method)
+    bs_s = get_batch_size_correction(batch_size)
+    mmv_s = get_model_method_version_scale(model_name, method, fms_version) if fms_version else 1.0
+    mmg_s = get_model_method_gpucount_scale(model_name, method, num_gpus)
+    throughput_scale = get_method_scale(method) * get_model_scale(model_name) * version_s * dtype_s * mm_s * bs_s * mmv_s * mmg_s
+
+    # dataset_tokens_per_second in the training data reports per-node throughput
+    # for multi-node jobs (= per_gpu_tps * gpus_per_node).
+    gpus_per_node = max(1, num_gpus // num_nodes) if num_nodes > 0 else num_gpus
     tokens_per_gpu = batch_size * tokens_per_sample
-    total_tokens_per_step = tokens_per_gpu * num_gpus / multi_gpu_correction
-    tokens_per_second = total_tokens_per_step / step_time_s if step_time_s > 0 else 0
+    total_tokens_per_step = tokens_per_gpu * gpus_per_node / multi_gpu_correction
+    tokens_per_second = (total_tokens_per_step / step_time_s * throughput_scale) if step_time_s > 0 else 0
     
     # Calculate energy metrics
     # Compute utilization based on MFU
@@ -146,44 +160,20 @@ def simulate_full_training(
     Simulate complete training run and return predictions.
     
     This is the main entry point called by the CLI.
-    
-    Args:
-        model_name: LLM model name
-        method: Training method ("full" or "lora")
-        gpu_model: GPU model name
-        tokens_per_sample: Sequence length
-        batch_size: Batch size per GPU
-        number_gpus: Number of GPUs
-        number_nodes: Number of nodes
-        total_tokens: Total tokens to train on (optional, for runtime calculation)
-        metrics: "performance", "energy", or "both"
-        
-    Returns:
-        Dictionary:
-        - train_tokens_per_second
-        - train_tokens_per_gpu_per_second
-        - train_samples_per_second
-        - train_steps_per_second
-        - train_runtime (seconds, if total_tokens provided)
-        - gpu_compute_utilization_avg/min/max
-        - gpu_memory_utilization_avg/min/peak/max
-        - gpu_power_watts_avg/min/max (if metrics includes "energy")
-        - etc.
     """
-    llm = LLM_SPEC_LIBRARY[model_name]
-    gpu = GPU_SPEC_LIBRARY[gpu_model]
     total_gpus = number_gpus * number_nodes
     
     step_result = simulate_training_step(
-        model_name, gpu_model, tokens_per_sample, batch_size, method, total_gpus
+        model_name, gpu_model, tokens_per_sample, batch_size, method,
+        num_gpus=total_gpus, num_nodes=number_nodes,
     )
     total_throughput = step_result["tokens_per_second"]
     
-    tokens_per_gpu = total_throughput / total_gpus if total_gpus > 0 else total_throughput
+    gpus_per_node = max(1, number_gpus)
+    tokens_per_gpu = total_throughput / gpus_per_node if gpus_per_node > 0 else total_throughput
     samples_per_second = total_throughput / tokens_per_sample if tokens_per_sample > 0 else 0
     steps_per_second = samples_per_second / batch_size if batch_size > 0 else 0
     
-    # Calculate runtime if total_tokens provided
     train_runtime = (total_tokens / total_throughput) if (total_tokens and total_throughput > 0) else 0.0
     
     return {

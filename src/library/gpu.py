@@ -1,6 +1,21 @@
 from library.specs.GPUSpec import GPUSpec
 
 # ============================================================================
+# Kavier GPU Specifications Library
+# ============================================================================
+#
+# This module contains detailed GPU specifications for physics-based simulation.
+# These specs are calibrated for Kavier's analytical models and include parameters
+# like MFU factors, network bandwidth, and memory bandwidth.
+#
+# NOTE: For simplified GPU specs used by power predictor and webapp, see:
+#       common/hardware_specs.py
+#
+# The duplication is intentional - Kavier is a standalone physics simulator with
+# its own calibrated parameters optimized for accuracy in LLM training simulation.
+# ============================================================================
+
+# ============================================================================
 # INFERENCE GPUs (8 GPUs for Kavier Inference Baseline)
 # ============================================================================
 
@@ -13,7 +28,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=9216,
         gpu_core_max_mhz=1695,
         base_power_w=150,
-        mfu_factor=0.40,
+        mfu_factor=0.40,# look more into MFU, potentially make it dynamic
     ),
     "A100-40GB": GPUSpec(
         gpu_name="A100-40GB",

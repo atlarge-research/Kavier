@@ -9,7 +9,8 @@ References:
 
 from library.specs.GPUSpec import GPUSpec
 from library.specs.LLMSpec import LLMSpec
-from kavier_training.core.config import get_training_compute_efficiency, TRAINING_OVERHEAD_S
+from kavier_training.core.config import get_training_compute_efficiency
+from kavier_training.core.calibration import get_training_overhead_s, get_model_fwd_scale
 
 
 def calculate_forward_pass(
@@ -53,14 +54,20 @@ def calculate_forward_pass(
     total_tokens = batch_size * seq_length
     
     # FLOPs: 2 operations per parameter per token (Shoeybi et al. 2019)
-    flops_required = 2.0 * llm.m_params * total_tokens
+    # For MoE models, use active_params (only active experts contribute FLOPs)
+    # model_fwd_scale tunes effective param count per model (hyperparameter)
+    flops_required = 2.0 * llm.active_params * total_tokens * get_model_fwd_scale(llm.name)
     
     # Achieved FLOPS based on batch size, GPU specs, and architecture
     mfu = get_training_compute_efficiency(batch_size, seq_length, gpu)
     achieved_flops = gpu.fp_16_tensor_core_tflops * 1e12 * mfu
     
     # Time = FLOPs / achieved_FLOPS + overhead
-    forward_time_s = (flops_required / achieved_flops) + TRAINING_OVERHEAD_S
+    forward_time_s = (flops_required / achieved_flops) + get_training_overhead_s()
+    
+    # MoE routing overhead: expert selection adds ~1-2% to forward time
+    if llm.is_moe:
+        forward_time_s *= 1.015  # 1.5% routing overhead
     
     # Calculate activation memory (from ZeRO paper [3])
     # Activations must be stored for backward pass gradient computation

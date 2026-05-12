@@ -10,15 +10,15 @@ from library.specs.GPUSpec import GPUSpec
 # ============================================================================
 # MFU Scaling Constants
 # ============================================================================
-# Roofline-based batch scaling (Williams et al. 2009)
-# Formula: scale = min(1.0, BATCH_ALPHA × log2(batch_size) + BATCH_BETA)
-BATCH_ALPHA = 0.15  # Logarithmic coefficient for batch scaling
-BATCH_BETA = 0.70   # Base efficiency at batch_size=1
+# Batch scaling: MFU increases with batch_size because larger batches
+# improve arithmetic intensity (compute / memory-access ratio).
+# Reaches 1.0 around bs=64; small batches (bs<8) have significantly lower MFU.
+BATCH_ALPHA = 0.0671
+BATCH_BETA = 0.8148
 
-# Sequence-length scaling based on arithmetic intensity
-# Formula: scale = min(1.0, SEQ_GAMMA × log2(seq_length/512) + SEQ_DELTA)
-SEQ_GAMMA = 0.10    # Logarithmic coefficient for sequence scaling
-SEQ_DELTA = 0.85    # Base efficiency at 512 tokens
+# Sequence-length scaling: longer sequences amortise attention overhead.
+SEQ_GAMMA = 0.1761
+SEQ_DELTA = 1.0049
 
 # ============================================================================
 # Training Overhead Constants
@@ -67,12 +67,11 @@ def get_training_compute_efficiency(
     
     # Use GPU-specific MFU factor (varies by architecture)
     # Calibrated via least-squares optimization on validation data
-    base_mfu = gpu_spec.mfu_factor
+    from kavier_training.core.calibration import get_mfu_multiplier
+
+    base_mfu = gpu_spec.mfu_factor * get_mfu_multiplier(gpu_spec.name)
     
-    # Apply batch scaling using centralized constants
     batch_scale = min(1.0, BATCH_ALPHA * math.log2(max(1, batch_size)) + BATCH_BETA)
-    
-    # Apply sequence-length scaling using centralized constants
     seq_scale = min(1.0, SEQ_GAMMA * math.log2(max(1, seq_length / 512)) + SEQ_DELTA)
     
     # Combined MFU with both scaling factors

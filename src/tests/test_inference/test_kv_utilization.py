@@ -11,9 +11,7 @@ gpu = GPUSpec(
     memory_gb=24,
     base_power_w=150,
 )
-llm = LLMSpec(
-    llm_name="Tiny", n_layers=2, n_heads=2, d_head=64, d_model=128, p_bytes=2, m_params=1e6
-)
+llm = LLMSpec(llm_name="Tiny", n_layers=2, n_heads=2, d_head=64, d_model=128, p_bytes=2, m_params=1e6)
 
 
 def test_kv_usage_bounds():

@@ -8,7 +8,6 @@
     "L40S": 1.0241
   },
   "multi_gpu_correction": {
-    "default": 1.0,
     "by_num_gpus": {
       "2": 1.0803,
       "4": 1.1057,

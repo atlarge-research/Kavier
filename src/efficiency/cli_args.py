@@ -20,4 +20,3 @@ def add_efficiency_args(parser):
         help="Optional path to save JSON summary",
     )
     return parser
-

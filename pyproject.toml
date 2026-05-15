@@ -31,6 +31,8 @@ dev = [
     "hypothesis>=6.102",
     "ruff>=0.4",
     "mypy>=1.10",
+    "pandas-stubs>=2.2",
+    "types-tqdm",
     "types-cachetools",
 ]
 
@@ -63,5 +65,12 @@ include = ["kavier_inference*", "kavier_training*", "library*", "kavier_io*", "o
 python_version = "3.11"
 strict = true
 mypy_path = "src"
-packages = ["kavier_inference", "kavier_training", "library", "io", "opendc", "efficiency"]
+packages = [
+    "kavier_inference",
+    "kavier_training",
+    "library",
+    "kavier_io",
+    "opendc",
+    "efficiency",
+]
 exclude = ["tests/"]

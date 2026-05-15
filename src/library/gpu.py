@@ -1,24 +1,5 @@
 from library.specs.GPUSpec import GPUSpec
 
-# ============================================================================
-# Kavier GPU Specifications Library
-# ============================================================================
-#
-# This module contains detailed GPU specifications for physics-based simulation.
-# These specs are calibrated for Kavier's analytical models and include parameters
-# like MFU factors, network bandwidth, and memory bandwidth.
-#
-# NOTE: For simplified GPU specs used by power predictor and webapp, see:
-#       common/hardware_specs.py
-#
-# The duplication is intentional - Kavier is a standalone physics simulator with
-# its own calibrated parameters optimized for accuracy in LLM training simulation.
-# ============================================================================
-
-# ============================================================================
-# INFERENCE GPUs (8 GPUs for Kavier Inference Baseline)
-# ============================================================================
-
 GPU_SPEC_LIBRARY = {
     "A10": GPUSpec(
         gpu_name="A10",
@@ -28,7 +9,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=9216,
         gpu_core_max_mhz=1695,
         base_power_w=150,
-        mfu_factor=0.40,# look more into MFU, potentially make it dynamic
+        mfu_factor=0.40,
     ),
     "A100-40GB": GPUSpec(
         gpu_name="A100-40GB",
@@ -68,7 +49,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=18176,
         gpu_core_max_mhz=2520,
         base_power_w=350,
-        mfu_factor=0.1042,  # Recalibrated: 0.48 / 4.599 = 0.1042
+        mfu_factor=0.1042,
     ),
     "H100-PCIe": GPUSpec(
         gpu_name="H100-PCIe",
@@ -78,7 +59,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=14592,
         gpu_core_max_mhz=1755,
         base_power_w=350,
-        mfu_factor=0.1554,  # Calibrated via least-squares
+        mfu_factor=0.1554,
     ),
     "H100-SXM": GPUSpec(
         gpu_name="H100-SXM",
@@ -100,11 +81,6 @@ GPU_SPEC_LIBRARY = {
         base_power_w=700,
         mfu_factor=0.58,
     ),
-    
-    # ============================================================================
-    # TRAINING GPUs (3 GPUs from ado-sfttrainer dataset for Training)
-    # ============================================================================
-    
     "NVIDIA-A100-80GB-PCIe": GPUSpec(
         gpu_name="NVIDIA-A100-80GB-PCIe",
         memory_gb=80,
@@ -113,8 +89,8 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=6912,
         gpu_core_max_mhz=1410,
         base_power_w=300,
-        mfu_factor=0.4513,  # Calibrated via least-squares
-        network_bandwidth_gbps=512.0,  # PCIe 4.0 x16: 64 GB/s = 512 Gbps
+        mfu_factor=0.4513,
+        network_bandwidth_gbps=512.0,
     ),
     "NVIDIA-H100-PCIe": GPUSpec(
         gpu_name="NVIDIA-H100-PCIe",
@@ -124,8 +100,8 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=14592,
         gpu_core_max_mhz=1755,
         base_power_w=350,
-        mfu_factor=0.1554,  # Calibrated via least-squares
-        network_bandwidth_gbps=1024.0,  # PCIe 5.0 x16: 128 GB/s = 1024 Gbps
+        mfu_factor=0.1554,
+        network_bandwidth_gbps=1024.0,
     ),
     "NVIDIA-A100-SXM4-80GB": GPUSpec(
         gpu_name="NVIDIA-A100-SXM4-80GB",
@@ -135,7 +111,7 @@ GPU_SPEC_LIBRARY = {
         gpu_cores=6912,
         gpu_core_max_mhz=1410,
         base_power_w=400,
-        mfu_factor=0.4513,  # Reset to PCIe baseline for recalibration
-        network_bandwidth_gbps=4800.0,  # NVLink 3.0: 600 GB/s = 4800 Gbps
+        mfu_factor=0.4513,
+        network_bandwidth_gbps=4800.0,
     ),
 }

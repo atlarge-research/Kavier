@@ -1,5 +1,5 @@
-from kavier_inference.core.config import CacheCfg
 from kavier_inference.core.cache import PrefixCache
+from kavier_inference.core.config import CacheCfg
 
 
 def make_cache(max_entries=3, scope="session"):

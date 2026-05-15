@@ -1,9 +1,5 @@
 from library.specs.LLMSpec import LLMSpec
 
-# ============================================================================
-# INFERENCE LLMs (12 LLMs for Kavier Inference Baseline)
-# ============================================================================
-
 LLM_SPEC_LIBRARY = {
     "MPT-7B": LLMSpec(
         llm_name="MPT-7B",
@@ -104,10 +100,6 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=176e9,
     ),
-    
-    # ============================================================================
-    # TRAINING LLMs (4 models from recommender system for Training)
-    # ============================================================================
     "llama3.1-70b": LLMSpec(
         llm_name="llama3.1-70b",
         n_layers=80,
@@ -117,8 +109,6 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=70e9,
     ),
-
-
     "granite-3.1-3b-a800m-instruct": LLMSpec(
         llm_name="granite-3.1-3b-a800m-instruct",
         n_layers=28,
@@ -128,7 +118,6 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=3e9,
     ),
-    
     "mistral-7b-v0.1": LLMSpec(
         llm_name="mistral-7b-v0.1",
         n_layers=32,
@@ -145,9 +134,9 @@ LLM_SPEC_LIBRARY = {
         d_head=128,
         d_model=4096,
         p_bytes=2,
-        m_params=47e9,  # 46.7B total params (8 experts × ~5.6B MLP each + shared attention)
+        m_params=47e9,
         num_experts=8,
         active_experts=2,
-        active_params=13e9,  # ~13B active per token: shared attention (~5B) + 2 expert MLPs (~4B each)
-    )  
+        active_params=13e9,
+    ),
 }

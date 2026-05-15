@@ -46,5 +46,6 @@ src/kavier_training/validation/*
 !src/kavier_training/validation/__init__.py
 !src/kavier_training/validation/validator.py
 !src/kavier_training/validation/run_benchmarks.py
+!src/kavier_training/validation/fit_kavier_calibration.py
 
 src/reader/

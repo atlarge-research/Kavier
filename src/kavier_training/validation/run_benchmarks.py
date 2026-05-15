@@ -34,6 +34,7 @@ def run_benchmark(df: pd.DataFrame, name: str, filter_fn=None) -> Dict:
                 batch_size=int(row["batch_size"]),
                 method=row["method"],
                 num_gpus=int(row["number_gpus"]),
+                num_nodes=int(row["number_nodes"]),
             )
             pred = result["tokens_per_second"]
             act = row["measured_throughput"]
@@ -60,8 +61,7 @@ def run_benchmark(df: pd.DataFrame, name: str, filter_fn=None) -> Dict:
 
 
 def main():
-    """Run all benchmarks and report results."""
-    csv_path = Path(__file__).parent.parent / "data" / "input" / "validation.csv"
+    csv_path = Path(__file__).parent.parent / "data" / "input" / "validation_clean.csv"
     df = pd.read_csv(csv_path)
 
     print("=" * 70)

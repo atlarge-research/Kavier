@@ -28,6 +28,7 @@ venv/
 # ── IDE / OS clutter ─────────────────────
 .vscode/
 .idea/
+.bob/
 
 # ── Simulator output ─────────────────────
 data/output_traces/
@@ -46,6 +47,8 @@ src/kavier_training/validation/*
 !src/kavier_training/validation/__init__.py
 !src/kavier_training/validation/validator.py
 !src/kavier_training/validation/run_benchmarks.py
-!src/kavier_training/validation/fit_kavier_calibration.py
+
+# ── Generated validation output ───────────────
+src/kavier_training/data/output/
 
 src/reader/

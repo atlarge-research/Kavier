@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Dict
 
 import pandas as pd
@@ -5,15 +6,21 @@ from tqdm import tqdm
 
 from kavier_training.core.engine import simulate_full_training
 
+_DATA = Path(__file__).resolve().parent.parent / "data"
+_DEFAULT_VALIDATION_CSV = _DATA / "input" / "validation_clean.csv"
+_DEFAULT_OUTPUT_CSV = _DATA / "output" / "validation_results.csv"
+
 
 def validate_predictions(
-    validation_csv: str = "src/kavier_training/data/input/validation.csv",
-    output_csv: str = "src/kavier_training/data/output/validation_results.csv",
+    validation_csv: str | Path | None = None,
+    output_csv: str | Path | None = None,
     method: str = None,
     num_gpus: int = None,
     max_samples: int = None,
 ) -> Dict[str, Any]:
-    df = pd.read_csv(validation_csv)
+    validation_path = Path(validation_csv) if validation_csv else _DEFAULT_VALIDATION_CSV
+    output_path = Path(output_csv) if output_csv else _DEFAULT_OUTPUT_CSV
+    df = pd.read_csv(validation_path)
 
     if method:
         df = df[df["method"] == method]
@@ -60,7 +67,8 @@ def validate_predictions(
             errors.append({"index": idx, "model": row["model_name"], "error": str(e)})
 
     df_results = pd.DataFrame(results)
-    df_results.to_csv(output_csv, index=False)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df_results.to_csv(output_path, index=False)
 
     metrics = {
         "total_samples": len(df),

@@ -1,5 +1,3 @@
-"""Analytical training throughput model."""
-
 from __future__ import annotations
 
 import math
@@ -8,16 +6,27 @@ from typing import Any, Dict
 from kavier_training.core.calibration import (
     get_comm_scale,
     get_method_scale,
+    get_mfu_multiplier,
     get_model_scale,
     get_multi_gpu_correction,
     get_training_overhead_s,
 )
-from kavier_training.core.config import get_training_compute_efficiency
 from library.gpu import GPU_SPEC_LIBRARY
 from library.llm import LLM_SPEC_LIBRARY
 from library.specs.GPUSpec import GPUSpec
 
 INFINIBAND_GBPS = 200.0
+MFU_BATCH_ALPHA = 0.0341
+MFU_BATCH_BETA = 0.8147
+MFU_SEQ_GAMMA = 0.1781
+MFU_SEQ_DELTA = 3.5714
+
+
+def _compute_mfu(batch_size: int, seq_length: int, gpu: GPUSpec) -> float:
+    base = gpu.mfu_factor * get_mfu_multiplier(gpu.name)
+    batch_scale = min(1.0, MFU_BATCH_ALPHA * math.log2(batch_size) + MFU_BATCH_BETA)
+    seq_scale = min(1.0, MFU_SEQ_GAMMA * math.log2(seq_length / 512) + MFU_SEQ_DELTA)
+    return float(base * batch_scale * seq_scale)
 
 
 def _calculate_gpu_power(
@@ -101,7 +110,7 @@ def simulate_training_step(
 
     total_tokens = batch_size * tokens_per_sample
     flops = 2.0 * llm.active_params * total_tokens
-    mfu = get_training_compute_efficiency(batch_size, tokens_per_sample, gpu)
+    mfu = _compute_mfu(batch_size, tokens_per_sample, gpu)
     achieved_flops = gpu.fp_16_tensor_core_tflops * 1e12 * mfu
     forward_time = flops / achieved_flops + get_training_overhead_s()
     if llm.is_moe:

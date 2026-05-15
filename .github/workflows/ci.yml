@@ -30,7 +30,6 @@ jobs:
             src/kavier_training/cli.py \
             src/kavier_training/core/calibration.py \
             src/kavier_training/core/cli_args.py \
-            src/kavier_training/core/config.py \
             src/kavier_training/core/engine.py
 
   test:

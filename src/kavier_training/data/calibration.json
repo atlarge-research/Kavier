@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "comm_scale": 0.8223,
+  "training_overhead_s": 0.0,
+  "mfu_multiplier": {
+    "NVIDIA-A100-SXM4-80GB": 1.2328,
+    "NVIDIA-A100-80GB-PCIe": 1.1605,
+    "L40S": 1.0241
+  },
+  "multi_gpu_correction": {
+    "by_num_gpus": {
+      "2": 1.0803,
+      "4": 1.1057,
+      "8": 1.1312,
+      "32": 1.2927,
+      "128": 4.2471
+    }
+  },
+  "method_scale": {
+    "full": 0.8348,
+    "gptq-lora": 1.0951,
+    "lora": 0.9888
+  },
+  "model_scale": {
+    "granite-3.1-3b-a800m-instruct": 1.0235,
+    "llama3.1-70b": 1.2900,
+    "mistral-7b-v0.1": 0.9688,
+    "mixtral-8x7b-instruct-v0.1": 0.9799
+  }
+}

@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from kavier_inference.core.config import SimConfig
 from kavier_inference.core.cache import PrefixCache
+from kavier_inference.core.config import SimConfig
 from library.specs.GPUSpec import GPUSpec
 from library.specs.LLMSpec import LLMSpec
 
@@ -23,13 +23,13 @@ class Metrics:
         self.latencies.append(latency_ms)
 
     def summary(
-            self,
-            cache: PrefixCache,
-            n_req: int,
-            fragments: pd.DataFrame,
-            gpu: GPUSpec,
-            llm: LLMSpec,
-            cfg: SimConfig,
+        self,
+        cache: PrefixCache,
+        n_req: int,
+        fragments: pd.DataFrame,
+        gpu: GPUSpec,
+        llm: LLMSpec,
+        cfg: SimConfig,
     ) -> str:
         p95_lat = np.percentile(self.latencies, 95)
         total_s = self.sum_prefill + self.sum_decode

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, List
 
-from kavier_inference.core.config import SimConfig
 from kavier_inference.core.cache import PrefixCache
+from kavier_inference.core.config import SimConfig
 from kavier_inference.stages.decode import get_decode_time_s
 from kavier_inference.stages.gpu_usage import get_gpu_utilization
 from kavier_inference.stages.kv_usage import get_kv_cache_utilization
@@ -13,17 +13,17 @@ from library.specs.LLMSpec import LLMSpec
 
 
 def simulate_one(
-        idx: int,
-        session_id: Any,
-        n_in_tokens: int,
-        n_out_tokens: int,
-        in_tokens: list[int] | None,
-        llm: LLMSpec,
-        gpu: GPUSpec,
-        cache: PrefixCache,
-        cfg: SimConfig,
-        export_rate_s: float,
-        t0_ms: int,
+    idx: int,
+    session_id: Any,
+    n_in_tokens: int,
+    n_out_tokens: int,
+    in_tokens: list[int] | None,
+    llm: LLMSpec,
+    gpu: GPUSpec,
+    cache: PrefixCache,
+    cfg: SimConfig,
+    export_rate_s: float,
+    t0_ms: int,
 ) -> tuple[dict, list[dict], float, float]:
     t_prefill = get_prefill_time_s(n_in_tokens, llm, gpu)
     t_decode = get_decode_time_s(n_out_tokens, llm, gpu, cfg.kv_cache)
@@ -47,7 +47,7 @@ def simulate_one(
         "cpu_capacity": 0,
         "model_name": llm.name,
         "gpu_name": gpu.name,
-        "gpu_mem_capacity": int(gpu.memory_gb * 2 ** 30),
+        "gpu_mem_capacity": int(gpu.memory_gb * 2**30),
         "total_tokens": n_in_tokens + n_out_tokens,
     }
 
@@ -57,9 +57,7 @@ def simulate_one(
     t_sec = 0.0
     for snap in range(num_snaps):
         gpu_use = get_gpu_utilization(t_sec, t_prefill, t_decode)
-        kv_use = get_kv_cache_utilization(
-            llm, gpu, t_prefill, t_decode, t_sec, n_in_tokens, n_out_tokens, cfg.kv_cache
-        )
+        kv_use = get_kv_cache_utilization(llm, gpu, t_prefill, t_decode, t_sec, n_in_tokens, n_out_tokens, cfg.kv_cache)
         fragments.append(
             {
                 "id": str(idx),

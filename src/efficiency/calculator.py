@@ -28,13 +28,10 @@ def main() -> None:
         total_tokens = kavier_performance_df["total_tokens"].sum()
     else:
         raise ValueError(
-            "'total_tokens' column missing in tasks.parquet.\n"
-            "Make sure you kept that column when writing the file"
+            "'total_tokens' column missing in tasks.parquet.\nMake sure you kept that column when writing the file"
         )
 
-    summary = efficiency_summary(
-        kavier_performance_df, opendc_output_df, total_tokens, gpu_hour_price=args.price
-    )
+    summary = efficiency_summary(kavier_performance_df, opendc_output_df, total_tokens, gpu_hour_price=args.price)
 
     print("\n----------  Efficiency summary  ----------")
     for k, v in summary.items():

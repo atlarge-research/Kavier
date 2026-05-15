@@ -1,15 +1,99 @@
-"""
-Main training simulation module for Kavier.
-
-This module simulates LLM fine-tuning workloads and predicts:
-- Performance: throughput (tokens/sec), runtime
-- Energy: GPU power consumption
-- Utilization: GPU compute and memory utilization
-"""
-
 from __future__ import annotations
 
-from typing import Dict, Any
+import math
+from typing import Any, Dict
+
+from kavier_training.core.calibration import (
+    get_comm_scale,
+    get_method_scale,
+    get_mfu_multiplier,
+    get_model_scale,
+    get_multi_gpu_correction,
+    get_training_overhead_s,
+)
+from library.gpu import GPU_SPEC_LIBRARY
+from library.llm import LLM_SPEC_LIBRARY
+from library.specs.GPUSpec import GPUSpec
+
+INFINIBAND_GBPS = 200.0
+MFU_BATCH_ALPHA = 0.0341
+MFU_BATCH_BETA = 0.8147
+MFU_SEQ_GAMMA = 0.1781
+MFU_SEQ_DELTA = 3.5714
+
+
+def _compute_mfu(batch_size: int, seq_length: int, gpu: GPUSpec) -> float:
+    base = gpu.mfu_factor * get_mfu_multiplier(gpu.name)
+    batch_scale = min(1.0, MFU_BATCH_ALPHA * math.log2(batch_size) + MFU_BATCH_BETA)
+    seq_scale = min(1.0, MFU_SEQ_GAMMA * math.log2(seq_length / 512) + MFU_SEQ_DELTA)
+    return float(base * batch_scale * seq_scale)
+
+
+def _calculate_gpu_power(
+    compute_utilization: float,
+    memory_utilization: float,
+    gpu_spec: GPUSpec,
+) -> float:
+    idle_power = gpu_spec.base_power_w * 0.25
+    active = max(compute_utilization, memory_utilization)
+    return float(idle_power + (gpu_spec.base_power_w - idle_power) * active)
+
+
+def _calculate_memory_utilization(used_gbs: float, peak_gbs: float) -> float:
+    return min(1.0, used_gbs / peak_gbs)
+
+
+def _estimate_memory_bandwidth_usage(
+    model_params: float,
+    batch_size: int,
+    seq_length: int,
+    step_time_s: float,
+    hidden_dim: int = 4096,
+) -> float:
+    bytes_per_param = 2
+    param_traffic = model_params * bytes_per_param * 5
+    activation_traffic = batch_size * seq_length * hidden_dim * bytes_per_param
+    return (param_traffic + activation_traffic) / (1024**3) / step_time_s
+
+
+def _lora_trainable_params(
+    hidden_size: int,
+    num_layers: int,
+    rank: int = 8,
+    target_modules: int = 4,
+) -> int:
+    return 2 * rank * hidden_size * target_modules * num_layers
+
+
+def _ring_allreduce_time(
+    gradient_bytes: float,
+    num_participants: int,
+    bandwidth_gbps: float,
+    latency_s: float = 5e-6,
+    overhead_per_msg_s: float = 2e-6,
+) -> float:
+    if num_participants <= 1:
+        return 0.0
+    bw = bandwidth_gbps * 1e9 / 8
+    chunk = gradient_bytes * (num_participants - 1) / num_participants
+    return latency_s * math.log2(num_participants) + overhead_per_msg_s * (num_participants - 1) + chunk / bw
+
+
+def _comm_time(
+    trainable_params: int,
+    num_gpus: int,
+    network_bandwidth_gbps: float,
+    num_nodes: int = 1,
+) -> float:
+    if num_gpus <= 1:
+        return 0.0
+    grad_bytes = trainable_params * 4
+    if num_nodes <= 1:
+        return _ring_allreduce_time(grad_bytes, num_gpus, network_bandwidth_gbps) * get_comm_scale()
+    gpus_per_node = max(1, num_gpus // num_nodes)
+    intra = _ring_allreduce_time(grad_bytes, gpus_per_node, network_bandwidth_gbps)
+    inter = _ring_allreduce_time(grad_bytes, num_nodes, INFINIBAND_GBPS)
+    return (intra + inter) * get_comm_scale()
 
 
 def simulate_training_step(
@@ -18,33 +102,53 @@ def simulate_training_step(
     tokens_per_sample: int,
     batch_size: int,
     method: str,
+    num_gpus: int = 1,
+    num_nodes: int = 1,
 ) -> Dict[str, float]:
-    """
-    Simulate a single training step (forward + backward + optimizer).
-    
-    Args:
-        model_name: LLM model name (e.g., "llama3.1-70b")
-        gpu_model: GPU model (e.g., "NVIDIA-A100-SXM4-80GB")
-        tokens_per_sample: Sequence length
-        batch_size: Batch size per GPU
-        method: Training method ("full" or "lora")
-        
-    Returns:
-        Dictionary with step metrics:
-        - step_time_ms: Time for one training step
-        - tokens_per_second: Throughput
-        - gpu_compute_utilization: GPU utilization %
-        - gpu_memory_utilization: Memory utilization %
-        - gpu_power_watts: Power consumption
-    """
-    # TODO: Implement actual simulation logic
-    # Will call: forward_pass, backward_pass, optimizer_step, communication
+    llm = LLM_SPEC_LIBRARY[model_name]
+    gpu = GPU_SPEC_LIBRARY[gpu_model]
+
+    total_tokens = batch_size * tokens_per_sample
+    flops = 2.0 * llm.active_params * total_tokens
+    mfu = _compute_mfu(batch_size, tokens_per_sample, gpu)
+    achieved_flops = gpu.fp_16_tensor_core_tflops * 1e12 * mfu
+    forward_time = flops / achieved_flops + get_training_overhead_s()
+    if llm.is_moe:
+        forward_time *= 1.015
+
+    backward_time = 2.0 * forward_time
+
+    if method in ("lora", "gptq-lora"):
+        trainable = _lora_trainable_params(llm.d_model, llm.n_layers)
+    else:
+        trainable = int(llm.m_params)
+    optimizer_time = trainable * 20 / gpu.bandwidth_bps
+
+    comm_time = _comm_time(trainable, num_gpus, gpu.network_bandwidth_gbps, num_nodes)
+    step_time_s = forward_time + backward_time + optimizer_time + comm_time
+
+    mgc = get_multi_gpu_correction(num_gpus)
+    throughput_scale = get_method_scale(method) * get_model_scale(model_name)
+    gpus_per_node = num_gpus // num_nodes
+    tokens_per_step = batch_size * tokens_per_sample * gpus_per_node / mgc
+    tokens_per_second = tokens_per_step / step_time_s * throughput_scale
+
+    bw_used = _estimate_memory_bandwidth_usage(
+        llm.m_params,
+        batch_size,
+        tokens_per_sample,
+        step_time_s,
+        hidden_dim=llm.d_model,
+    )
+    memory_util = _calculate_memory_utilization(bw_used, gpu.bandwidth_bps / 1e9)
+    power = _calculate_gpu_power(mfu, memory_util, gpu)
+
     return {
-        "step_time_ms": 0.0,
-        "tokens_per_second": 0.0,
-        "gpu_compute_utilization": 0.0,
-        "gpu_memory_utilization": 0.0,
-        "gpu_power_watts": 0.0,
+        "step_time_ms": step_time_s * 1000,
+        "tokens_per_second": tokens_per_second,
+        "gpu_compute_utilization": mfu * 100,
+        "gpu_memory_utilization": memory_util * 100,
+        "gpu_power_watts": power,
     }
 
 
@@ -56,58 +160,30 @@ def simulate_full_training(
     batch_size: int,
     number_gpus: int,
     number_nodes: int,
-    metrics: str = "both",
+    total_tokens: int | None = None,
 ) -> Dict[str, Any]:
-    """
-    Simulate complete training run and return predictions.
-    
-    This is the main entry point called by the CLI.
-    
-    Args:
-        model_name: LLM model name
-        method: Training method ("full" or "lora")
-        gpu_model: GPU model name
-        tokens_per_sample: Sequence length
-        batch_size: Batch size per GPU
-        number_gpus: Number of GPUs
-        number_nodes: Number of nodes
-        metrics: "performance", "energy", or "both"
-        
-    Returns:
-        Dictionary:
-        - train_tokens_per_second
-        - train_tokens_per_gpu_per_second
-        - train_samples_per_second
-        - train_steps_per_second
-        - train_runtime (seconds)
-        - gpu_compute_utilization_avg/min/max
-        - gpu_memory_utilization_avg/min/peak/max
-        - gpu_power_watts_avg/min/max (if metrics includes "energy")
-        - etc.
-    """
-    # TODO: Implement full training simulation
-    # Steps:
-    # 1. Load model and GPU specs from libraries
-    # 2. Simulate multiple training steps
-    # 3. Aggregate metrics
-    # 4. Return in OpenDC-compatible format
-    return {}
-
-
-def _load_model_spec(model_name: str) -> Dict[str, Any]:
-    """Load model specifications from LLM library."""
-    # TODO: Import from library.llm_library
-    return {}
-
-
-def _load_gpu_spec(gpu_model: str) -> Dict[str, Any]:
-    """Load GPU specifications from GPU library."""
-    # TODO: Import from library.gpu_library
-    return {}
-
-
-def _compute_total_gpus(number_gpus: int, number_nodes: int) -> int:
-    """Compute total number of GPUs across all nodes."""
-    return number_gpus * number_nodes
-
-
+    total_gpus = number_gpus * number_nodes
+    step = simulate_training_step(
+        model_name,
+        gpu_model,
+        tokens_per_sample,
+        batch_size,
+        method,
+        num_gpus=total_gpus,
+        num_nodes=number_nodes,
+    )
+    tps = step["tokens_per_second"]
+    tokens_per_step = tokens_per_sample * batch_size
+    return {
+        "train_tokens_per_second": tps,
+        "train_tokens_per_gpu_per_second": tps / number_gpus,
+        "train_samples_per_second": tps / tokens_per_sample,
+        "train_steps_per_second": tps / tokens_per_step,
+        "train_runtime": total_tokens / tps if total_tokens is not None else 0.0,
+        "model_name": model_name,
+        "gpu_name": gpu_model,
+        "method": method,
+        "batch_size": batch_size,
+        "tokens_per_sample": tokens_per_sample,
+        "number_gpus": total_gpus,
+    }

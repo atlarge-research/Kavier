@@ -15,9 +15,7 @@ gpu = GPUSpec(
     memory_gb=24,
     base_power_w=150,
 )
-llm = LLMSpec(
-    llm_name="Test-7B", n_layers=32, n_heads=32, d_head=128, d_model=4096, p_bytes=2, m_params=7e9
-)
+llm = LLMSpec(llm_name="Test-7B", n_layers=32, n_heads=32, d_head=128, d_model=4096, p_bytes=2, m_params=7e9)
 
 
 def test_prefill_scales_linearly():

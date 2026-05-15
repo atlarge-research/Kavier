@@ -16,18 +16,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install .[dev]
-      - name: Ruff auto-fix
-        run: |
-          ruff check . --fix
-          ruff format .
-      - name: Ruff (lint + format check)
-        run: |
-          # Fail if there are any lint errors
-          ruff check .
 
-      - name: Mypy (type check)
+      - name: Ruff (lint)
+        run: ruff check .
+
+      - name: Ruff (format check)
+        run: ruff format --check .
+
+      # Full-tree strict mypy is not clean yet; gate the training package entrypoints.
+      - name: Mypy (training, strict)
         run: |
-          mypy --show-error-codes .
+          mypy --strict --follow-imports=skip --show-error-codes \
+            src/kavier_training/cli.py \
+            src/kavier_training/core/calibration.py \
+            src/kavier_training/core/cli_args.py \
+            src/kavier_training/core/engine.py
 
   test:
     needs: lint

@@ -3,7 +3,7 @@ from library.specs.LLMSpec import LLMSpec
 
 
 def get_kv_cache_utilization(
-        llm: LLMSpec, gpu: GPUSpec, t_prefill, t_decode, t, prompt_len, response_len, kv_cache
+    llm: LLMSpec, gpu: GPUSpec, t_prefill, t_decode, t, prompt_len, response_len, kv_cache
 ) -> float:
     """
     KV-cache usage (%) of GPU VRAM at time t.
@@ -28,6 +28,6 @@ def get_kv_cache_utilization(
             tokens += response_len * (elapsed_decode / t_decode)
 
     used_bytes = tokens * bytes_per_token
-    total_bytes = gpu.memory_gb * 1024 ** 3
+    total_bytes = gpu.memory_gb * 1024**3
     total_byte = total_bytes
     return used_bytes / total_byte

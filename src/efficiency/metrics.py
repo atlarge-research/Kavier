@@ -4,9 +4,9 @@ import pandas as pd
 
 
 def financial_efficiency(
-        tasks: pd.DataFrame,
-        total_tokens: int,
-        gpu_hour_price: float,
+    tasks: pd.DataFrame,
+    total_tokens: int,
+    gpu_hour_price: float,
 ) -> float:
     """
     Return in euros / million tokens / second.
@@ -33,9 +33,9 @@ def _extract_co2_emission_kg(powerSource: pd.DataFrame) -> float:
 
 
 def sustainability_efficiency(
-        powerSource: pd.DataFrame,
-        tasks: pd.DataFrame,
-        total_tokens: int,
+    powerSource: pd.DataFrame,
+    tasks: pd.DataFrame,
+    total_tokens: int,
 ) -> float:
     """
     Result in Wh / million tokens / second.
@@ -46,9 +46,9 @@ def sustainability_efficiency(
 
 
 def sustainability_efficiency_CO2(
-        powerSource: pd.DataFrame,
-        tasks: pd.DataFrame,
-        total_tokens: int,
+    powerSource: pd.DataFrame,
+    tasks: pd.DataFrame,
+    total_tokens: int,
 ) -> float:
     """
     Result in kgCO2 / million tokens / second.
@@ -59,10 +59,10 @@ def sustainability_efficiency_CO2(
 
 
 def efficiency_summary(
-        tasks_df: pd.DataFrame,
-        powerSource_df: pd.DataFrame,
-        total_tokens: int,
-        gpu_hour_price: float = 10.0,
+    tasks_df: pd.DataFrame,
+    powerSource_df: pd.DataFrame,
+    total_tokens: int,
+    gpu_hour_price: float = 10.0,
 ) -> dict[str, float]:
     e_fin = financial_efficiency(tasks_df, total_tokens, gpu_hour_price)
     e_sus_wh = sustainability_efficiency(powerSource_df, tasks_df, total_tokens)

@@ -81,6 +81,8 @@ GPU_SPEC_LIBRARY = {
         base_power_w=700,
         mfu_factor=0.58,
     ),
+
+    
     "NVIDIA-A100-80GB-PCIe": GPUSpec(
         gpu_name="NVIDIA-A100-80GB-PCIe",
         memory_gb=80,

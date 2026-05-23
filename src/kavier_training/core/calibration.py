@@ -25,7 +25,12 @@ def get_mfu_multiplier(gpu_name: str) -> float:
 def get_multi_gpu_correction(num_gpus: int) -> float:
     if num_gpus <= 1:
         return 1.0
-    return float(_CAL["multi_gpu_correction"]["by_num_gpus"][str(num_gpus)])
+    table = _CAL["multi_gpu_correction"]["by_num_gpus"]
+    key = str(num_gpus)
+    if key in table:
+        return float(table[key])
+    nearest = min((int(k) for k in table), key=lambda k: abs(k - num_gpus))
+    return float(table[str(nearest)])
 
 
 def get_method_scale(method: str) -> float:

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pyarrow.parquet as pq
 import pytest
 
+from kavier_io.training_opendc import build_training_opendc_frames, export_training_opendc
 from kavier_training.core.engine import simulate_full_training, simulate_training_step
 
 TRAINING_CONFIGS = [
@@ -112,3 +116,90 @@ def test_simulate_full_training_without_total_tokens():
 
     assert result["train_tokens_per_second"] > 0
     assert result["train_runtime"] == 0.0
+
+
+def test_build_opendc_frames_strict_columns_and_values():
+    tasks, fragments, _summary = build_training_opendc_frames(
+        model_name="mistral-7b-v0.1",
+        method="full",
+        gpu_model="NVIDIA-A100-SXM4-80GB",
+        tokens_per_sample=1024,
+        batch_size=4,
+        number_gpus=2,
+        number_nodes=1,
+        total_tokens=1_000_000,
+        task_id=1,
+        submission_time_ms=1234,
+        simulate_full_training_fn=simulate_full_training,
+        simulate_training_step_fn=simulate_training_step,
+    )
+
+    assert list(tasks.columns) == [
+        "id",
+        "submission_time",
+        "duration",
+        "cpu_count",
+        "cpu_capacity",
+        "mem_capacity",
+        "gpu_count",
+        "gpu_capacity",
+    ]
+    assert list(fragments.columns) == [
+        "id",
+        "duration",
+        "cpu_count",
+        "cpu_usage",
+        "gpu_count",
+        "gpu_usage",
+    ]
+    assert tasks.loc[0, "id"] == 1
+    assert tasks.loc[0, "submission_time"] == 1234
+    assert tasks.loc[0, "duration"] > 0
+    assert len(fragments) > 1
+    assert fragments["id"].nunique() == 1
+    assert fragments["duration"].sum() == tasks.loc[0, "duration"]
+
+
+def test_export_training_opendc_writes_parquet_with_strict_schema(tmp_path: Path):
+    result = export_training_opendc(
+        output_dir=str(tmp_path),
+        model_name="mistral-7b-v0.1",
+        method="full",
+        gpu_model="NVIDIA-A100-SXM4-80GB",
+        tokens_per_sample=1024,
+        batch_size=4,
+        number_gpus=1,
+        number_nodes=1,
+        total_tokens=100_000,
+        task_id=7,
+        submission_time_ms=0,
+        simulate_full_training_fn=simulate_full_training,
+        simulate_training_step_fn=simulate_training_step,
+    )
+
+    assert result["train_tokens_per_second"] > 0
+
+    tasks_table = pq.read_table(tmp_path / "tasks.parquet")
+    fragments_table = pq.read_table(tmp_path / "fragments.parquet")
+
+    assert tasks_table.column_names == [
+        "id",
+        "submission_time",
+        "duration",
+        "cpu_count",
+        "cpu_capacity",
+        "mem_capacity",
+        "gpu_count",
+        "gpu_capacity",
+    ]
+    assert fragments_table.column_names == [
+        "id",
+        "duration",
+        "cpu_count",
+        "cpu_usage",
+        "gpu_count",
+        "gpu_usage",
+    ]
+    assert tasks_table.num_rows == 1
+    assert fragments_table.num_rows > 1
+    assert fragments_table.column("id").to_pylist().count(7) == fragments_table.num_rows

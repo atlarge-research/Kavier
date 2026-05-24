@@ -10,6 +10,9 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=1695,
         base_power_w=150,
         mfu_factor=0.40,
+        idle_power_w=30,
+        max_power_w=150,
+        calibration_factor=1.0,
     ),
     "A100-40GB": GPUSpec(
         gpu_name="A100-40GB",
@@ -20,6 +23,9 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=1410,
         base_power_w=250,
         mfu_factor=0.42,
+        idle_power_w=50,
+        max_power_w=250,
+        calibration_factor=1.0,
     ),
     "A100-80GB": GPUSpec(
         gpu_name="A100-80GB",
@@ -30,6 +36,9 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=1410,
         base_power_w=300,
         mfu_factor=0.45,
+        idle_power_w=60,
+        max_power_w=300,
+        calibration_factor=1.0,
     ),
     "L4": GPUSpec(
         gpu_name="L4",
@@ -40,6 +49,9 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=2040,
         base_power_w=72,
         mfu_factor=0.38,
+        idle_power_w=15,
+        max_power_w=72,
+        calibration_factor=1.0,
     ),
     "L40S": GPUSpec(
         gpu_name="L40S",
@@ -50,6 +62,9 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=2520,
         base_power_w=350,
         mfu_factor=0.1042,
+        idle_power_w=70,
+        max_power_w=350,
+        calibration_factor=1.0,
     ),
     "H100-PCIe": GPUSpec(
         gpu_name="H100-PCIe",
@@ -60,6 +75,9 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=1755,
         base_power_w=350,
         mfu_factor=0.1554,
+        idle_power_w=70,
+        max_power_w=350,
+        calibration_factor=1.0,
     ),
     "H100-SXM": GPUSpec(
         gpu_name="H100-SXM",
@@ -70,6 +88,9 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=1830,
         base_power_w=700,
         mfu_factor=0.55,
+        idle_power_w=115,
+        max_power_w=700,
+        calibration_factor=1.0,
     ),
     "H200 SXM": GPUSpec(
         gpu_name="H200 SXM",
@@ -80,9 +101,11 @@ GPU_SPEC_LIBRARY = {
         gpu_core_max_mhz=1785,
         base_power_w=700,
         mfu_factor=0.58,
+        idle_power_w=115,
+        max_power_w=700,
+        calibration_factor=1.0,
     ),
 
-    
     "NVIDIA-A100-80GB-PCIe": GPUSpec(
         gpu_name="NVIDIA-A100-80GB-PCIe",
         memory_gb=80,
@@ -93,6 +116,9 @@ GPU_SPEC_LIBRARY = {
         base_power_w=300,
         mfu_factor=0.4513,
         network_bandwidth_gbps=512.0,
+        idle_power_w=60,
+        max_power_w=300,
+        calibration_factor=1.0,
     ),
     "NVIDIA-H100-PCIe": GPUSpec(
         gpu_name="NVIDIA-H100-PCIe",
@@ -104,6 +130,9 @@ GPU_SPEC_LIBRARY = {
         base_power_w=350,
         mfu_factor=0.1554,
         network_bandwidth_gbps=1024.0,
+        idle_power_w=70,
+        max_power_w=350,
+        calibration_factor=1.0,
     ),
     "NVIDIA-A100-SXM4-80GB": GPUSpec(
         gpu_name="NVIDIA-A100-SXM4-80GB",
@@ -115,5 +144,9 @@ GPU_SPEC_LIBRARY = {
         base_power_w=400,
         mfu_factor=0.4513,
         network_bandwidth_gbps=4800.0,
+        idle_power_w=75,
+        max_power_w=400,
+        calibration_factor=1.0,
     ),
 }
+

@@ -22,8 +22,8 @@
     "lora": 0.9888
   },
   "model_scale": {
-    "granite-3.1-3b-a800m-instruct": 1.0235,
-    "llama3.1-70b": 1.2900,
+    "granite-3.1-3b-a800m-instruct": 0.2522,
+    "llama3.1-70b": 1.29,
     "mistral-7b-v0.1": 0.9688,
     "mixtral-8x7b-instruct-v0.1": 0.9799,
     "granite-3.3-8b": 0.9773

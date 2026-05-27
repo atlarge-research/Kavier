@@ -19,15 +19,12 @@ from library.specs.GPUSpec import GPUSpec
 INFINIBAND_GBPS = 200.0
 MFU_BATCH_ALPHA = 0.0341
 MFU_BATCH_BETA = 0.8147
-MFU_SEQ_GAMMA = 0.1781
-MFU_SEQ_DELTA = 3.5714
 
 
-def _compute_mfu(batch_size: int, seq_length: int, gpu: GPUSpec, calibrated: bool = True) -> float:
+def _compute_mfu(batch_size: int, gpu: GPUSpec, calibrated: bool = True) -> float:
     base = gpu.mfu_factor * (get_mfu_multiplier(gpu.name) if calibrated else 1.0)
     batch_scale = min(1.0, MFU_BATCH_ALPHA * math.log2(batch_size) + MFU_BATCH_BETA)
-    seq_scale = min(1.0, MFU_SEQ_GAMMA * math.log2(seq_length / 512) + MFU_SEQ_DELTA)
-    return float(base * batch_scale * seq_scale)
+    return float(base * batch_scale)
 
 
 def _calculate_gpu_power(
@@ -143,7 +140,7 @@ def simulate_training_step(
 
     total_tokens = batch_size * tokens_per_sample
     flops = 2.0 * llm.active_params * total_tokens
-    mfu = _compute_mfu(batch_size, tokens_per_sample, gpu, calibrated)
+    mfu = _compute_mfu(batch_size, gpu, calibrated)
     achieved_flops = gpu.fp_16_tensor_core_tflops * 1e12 * mfu
     overhead = get_training_overhead_s() if calibrated else 0.0
     forward_time = flops / achieved_flops + overhead

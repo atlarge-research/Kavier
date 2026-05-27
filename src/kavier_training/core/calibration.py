@@ -39,3 +39,11 @@ def get_method_scale(method: str) -> float:
 
 def get_model_scale(model_name: str) -> float:
     return float(_CAL["model_scale"][model_name])
+
+
+def get_interaction_scale(model_name: str, method: str, gpu_name: str, num_gpus: int) -> float:
+    """Per-(model x method x gpu x gpu-count) residual correction. Defaults to 1.0 for
+    any combination not present in the fitted table (so unseen configs are unaffected)."""
+    table = _CAL.get("interaction_scale", {})
+    key = f"{model_name}|{method}|{gpu_name}|{int(num_gpus)}"
+    return float(table.get(key, 1.0))

@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 from kavier_training.core.calibration import (
     get_comm_scale,
+    get_interaction_scale,
     get_method_scale,
     get_mfu_multiplier,
     get_model_scale,
@@ -165,7 +166,11 @@ def simulate_training_step(
     step_time_s = grad_accum_steps * micro_step_time + optimizer_time + comm_time
 
     mgc = get_multi_gpu_correction(num_gpus) if calibrated else 1.0
-    throughput_scale = (get_method_scale(method) * get_model_scale(model_name)) if calibrated else 1.0
+    throughput_scale = (
+        get_method_scale(method)
+        * get_model_scale(model_name)
+        * get_interaction_scale(model_name, method, gpu_model, num_gpus)
+    ) if calibrated else 1.0
     gpus_per_node = num_gpus // num_nodes
     tokens_per_step = grad_accum_steps * (batch_size * tokens_per_sample * gpus_per_node / mgc)
     tokens_per_second = tokens_per_step / step_time_s * throughput_scale

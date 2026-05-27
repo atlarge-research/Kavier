@@ -1,11 +1,12 @@
 {
-  "version": 2,
+  "version": 3,
   "comm_scale": 0.8223,
   "training_overhead_s": 0.0,
   "mfu_multiplier": {
     "NVIDIA-A100-SXM4-80GB": 1.2328,
     "NVIDIA-A100-80GB-PCIe": 1.1605,
-    "L40S": 1.0241
+    "L40S": 1.0241,
+    "NVIDIA-H100-PCIe": 0.9999999999999998
   },
   "multi_gpu_correction": {
     "by_num_gpus": {
@@ -26,6 +27,8 @@
     "llama3.1-70b": 1.29,
     "mistral-7b-v0.1": 0.9688,
     "mixtral-8x7b-instruct-v0.1": 0.9799,
-    "granite-3.3-8b": 0.9773
+    "granite-3.3-8b": 0.9773,
+    "granite-3-8b": 1.0049107294236002,
+    "llama3.2-3b": 0.9074476913549112
   }
 }

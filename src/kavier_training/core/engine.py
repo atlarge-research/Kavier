@@ -22,8 +22,8 @@ MFU_SEQ_GAMMA = 0.1781
 MFU_SEQ_DELTA = 3.5714
 
 
-def _compute_mfu(batch_size: int, seq_length: int, gpu: GPUSpec) -> float:
-    base = gpu.mfu_factor * get_mfu_multiplier(gpu.name)
+def _compute_mfu(batch_size: int, seq_length: int, gpu: GPUSpec, calibrated: bool = True) -> float:
+    base = gpu.mfu_factor * (get_mfu_multiplier(gpu.name) if calibrated else 1.0)
     batch_scale = min(1.0, MFU_BATCH_ALPHA * math.log2(batch_size) + MFU_BATCH_BETA)
     seq_scale = min(1.0, MFU_SEQ_GAMMA * math.log2(seq_length / 512) + MFU_SEQ_DELTA)
     return float(base * batch_scale * seq_scale)
@@ -104,16 +104,18 @@ def _comm_time(
     num_gpus: int,
     network_bandwidth_gbps: float,
     num_nodes: int = 1,
+    calibrated: bool = True,
 ) -> float:
     if num_gpus <= 1:
         return 0.0
     grad_bytes = trainable_params * 4
+    comm_scale = get_comm_scale() if calibrated else 1.0
     if num_nodes <= 1:
-        return _ring_allreduce_time(grad_bytes, num_gpus, network_bandwidth_gbps) * get_comm_scale()
+        return _ring_allreduce_time(grad_bytes, num_gpus, network_bandwidth_gbps) * comm_scale
     gpus_per_node = max(1, num_gpus // num_nodes)
     intra = _ring_allreduce_time(grad_bytes, gpus_per_node, network_bandwidth_gbps)
     inter = _ring_allreduce_time(grad_bytes, num_nodes, INFINIBAND_GBPS)
-    return (intra + inter) * get_comm_scale()
+    return (intra + inter) * comm_scale
 
 
 def simulate_training_step(
@@ -126,7 +128,10 @@ def simulate_training_step(
     num_nodes: int = 1,
     grad_accum_steps: int = 1,
     backward_factor: float = 2.0,
+    calibrated: bool = True,
 ) -> Dict[str, float]:
+    """Predict one training step. ``calibrated=False`` (the ``--no-calib`` mode) runs
+    pure physics: all empirical calibration factors are neutralised."""
     llm = LLM_SPEC_LIBRARY[model_name]
     gpu = GPU_SPEC_LIBRARY[gpu_model]
 
@@ -137,9 +142,10 @@ def simulate_training_step(
 
     total_tokens = batch_size * tokens_per_sample
     flops = 2.0 * llm.active_params * total_tokens
-    mfu = _compute_mfu(batch_size, tokens_per_sample, gpu)
+    mfu = _compute_mfu(batch_size, tokens_per_sample, gpu, calibrated)
     achieved_flops = gpu.fp_16_tensor_core_tflops * 1e12 * mfu
-    forward_time = flops / achieved_flops + get_training_overhead_s()
+    overhead = get_training_overhead_s() if calibrated else 0.0
+    forward_time = flops / achieved_flops + overhead
     if llm.is_moe:
         forward_time *= 1.015
 
@@ -152,14 +158,14 @@ def simulate_training_step(
         trainable = int(llm.m_params)
     optimizer_time = trainable * 20 / gpu.bandwidth_bps
 
-    comm_time = _comm_time(trainable, num_gpus, gpu.network_bandwidth_gbps, num_nodes)
+    comm_time = _comm_time(trainable, num_gpus, gpu.network_bandwidth_gbps, num_nodes, calibrated)
 
     # One optimizer step accumulates `grad_accum_steps` micro-steps (fwd+bwd each),
     # then ONE optimizer update + all-reduce. Comm/optimizer are amortized over G.
     step_time_s = grad_accum_steps * micro_step_time + optimizer_time + comm_time
 
-    mgc = get_multi_gpu_correction(num_gpus)
-    throughput_scale = get_method_scale(method) * get_model_scale(model_name)
+    mgc = get_multi_gpu_correction(num_gpus) if calibrated else 1.0
+    throughput_scale = (get_method_scale(method) * get_model_scale(model_name)) if calibrated else 1.0
     gpus_per_node = num_gpus // num_nodes
     tokens_per_step = grad_accum_steps * (batch_size * tokens_per_sample * gpus_per_node / mgc)
     tokens_per_second = tokens_per_step / step_time_s * throughput_scale

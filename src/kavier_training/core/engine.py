@@ -124,9 +124,14 @@ def simulate_training_step(
     method: str,
     num_gpus: int = 1,
     num_nodes: int = 1,
+    grad_accum_steps: int = 1,
+    backward_factor: float = 2.0,
 ) -> Dict[str, float]:
     llm = LLM_SPEC_LIBRARY[model_name]
     gpu = GPU_SPEC_LIBRARY[gpu_model]
+
+    if grad_accum_steps < 1:
+        raise ValueError(f"grad_accum_steps must be >= 1, got {grad_accum_steps}")
 
     total_tokens = batch_size * tokens_per_sample
     flops = 2.0 * llm.active_params * total_tokens
@@ -136,7 +141,8 @@ def simulate_training_step(
     if llm.is_moe:
         forward_time *= 1.015
 
-    backward_time = 2.0 * forward_time
+    backward_time = backward_factor * forward_time
+    micro_step_time = forward_time + backward_time  # one fwd+bwd micro-step
 
     if method in ("lora", "gptq-lora"):
         trainable = _lora_trainable_params(llm.d_model, llm.n_layers)
@@ -145,12 +151,15 @@ def simulate_training_step(
     optimizer_time = trainable * 20 / gpu.bandwidth_bps
 
     comm_time = _comm_time(trainable, num_gpus, gpu.network_bandwidth_gbps, num_nodes)
-    step_time_s = forward_time + backward_time + optimizer_time + comm_time
+
+    # One optimizer step accumulates `grad_accum_steps` micro-steps (fwd+bwd each),
+    # then ONE optimizer update + all-reduce. Comm/optimizer are amortized over G.
+    step_time_s = grad_accum_steps * micro_step_time + optimizer_time + comm_time
 
     mgc = get_multi_gpu_correction(num_gpus)
     throughput_scale = get_method_scale(method) * get_model_scale(model_name)
     gpus_per_node = num_gpus // num_nodes
-    tokens_per_step = batch_size * tokens_per_sample * gpus_per_node / mgc
+    tokens_per_step = grad_accum_steps * (batch_size * tokens_per_sample * gpus_per_node / mgc)
     tokens_per_second = tokens_per_step / step_time_s * throughput_scale
 
     bw_used = _estimate_memory_bandwidth_usage(
@@ -181,6 +190,8 @@ def simulate_full_training(
     number_gpus: int,
     number_nodes: int,
     total_tokens: int | None = None,
+    grad_accum_steps: int = 1,
+    backward_factor: float = 2.0,
 ) -> Dict[str, Any]:
     total_gpus = number_gpus * number_nodes
     step = simulate_training_step(
@@ -191,6 +202,8 @@ def simulate_full_training(
         method,
         num_gpus=total_gpus,
         num_nodes=number_nodes,
+        grad_accum_steps=grad_accum_steps,
+        backward_factor=backward_factor,
     )
     tps = step["tokens_per_second"]
     tokens_per_step = tokens_per_sample * batch_size

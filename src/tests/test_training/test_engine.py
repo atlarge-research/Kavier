@@ -206,8 +206,8 @@ def test_export_training_opendc_writes_parquet_with_strict_schema(tmp_path: Path
 
 
 def test_defaults_reproduce_v0_snapshot():
-    """Defaults (grad_accum_steps=1, backward_factor=2.0) must be byte-identical to the
-    pre-change engine for a fixed config (captured from the current engine)."""
+    """Default call (grad_accum_steps=1, backward_factor=2.0) must produce the same
+    numeric output as the pre-change engine, verified against a pinned snapshot."""
     r1 = simulate_training_step(
         "mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", num_gpus=1)
     assert r1["tokens_per_second"] == pytest.approx(2781.039303, rel=1e-6)
@@ -237,3 +237,15 @@ def test_backward_factor_monotonic():
             "mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full",
             num_gpus=1, backward_factor=bf)["tokens_per_second"]
     assert tps(3.0) < tps(2.0)
+
+
+def test_invalid_grad_accum_steps_raises():
+    with pytest.raises(ValueError, match="grad_accum_steps must be >= 1"):
+        simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB",
+                               1024, 4, "full", grad_accum_steps=0)
+
+
+def test_invalid_backward_factor_raises():
+    with pytest.raises(ValueError, match="backward_factor must be > 0"):
+        simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB",
+                               1024, 4, "full", backward_factor=0.0)

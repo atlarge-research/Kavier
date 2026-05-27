@@ -132,6 +132,8 @@ def simulate_training_step(
 
     if grad_accum_steps < 1:
         raise ValueError(f"grad_accum_steps must be >= 1, got {grad_accum_steps}")
+    if backward_factor <= 0.0:
+        raise ValueError(f"backward_factor must be > 0, got {backward_factor}")
 
     total_tokens = batch_size * tokens_per_sample
     flops = 2.0 * llm.active_params * total_tokens
@@ -206,7 +208,7 @@ def simulate_full_training(
         backward_factor=backward_factor,
     )
     tps = step["tokens_per_second"]
-    tokens_per_step = tokens_per_sample * batch_size
+    tokens_per_step = tokens_per_sample * batch_size * grad_accum_steps
     return {
         "train_tokens_per_second": tps,
         "train_tokens_per_gpu_per_second": tps / number_gpus,

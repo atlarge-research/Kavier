@@ -125,7 +125,7 @@ empirical `model_scale` calibration.
 2. **Batch Size Impact**: Small batches severely underutilize GPU (27× error at batch=1)
 3. **Communication Overhead**: Scales with model size and GPU count ([Li et al., 2020](https://arxiv.org/abs/2006.15704))
 4. **Efficiency Calibration**: Must be empirically validated per GPU architecture
-5. **MoE Efficiency**: Sparse models achieve better parameter efficiency but require careful load balancing
+5. **Sparse models**: encoded via `active_params` only — Kavier does not model expert routing or load balancing.
 6. **LoRA Benefits**: Enables fine-tuning of large models with minimal memory overhead
 
 ## References
@@ -151,7 +151,7 @@ empirical `model_scale` calibration.
 - [Pope et al. (2022) - Efficiently Scaling Transformer Inference](https://arxiv.org/abs/2211.05102) - Inference optimization techniques
 - [Kwon et al. (2023) - Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180) - KV cache optimization
 
-### Mixture-of-Experts
+### Sparse-architecture models (supported via `active_params`)
 - [Chowdhery et al. (2022) - PaLM: Scaling Language Modeling with Pathways](https://arxiv.org/abs/2204.02311) - Large-scale MoE training
 - [Jiang et al. (2024) - Mixtral of Experts](https://arxiv.org/abs/2401.04088) - Mixtral architecture and sparse MoE
 

@@ -92,41 +92,15 @@
 - `num_GPUs`: Total GPUs (data parallel)
 - `gradient_accumulation`: Steps before optimizer update
 
-## Mixture-of-Experts (MoE) Models
+## Sparse / active-parameter models
 
-### 11. MoE Parameter Count
-**Formula:** `total_params = shared_params + (num_experts × expert_params)`
-
-**Active Parameters per Token:** `active_params = shared_params + (experts_per_token × expert_params)`
-
-**Source:** [Jiang et al. (2024) - Mixtral of Experts](https://arxiv.org/abs/2401.04088); [Chowdhery et al. (2022) - PaLM](https://arxiv.org/abs/2204.02311)
-
-**Example - Mixtral 8x7B:**
-- Total parameters: 46.7B
-- Number of experts: 8
-- Expert size: ~7B each
-- Active experts per token: 2
-- Active parameters per token: ~12.9B (shared layers + 2×7B experts)
-
-**Compute Efficiency:**
-- MoE models achieve higher capacity with lower compute per token
-- Training time scales with active parameters, not total parameters
-- Inference benefits from sparse activation patterns
-
-### 12. MoE Training Time
-**Formula:** `T_forward_moe = (2 × active_params × tokens) / (GPU_FLOPS × efficiency) + routing_overhead`
-
-**Source:** Sparse gating mechanism ([Jiang et al., 2024](https://arxiv.org/abs/2401.04088))
-- Routing overhead: Expert selection and load balancing
-- Communication overhead increases with expert distribution across GPUs
-
-### 13. MoE Memory Requirements
-**Formula:** `memory_moe = model_weights + activations + expert_buffers`
-
-**Considerations:**
-- All expert weights must be loaded (46.7B for Mixtral)
-- Only active expert activations computed per token
-- Expert parallelism: Distribute experts across GPUs ([Ivanov et al., 2021 - Data Movement](https://arxiv.org/abs/2110.11501))
+Kavier does not track expert structure (no `num_experts`, no routing
+overhead term). Sparse architectures are encoded by setting the LLMSpec's
+`active_params` to the per-token active subset (e.g. Mixtral-8x7B:
+`m_params=47B`, `active_params=13B`). The forward-FLOP formula (#1) then
+uses `active_params`, so compute scales with the effective per-token cost
+rather than the total weight count. Any residual error is absorbed by the
+empirical `model_scale` calibration.
 
 ## Fine-Tuning Optimizations
 

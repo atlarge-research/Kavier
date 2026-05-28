@@ -144,8 +144,6 @@ def simulate_training_step(
     achieved_flops = gpu.fp_16_tensor_core_tflops * 1e12 * mfu
     overhead = get_training_overhead_s() if calibrated else 0.0
     forward_time = flops / achieved_flops + overhead
-    if llm.is_moe:
-        forward_time *= 1.015
 
     backward_time = backward_factor * forward_time
     micro_step_time = forward_time + backward_time  # one fwd+bwd micro-step

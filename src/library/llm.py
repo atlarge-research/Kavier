@@ -117,8 +117,6 @@ LLM_SPEC_LIBRARY = {
         d_model=1536,
         p_bytes=2,
         m_params=3.3e9,
-        num_experts=40,
-        active_experts=8,
         active_params=800e6,
     ),
     "mistral-7b-v0.1": LLMSpec(
@@ -138,8 +136,6 @@ LLM_SPEC_LIBRARY = {
         d_model=4096,
         p_bytes=2,
         m_params=47e9,
-        num_experts=8,
-        active_experts=2,
         active_params=13e9,
     ),
     "granite-3.3-8b": LLMSpec(

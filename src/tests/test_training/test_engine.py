@@ -207,15 +207,16 @@ def test_export_training_opendc_writes_parquet_with_strict_schema(tmp_path: Path
 
 def test_defaults_reproduce_v0_snapshot():
     """Default call (grad_accum_steps=1, backward_factor=2.0) reproduces a pinned
-    snapshot. Throughput values updated for the v3 calibration (per-config interaction
-    corrections); step_time is unaffected by calibration and stays pinned."""
+    snapshot. Values pinned to the held-out calibration (fit on the 70/15 train+val
+    split, seed 42; 15% test held out — see calibration.json _note). step_time moves
+    with calibration too, since mfu_multiplier feeds the micro-step time."""
     r1 = simulate_training_step(
         "mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", num_gpus=1)
-    assert r1["tokens_per_second"] == pytest.approx(3101.415031, rel=1e-6)
-    assert r1["step_time_ms"] == pytest.approx(1191.158055, rel=1e-6)
+    assert r1["tokens_per_second"] == pytest.approx(3107.960789, rel=1e-6)
+    assert r1["step_time_ms"] == pytest.approx(1166.978864, rel=1e-6)
     r8 = simulate_training_step(
         "mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", num_gpus=8)
-    assert r8["tokens_per_second"] == pytest.approx(20534.232003, rel=1e-6)
+    assert r8["tokens_per_second"] == pytest.approx(20618.241744, rel=1e-6)
 
 
 def test_grad_accum_amortizes_comm():

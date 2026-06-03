@@ -7,11 +7,11 @@ import pandas as pd
 
 from kavier_inference.core.config import SimConfig
 from kavier_inference.core.engine import simulate
+from kavier_io.input_spec import InputSpec
 from kavier_io.log import log
 from kavier_io.stream_writer import StreamingParquetWriter
 from library.gpu import GPU_SPEC_LIBRARY
 from library.llm import LLM_SPEC_LIBRARY
-from library.specs.InputSpec import InputSpec
 from opendc.adapter import output_kavier_specs, prepare_opendc_input
 
 

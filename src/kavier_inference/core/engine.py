@@ -11,9 +11,9 @@ from kavier_inference.core.cache import PrefixCache
 from kavier_inference.core.config import SimConfig
 from kavier_inference.core.metrics import Metrics
 from kavier_inference.core.runner import simulate_one
+from kavier_io.input_spec import InputSpec
 from kavier_io.stream_writer import StreamingParquetWriter
 from library.specs.GPUSpec import GPUSpec
-from library.specs.InputSpec import InputSpec
 from library.specs.LLMSpec import LLMSpec
 
 

@@ -10,6 +10,7 @@ References (in the sibling coastline/ tree):
     coastline/recommender/cli_interactive.py  -- PYTHONPATH wiring
     coastline/benchmark/kavier_calibration.py -- cal._CAL swap
 """
+
 import pytest
 
 

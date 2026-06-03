@@ -6,12 +6,6 @@ def add_performance_args(parser):
 
     parser.add_argument("--kv_cache", choices=["on", "off"], default="on", help="Toggle KV caching (vLLM-style)")
     parser.add_argument(
-        "--prefix_len",
-        type=int,
-        default=1024,
-        help="Only prompts with >= this many input tokens are cached (0 to disable prefix cache)",
-    )
-    parser.add_argument(
         "--export_rate",
         type=float,
         default=0.1,

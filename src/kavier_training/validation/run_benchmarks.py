@@ -1,15 +1,10 @@
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 import numpy as np
 import pandas as pd
 
 from kavier_training.core.engine import simulate_training_step
-
-
-def calculate_mape(predicted: List[float], actual: List[float]) -> float:
-    errors = [abs(p - a) / a * 100 for p, a in zip(predicted, actual)]
-    return np.mean(errors)
 
 
 def run_benchmark(df: pd.DataFrame, name: str, filter_fn=None) -> Dict:

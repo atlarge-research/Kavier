@@ -40,6 +40,7 @@ dev = [
 kavier-perf   = "kavier_inference.cli:main"
 kavier-train  = "kavier_training.cli:main"
 kavier-energy = "kavier_energy.calculator:main"
+kavier-co2    = "kavier_co2.cli:main"
 # Deprecated alias for kavier-energy; kept for backward compatibility.
 kavier-eff    = "kavier_inference.cli:main_efficiency"
 

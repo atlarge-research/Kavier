@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from efficiency.cli_args import add_efficiency_args
-from efficiency.metrics import efficiency_summary
+from kavier_energy.cli_args import add_efficiency_args
+from kavier_energy.metrics import efficiency_summary
 
 
 def main() -> None:

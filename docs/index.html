@@ -87,7 +87,7 @@
         <span class="go">Read the reference →</span>
       </a>
       <a class="card nav-noline" href="cli-efficiency.html">
-        <span class="cmd">kavier-eff</span>
+        <span class="cmd">kavier-energy</span>
         <h3>Efficiency</h3>
         <p>Combine Kavier's <code>tasks.parquet</code> with OpenDC's <code>powerSource.parquet</code> into financial and sustainability efficiency metrics.</p>
         <span class="go">Read the reference →</span>
@@ -135,17 +135,18 @@
         </div>
         <div class="node accent">
           <b>Efficiency</b>
-          <span class="sub">kavier-eff</span>
+          <span class="sub">kavier-energy</span>
         </div>
       </div>
-      <p class="arch-note">The <strong>library</strong> feeds both engines; <strong>calibration</strong> feeds training only. Kavier's outputs flow into <code>OpenDC</code> and back through <code>kavier-eff</code> for the final efficiency summary.</p>
+      <p class="arch-note">The <strong>library</strong> feeds both engines; <strong>calibration</strong> feeds training only. Kavier's outputs flow into <code>OpenDC</code> and back through <code>kavier-energy</code> for the final efficiency summary.</p>
     </div>
 
     <h2 id="structure">Structure</h2>
     <p>Kavier is organized into 5 main components:</p>
 <pre><code>src/
-├── kavier_inference/    # Inference simulation (kavier-perf, kavier-eff)
+├── kavier_inference/    # Inference simulation (kavier-perf)
 ├── kavier_training/     # Training simulation (kavier-train)
+├── kavier_energy/       # Efficiency &amp; sustainability metrics (kavier-energy)
 ├── library/             # Shared GPU &amp; LLM specifications
 ├── kavier_io/           # Shared I/O utilities
 └── tests/               # Test suites</code></pre>

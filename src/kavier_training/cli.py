@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import sys
+from typing import NoReturn
 
 from kavier_io.training_opendc import export_training_opendc
 from kavier_training.core.cli_args import add_training_args
@@ -19,7 +20,7 @@ _EXAMPLE_CMD = (
 class _FriendlyParser(argparse.ArgumentParser):
     """On bad/missing arguments, show a ready-to-run example command."""
 
-    def error(self, message: str) -> None:  # type: ignore[override]
+    def error(self, message: str) -> NoReturn:
         self.print_usage(sys.stderr)
         print(f"{self.prog}: error: {message}", file=sys.stderr)
         print(f"\nYou may have mistaken the input — try this example instead:\n  {_EXAMPLE_CMD}", file=sys.stderr)

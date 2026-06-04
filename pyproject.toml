@@ -62,6 +62,17 @@ package-dir = {"" = "src"}
 where = ["src"]
 include = ["kavier*", "library*", "opendc*", "tests*"]
 
+# Ship only the *small* runtime data: the training calibration table (required
+# at import time by kavier_training.core.calibration) and the small training
+# input example. We deliberately do NOT ship kavier_inference/data — its
+# input_example.csv is ~74 MB and the data/output dir holds simulation outputs;
+# both are dev/demo artefacts, not runtime assets.
+[tool.setuptools.package-data]
+kavier_training = ["data/calibration.json", "data/input/input_example.csv"]
+
+[tool.setuptools.exclude-package-data]
+kavier_inference = ["data/input/*.csv", "data/output/*", "data/output/**/*"]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true

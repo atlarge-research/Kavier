@@ -7,7 +7,7 @@ from typing import List
 
 import pandas as pd
 
-from kavier_co2.emissions import WS_PER_KWH, Fragment
+from kavier_co2.emissions import Fragment
 from kavier_training.core.engine import simulate_full_training, simulate_training_step
 
 
@@ -99,6 +99,3 @@ def fragments_from_powersource(df: pd.DataFrame) -> List[Fragment]:
         frags.append(Fragment(start_time=ts[i], duration_s=dur, power_w=power_w))
     return frags
 
-
-def _kwh_of(power_w: float, duration_s: float) -> float:
-    return power_w * duration_s / WS_PER_KWH

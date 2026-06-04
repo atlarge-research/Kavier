@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Core formulas — Kavier</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand nav-noline" href="index.html">
+      <span class="mark">Kavier<span class="dot">.</span></span>
+      <span class="ver">docs</span>
+    </a>
+    <nav class="nav">
+      <div class="nav-group-label">Start here</div>
+      <a href="index.html"><span class="ix">00</span> Overview</a>
+      <a href="getting-started.html"><span class="ix">01</span> Getting started</a>
+      <div class="nav-group"><div class="nav-group-label">Command line</div></div>
+      <a href="cli-performance.html"><span class="ix">02</span> Performance</a>
+      <a href="cli-efficiency.html"><span class="ix">03</span> Efficiency</a>
+      <a href="cli-training.html"><span class="ix">04</span> Training</a>
+      <div class="nav-group"><div class="nav-group-label">Reference</div></div>
+      <a class="active" href="formulas.html"><span class="ix">05</span> Core formulas</a>
+      <a href="contributing.html"><span class="ix">06</span> Contributing</a>
+    </nav>
+    <div class="sidebar-foot">
+      MIT licensed.<br>
+      <a href="../LICENSE.txt">LICENSE.txt</a> &middot;
+      <a href="https://opendc.org/">OpenDC</a>
+    </div>
+  </aside>
+
+  <main class="content">
+  <div class="page">
+
+    <div class="topbar">
+      <div class="crumbs"><a href="index.html">docs</a><span class="sep">/</span><span class="here">core formulas</span></div>
+      <span class="pill">reference</span>
+    </div>
+
+    <header class="hero">
+      <div class="eyebrow">Reference · 05</div>
+      <h1>Kavier Core Formulas</h1>
+      <p class="lede">The equations behind the training, inference, and utilization models — with their sources.</p>
+    </header>
+
+    <h2 id="training">Training simulation</h2>
+
+    <div class="formula">
+      <div class="head"><span class="num">1</span><span class="name">Forward Pass Time</span></div>
+      <div class="body">
+        <code class="eq">T_forward <span class="op">=</span> (2 × params × tokens) <span class="op">/</span> (GPU_FLOPS × efficiency) <span class="op">+</span> overhead</code>
+        <p class="meta"><strong>Source:</strong> <a href="https://arxiv.org/abs/2001.08361">Kaplan et al. (2020) — Scaling Laws for Neural Language Models</a></p>
+        <ul>
+          <li>2 FLOPs per parameter per token (1 multiply + 1 add)</li>
+          <li>Efficiency accounts for memory bandwidth bottlenecks</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="formula">
+      <div class="head"><span class="num">2</span><span class="name">Backward Pass Time</span></div>
+      <div class="body">
+        <code class="eq">T_backward <span class="op">=</span> 2 × T_forward</code>
+        <p class="meta"><strong>Source:</strong> Standard deep learning practice (<a href="http://www.deeplearningbook.org/">Goodfellow et al., 2016</a>)</p>
+        <ul><li>Backward pass computes gradients (2× forward compute)</li></ul>
+      </div>
+    </div>
+
+    <div class="formula">
+      <div class="head"><span class="num">3</span><span class="name">Optimizer Step Time</span></div>
+      <div class="body">
+        <code class="eq">T_optimizer <span class="op">=</span> (bytes_to_update <span class="op">/</span> memory_bandwidth) × overhead_factor</code>
+        <p class="meta"><strong>Source:</strong> Memory-bandwidth limited operation (<a href="https://arxiv.org/abs/1412.6980">Kingma &amp; Ba, 2014 — Adam Optimizer</a>)</p>
+        <ul>
+          <li>Adam: 4 bytes/param (fp32) or 2 bytes/param (fp16)</li>
+          <li>Overhead from kernel launches, synchronization</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="formula">
+      <div class="head"><span class="num">4</span><span class="name">Communication Time (Ring All-Reduce)</span></div>
+      <div class="body">
+        <code class="eq">T_comm <span class="op">=</span> 2 × (N−1)<span class="op">/</span>N × gradient_bytes <span class="op">/</span> bandwidth</code>
+        <p class="meta"><strong>Source:</strong> <a href="https://doi.org/10.1177/1094342005051521">Thakur et al. (2005)</a>; <a href="https://arxiv.org/abs/1802.05799">Sergeev &amp; Del Balso (2018) — Horovod</a>; <a href="https://arxiv.org/abs/2006.15704">Li et al. (2020) — PyTorch Distributed</a></p>
+        <ul>
+          <li>N = number of GPUs</li>
+          <li>2× factor: reduce-scatter + all-gather phases</li>
+          <li>(N−1)/N: efficiency of ring topology</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="formula">
+      <div class="head"><span class="num">5</span><span class="name">Total Step Time</span></div>
+      <div class="body">
+        <code class="eq">T_step <span class="op">=</span> T_forward <span class="op">+</span> T_backward <span class="op">+</span> T_optimizer <span class="op">+</span> T_comm</code>
+        <p class="meta"><strong>Throughput:</strong></p>
+        <code class="eq">tokens/sec <span class="op">=</span> (batch_size × seq_length × num_GPUs) <span class="op">/</span> T_step</code>
+      </div>
+    </div>
+
+    <h2 id="inference">Inference simulation</h2>
+
+    <div class="formula">
+      <div class="head"><span class="num">6</span><span class="name">Prefill Time</span></div>
+      <div class="body">
+        <code class="eq">T_prefill <span class="op">=</span> (2 × params × input_tokens) <span class="op">/</span> (GPU_FLOPS × efficiency)</code>
+        <p class="meta"><strong>Source:</strong> Same as forward pass, single-pass inference (<a href="https://arxiv.org/abs/1706.03762">Vaswani et al., 2017</a>)</p>
+      </div>
+    </div>
+
+    <div class="formula">
+      <div class="head"><span class="num">7</span><span class="name">Decode Time (per token)</span></div>
+      <div class="body">
+        <code class="eq">T_decode <span class="op">=</span> (2 × params) <span class="op">/</span> (GPU_FLOPS × efficiency) <span class="op">+</span> KV_cache_overhead</code>
+        <p class="meta"><strong>Source:</strong> Autoregressive generation, memory-bound (<a href="https://arxiv.org/abs/2211.05102">Pope et al., 2022</a>; <a href="https://arxiv.org/abs/2309.06180">Kwon et al., 2023 — PagedAttention</a>)</p>
+        <ul>
+          <li>Each token attends to all previous tokens</li>
+          <li>KV cache reduces compute but adds memory traffic</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="formula">
+      <div class="head"><span class="num">8</span><span class="name">KV Cache Memory</span></div>
+      <div class="body">
+        <code class="eq">KV_bytes <span class="op">=</span> 2 × layers × heads × head_dim × seq_length × precision</code>
+        <p class="meta"><strong>Source:</strong> Transformer architecture (<a href="https://arxiv.org/abs/1706.03762">Vaswani et al., 2017</a>)</p>
+        <ul>
+          <li>2× for Key and Value</li>
+          <li>Precision: 2 bytes (fp16) or 4 bytes (fp32)</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2 id="utilization">GPU utilization</h2>
+
+    <div class="formula">
+      <div class="head"><span class="num">9</span><span class="name">Roofline Model</span></div>
+      <div class="body">
+        <code class="eq">Performance <span class="op">=</span> min(peak_FLOPS, bandwidth × arithmetic_intensity)</code>
+        <p class="meta"><strong>Source:</strong> <a href="https://doi.org/10.1145/1498765.1498785">Williams et al. (2009) — Roofline: An Insightful Visual Performance Model</a></p>
+        <ul>
+          <li>Arithmetic intensity = FLOPs / bytes_transferred</li>
+          <li>Training typically memory-bound (low AI)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="formula">
+      <div class="head"><span class="num">10</span><span class="name">Compute Efficiency</span></div>
+      <div class="body">
+        <code class="eq">efficiency <span class="op">=</span> base_eff × batch_scale_factor × model_scale_factor</code>
+        <p class="meta"><strong>Factors:</strong></p>
+        <ul>
+          <li>Batch size: Larger batches → better parallelism</li>
+          <li>Model size: Larger models → better compute/memory ratio</li>
+          <li>Typical training: 15-30% of peak FLOPS</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2 id="params">Key parameters</h2>
+
+    <h4>Model parameters</h4>
+    <ul>
+      <li><code>params</code>: Total trainable parameters</li>
+      <li><code>layers</code>: Number of transformer layers</li>
+      <li><code>hidden_dim</code>: Hidden dimension size</li>
+      <li><code>heads</code>: Number of attention heads</li>
+    </ul>
+
+    <h4>Hardware parameters</h4>
+    <ul>
+      <li><code>GPU_FLOPS</code>: Peak TFLOPS (fp16/bf16)</li>
+      <li><code>memory_bandwidth</code>: GB/s</li>
+      <li><code>network_bandwidth</code>: GB/s (NVLink, InfiniBand)</li>
+    </ul>
+
+    <h4>Training parameters</h4>
+    <ul>
+      <li><code>batch_size</code>: Samples per GPU per step</li>
+      <li><code>seq_length</code>: Tokens per sample</li>
+      <li><code>num_GPUs</code>: Total GPUs (data parallel)</li>
+      <li><code>gradient_accumulation</code>: Steps before optimizer update</li>
+    </ul>
+
+    <h2 id="sparse">Sparse / active-parameter models</h2>
+    <p>Kavier does not track expert structure (no <code>num_experts</code>, no routing overhead term). Sparse architectures are encoded by setting the LLMSpec's <code>active_params</code> to the per-token active subset (e.g. Mixtral-8x7B: <code>m_params=47B</code>, <code>active_params=13B</code>). The forward-FLOP formula (#1) then uses <code>active_params</code>, so compute scales with the effective per-token cost rather than the total weight count. Any residual error is absorbed by the empirical <code>model_scale</code> calibration.</p>
+
+    <h2 id="finetuning">Fine-tuning optimizations</h2>
+
+    <div class="formula">
+      <div class="head"><span class="num">14</span><span class="name">LoRA (Low-Rank Adaptation)</span></div>
+      <div class="body">
+        <code class="eq">trainable_params <span class="op">=</span> 2 × rank × (input_dim <span class="op">+</span> output_dim) × num_layers</code>
+        <p class="meta"><strong>Source:</strong> <a href="https://arxiv.org/abs/2106.09685">Hu et al. (2021) — LoRA: Low-Rank Adaptation of Large Language Models</a></p>
+        <p class="meta"><strong>Memory savings:</strong></p>
+        <ul>
+          <li>Full fine-tuning: All parameters trainable</li>
+          <li>LoRA: Only low-rank matrices trainable (typically &lt;1% of parameters)</li>
+          <li>Rank r typically 8-64 for good performance</li>
+        </ul>
+        <p class="meta"><strong>Training time impact:</strong></p>
+        <ul>
+          <li>Forward pass: Same as full model</li>
+          <li>Backward pass: Only compute gradients for LoRA weights</li>
+          <li>Optimizer: Dramatically reduced memory and time</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2 id="insights">Critical insights</h2>
+    <ol>
+      <li><strong>Memory Bottleneck:</strong> Training is memory-bandwidth limited, not compute-limited (<a href="https://arxiv.org/abs/2110.11501">Ivanov et al., 2021</a>)</li>
+      <li><strong>Batch Size Impact:</strong> Small batches severely underutilize GPU (27× error at batch=1)</li>
+      <li><strong>Communication Overhead:</strong> Scales with model size and GPU count (<a href="https://arxiv.org/abs/2006.15704">Li et al., 2020</a>)</li>
+      <li><strong>Efficiency Calibration:</strong> Must be empirically validated per GPU architecture</li>
+      <li><strong>Sparse models:</strong> encoded via <code>active_params</code> only — Kavier does not model expert routing or load balancing.</li>
+      <li><strong>LoRA Benefits:</strong> Enables fine-tuning of large models with minimal memory overhead</li>
+    </ol>
+
+    <h2 id="references">References</h2>
+
+    <h4>Foundational papers</h4>
+    <ul>
+      <li><a href="https://arxiv.org/abs/1706.03762">Vaswani et al. (2017) — Attention Is All You Need</a> — Transformer architecture</li>
+      <li><a href="https://arxiv.org/abs/2001.08361">Kaplan et al. (2020) — Scaling Laws for Neural Language Models</a> — Compute scaling laws</li>
+      <li><a href="http://www.deeplearningbook.org/">Goodfellow et al. (2016) — Deep Learning Book</a> — Deep learning fundamentals</li>
+    </ul>
+
+    <h4>Performance modeling</h4>
+    <ul>
+      <li><a href="https://doi.org/10.1145/1498765.1498785">Williams et al. (2009) — Roofline: An Insightful Visual Performance Model</a> — Performance analysis framework</li>
+    </ul>
+
+    <h4>Distributed training</h4>
+    <ul>
+      <li><a href="https://doi.org/10.1177/1094342005051521">Thakur et al. (2005) — Optimization of Collective Communication Operations in MPICH</a> — MPI collective operations</li>
+      <li><a href="https://arxiv.org/abs/1802.05799">Sergeev &amp; Del Balso (2018) — Horovod</a> — Distributed training framework</li>
+      <li><a href="https://arxiv.org/abs/2006.15704">Li et al. (2020) — PyTorch Distributed</a> — PyTorch distributed implementation</li>
+      <li><a href="https://arxiv.org/abs/2110.11501">Ivanov et al. (2021) — Data Movement Is All You Need</a> — Memory bandwidth analysis</li>
+    </ul>
+
+    <h4>Optimization algorithms</h4>
+    <ul>
+      <li><a href="https://arxiv.org/abs/1412.6980">Kingma &amp; Ba (2014) — Adam: A Method for Stochastic Optimization</a> — Adam optimizer</li>
+    </ul>
+
+    <h4>Inference optimization</h4>
+    <ul>
+      <li><a href="https://arxiv.org/abs/2211.05102">Pope et al. (2022) — Efficiently Scaling Transformer Inference</a> — Inference optimization techniques</li>
+      <li><a href="https://arxiv.org/abs/2309.06180">Kwon et al. (2023) — PagedAttention</a> — KV cache optimization</li>
+    </ul>
+
+    <h4>Sparse-architecture models (supported via <code>active_params</code>)</h4>
+    <ul>
+      <li><a href="https://arxiv.org/abs/2204.02311">Chowdhery et al. (2022) — PaLM: Scaling Language Modeling with Pathways</a> — Large-scale MoE training</li>
+      <li><a href="https://arxiv.org/abs/2401.04088">Jiang et al. (2024) — Mixtral of Experts</a> — Mixtral architecture and sparse MoE</li>
+    </ul>
+
+    <h4>Parameter-efficient fine-tuning</h4>
+    <ul>
+      <li><a href="https://arxiv.org/abs/2106.09685">Hu et al. (2021) — LoRA: Low-Rank Adaptation of Large Language Models</a> — LoRA fine-tuning method</li>
+    </ul>
+
+    <div class="page-foot">
+      <span>Calibration feeds the training engine; the library feeds both.</span>
+      <a class="next-link nav-noline" href="contributing.html">
+        <span class="lbl">Next</span>Contributing →
+      </a>
+    </div>
+
+  </div>
+  </main>
+
+</div>
+</body>
+</html>

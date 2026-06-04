@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Performance CLI — Kavier</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand nav-noline" href="index.html">
+      <span class="mark">Kavier<span class="dot">.</span></span>
+      <span class="ver">docs</span>
+    </a>
+    <nav class="nav">
+      <div class="nav-group-label">Start here</div>
+      <a href="index.html"><span class="ix">00</span> Overview</a>
+      <a href="getting-started.html"><span class="ix">01</span> Getting started</a>
+      <div class="nav-group"><div class="nav-group-label">Command line</div></div>
+      <a class="active" href="cli-performance.html"><span class="ix">02</span> Performance</a>
+      <a href="cli-efficiency.html"><span class="ix">03</span> Efficiency</a>
+      <a href="cli-training.html"><span class="ix">04</span> Training</a>
+      <div class="nav-group"><div class="nav-group-label">Reference</div></div>
+      <a href="formulas.html"><span class="ix">05</span> Core formulas</a>
+      <a href="contributing.html"><span class="ix">06</span> Contributing</a>
+    </nav>
+    <div class="sidebar-foot">
+      MIT licensed.<br>
+      <a href="../LICENSE.txt">LICENSE.txt</a> &middot;
+      <a href="https://opendc.org/">OpenDC</a>
+    </div>
+  </aside>
+
+  <main class="content">
+  <div class="page">
+
+    <div class="topbar">
+      <div class="crumbs"><a href="index.html">docs</a><span class="sep">/</span>cli<span class="sep">/</span><span class="here">performance</span></div>
+      <span class="pill">kavier-perf</span>
+    </div>
+
+    <header class="hero">
+      <div class="eyebrow">Command line · 02</div>
+      <h1>Kavier Performance</h1>
+      <p class="lede">This document provides documentation on how to interact with Kavier Performance via the command-line interface (CLI).</p>
+    </header>
+
+    <h2 id="flags">Flags &amp; options</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Flag / Option</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>--llm</code></td><td><code>str</code></td><td><code>Llama-3-8B</code></td><td>Key of the LLM to simulate (see <code>LLM_SPEC_LIBRARY</code>).</td></tr>
+        <tr><td><code>--gpu</code></td><td><code>str</code></td><td><code>A10</code></td><td>GPU model (see <code>GPU_SPEC_LIBRARY</code>).</td></tr>
+        <tr><td><code>--trace</code></td><td><code>path</code></td><td><code>src/data/input/input_example.csv</code></td><td>Input trace containing per-request token counts (CSV or Parquet).</td></tr>
+        <tr><td><code>--output_folder</code></td><td><code>path</code></td><td><code>src/data/output</code></td><td>Destination directory for generated Parquet files &amp; summary.</td></tr>
+        <tr><td><code>--kv_cache</code></td><td><code>on | off</code></td><td><code>on</code></td><td>Enable/disable vLLM-style KV caching.</td></tr>
+        <tr><td><code>--export_rate</code></td><td><code>float</code></td><td><code>0.1</code></td><td>Snapshot interval <strong>in seconds</strong> for utilisation traces.</td></tr>
+        <tr><td><code>--flush_size</code></td><td><code>int</code></td><td><code>1000</code></td><td>Rows to buffer before writing Parquet (<code>0 → one-shot</code>).</td></tr>
+        <tr><td><code>--prefix_cache_min_tokens</code></td><td><code>int</code></td><td><code>1024</code></td><td>Minimum prompt length (tokens) required to enter the <strong>prefix cache</strong>.</td></tr>
+        <tr><td><code>--max_cached_prompts</code></td><td><code>int</code></td><td><code>10</code></td><td>Capacity of the prefix cache (LRU).</td></tr>
+        <tr><td><code>--cache_scope</code></td><td><code>session | global</code></td><td><code>session</code></td><td>Whether the cache key includes <code>session_id</code>.</td></tr>
+        <tr><td><code>--prefix_cache_policy</code></td><td><code>none | prefill | full</code></td><td><code>prefill</code></td><td><em>prefill</em>: skip prefill on hit. <em>full</em>: skip prefill <strong>and</strong> decode.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h4>Example: smallest</h4>
+<pre><code>kavier-perf</code></pre>
+
+    <h4>Example: medium</h4>
+<pre><code>kavier-perf  \
+  --llm         Llama-3-8B \
+  --gpu         A10 \
+  --trace       src/data/input/your_special_trace.csv \
+  --kv_cache    on \
+  --export_rate 0.1 \
+  --flush_size  1000</code></pre>
+
+    <h4>Example: full</h4>
+<pre><code>kavier-perf \
+  --llm                     Llama-3-8B       \
+  --gpu                     A10              \
+  --trace                   traces/workload.csv \
+  --output_folder           results/run-01   \
+  --kv_cache                on               \
+  --export_rate             0.05             \
+  --flush_size              1000             \
+  --prefix_cache_min_tokens 1024             \
+  --max_cached_prompts      10               \
+  --cache_scope             session          \
+  --prefix_cache_policy     prefill</code></pre>
+
+    <div class="page-foot">
+      <span>Outputs <code>tasks.parquet</code>, <code>fragments.parquet</code> and <code>_sim_results.txt</code>.</span>
+      <a class="next-link nav-noline" href="cli-efficiency.html">
+        <span class="lbl">Next</span>Efficiency CLI →
+      </a>
+    </div>
+
+  </div>
+  </main>
+
+</div>
+</body>
+</html>

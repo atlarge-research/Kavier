@@ -3,291 +3,174 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kavier Documentation</title>
-<style>
-  :root { --fg: #1b1f23; --muted: #57606a; --accent: #2da44e; --border: #d0d7de; --bg: #ffffff; --code-bg: #f6f8fa; }
-  * { box-sizing: border-box; }
-  body { margin: 0; color: var(--fg); background: var(--bg);
-         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
-  .wrap { max-width: 860px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
-  h1 { font-size: 2rem; margin: 0 0 .25rem; }
-  h2 { font-size: 1.4rem; margin: 2.5rem 0 .75rem; padding-bottom: .3rem; border-bottom: 1px solid var(--border); }
-  h3 { font-size: 1.1rem; margin: 1.6rem 0 .5rem; }
-  h4 { font-size: 1rem; margin: 1.2rem 0 .4rem; color: var(--muted); }
-  p, li { color: var(--fg); }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  code { background: var(--code-bg); padding: .15em .35em; border-radius: 5px;
-         font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
-        padding: 1rem; overflow-x: auto; }
-  pre code { background: none; padding: 0; }
-  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 14px; }
-  th, td { border: 1px solid var(--border); padding: .45rem .6rem; text-align: left; vertical-align: top; }
-  th { background: var(--code-bg); }
-  .tagline { color: var(--muted); font-size: 1.05rem; margin: 0 0 1.5rem; }
-  nav.toc { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
-            padding: 1rem 1.25rem; margin: 1.5rem 0; }
-  nav.toc ul { margin: .25rem 0; padding-left: 1.2rem; }
-  blockquote { margin: 1rem 0; padding: .25rem 1rem; border-left: 4px solid var(--border); color: var(--muted); }
-  hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
-</style>
+<title>Kavier — Documentation</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="wrap">
+<div class="layout">
 
-  <h1>Kavier</h1>
-  <p class="tagline">Simulating performance, sustainability, and efficiency of LLM Ecosystems under inference and training.</p>
+  <aside class="sidebar">
+    <a class="brand nav-noline" href="index.html">
+      <span class="mark">Kavier<span class="dot">.</span></span>
+      <span class="ver">docs</span>
+    </a>
+    <nav class="nav">
+      <div class="nav-group-label">Start here</div>
+      <a class="active" href="index.html"><span class="ix">00</span> Overview</a>
+      <a href="getting-started.html"><span class="ix">01</span> Getting started</a>
 
-  <nav class="toc">
-    <strong>Contents</strong>
-    <ul>
-      <li><a href="#overview">Overview</a></li>
-      <li><a href="#getting-started">Getting Started</a></li>
-      <li><a href="#cli-performance">CLI &mdash; Kavier Performance (<code>kavier-perf</code>)</a></li>
-      <li><a href="#cli-efficiency">CLI &mdash; Kavier Efficiency (<code>kavier-eff</code>)</a></li>
-      <li><a href="#cli-training">CLI &mdash; Kavier Training (<code>kavier-train</code>)</a></li>
-      <li><a href="#structure">Structure</a></li>
-      <li><a href="#contributing">Contributing</a></li>
-    </ul>
-  </nav>
+      <div class="nav-group">
+        <div class="nav-group-label">Command line</div>
+      </div>
+      <a href="cli-performance.html"><span class="ix">02</span> Performance</a>
+      <a href="cli-efficiency.html"><span class="ix">03</span> Efficiency</a>
+      <a href="cli-training.html"><span class="ix">04</span> Training</a>
 
-  <h2 id="overview">Overview</h2>
-  <p>This repository is the home of Kavier, the first scientific instrument for predicting performance, sustainability, and efficiency of LLM ecosystems under inference and training, through discrete-event, cache-aware simulation.</p>
-  <p>Kavier helps operators, researchers, and engineers predict:</p>
-  <ul>
-    <li><strong>Performance</strong> &mdash; inference latencies, training throughput, GPU utilization</li>
-    <li><strong>Sustainability</strong> &mdash; energy consumption, carbon emissions (kgCO2/Mtoken/s)</li>
-    <li><strong>Financial efficiency</strong> &mdash; cost per token/sample given GPU-hour prices</li>
-  </ul>
+      <div class="nav-group">
+        <div class="nav-group-label">Reference</div>
+      </div>
+      <a href="formulas.html"><span class="ix">05</span> Core formulas</a>
+      <a href="contributing.html"><span class="ix">06</span> Contributing</a>
+    </nav>
+    <div class="sidebar-foot">
+      MIT licensed.<br>
+      <a href="../LICENSE.txt">LICENSE.txt</a> &middot;
+      <a href="https://opendc.org/">OpenDC</a>
+    </div>
+  </aside>
 
-  <h2 id="getting-started">Getting Started</h2>
-  <p>In this mini-tutorial, we will show how to get started with Kavier in under 10 minutes.</p>
+  <main class="content">
+  <div class="page">
 
-  <h3>1. Pre-requisites</h3>
-  <ol>
-    <li>Python &gt;= 3.9 (<strong>3.11 preferrably</strong>)</li>
-    <li>pip &gt;= 23 &amp; virtualenv / venv</li>
-  </ol>
-  <blockquote><strong>Tip for Apple Silicon:</strong> <code>brew install python@3.11</code></blockquote>
+    <div class="topbar">
+      <div class="crumbs"><span class="here">~/kavier/docs</span></div>
+      <span class="pill">discrete-event · cache-aware</span>
+    </div>
 
-  <h3>2. Clone &amp; create a virtual environment</h3>
+    <header class="hero">
+      <div class="eyebrow">Scientific instrument for LLM ecosystems</div>
+      <h1><span class="accent">Kavier</span> — simulate performance, sustainability &amp; efficiency.</h1>
+      <p class="lede">Simulating performance, sustainability, and efficiency of LLM ecosystems under inference and training.</p>
+
+      <div class="cta-row">
+        <a class="btn primary nav-noline" href="getting-started.html">Get started →</a>
+        <a class="btn ghost nav-noline" href="cli-performance.html">Browse the CLIs</a>
+        <a class="btn ghost nav-noline" href="formulas.html">The math</a>
+      </div>
+    </header>
+
+    <h2 id="overview">Overview</h2>
+    <p>This repository is the home of Kavier, the first scientific instrument for predicting performance, sustainability, and efficiency of LLM ecosystems under inference and training, through discrete-event, cache-aware simulation.</p>
+    <p>Kavier helps operators, researchers, and engineers predict:</p>
+
+    <div class="stats">
+      <div class="stat">
+        <span class="k">Performance</span>
+        <div class="l">inference latencies, training throughput, GPU utilization</div>
+      </div>
+      <div class="stat">
+        <span class="k">Sustainability</span>
+        <div class="l">energy consumption, carbon emissions <span style="white-space:nowrap">(kgCO2/Mtoken/s)</span></div>
+      </div>
+      <div class="stat">
+        <span class="k">Efficiency <span class="u">€</span></span>
+        <div class="l">cost per token / sample given GPU-hour prices</div>
+      </div>
+    </div>
+
+    <h2 id="clis">The three CLIs at a glance</h2>
+    <div class="cards">
+      <a class="card nav-noline" href="cli-performance.html">
+        <span class="cmd">kavier-perf</span>
+        <h3>Performance</h3>
+        <p>Replay a request trace through a discrete-event, cache-aware simulator to predict latencies, throughput and GPU utilisation.</p>
+        <span class="go">Read the reference →</span>
+      </a>
+      <a class="card nav-noline" href="cli-efficiency.html">
+        <span class="cmd">kavier-eff</span>
+        <h3>Efficiency</h3>
+        <p>Combine Kavier's <code>tasks.parquet</code> with OpenDC's <code>powerSource.parquet</code> into financial and sustainability efficiency metrics.</p>
+        <span class="go">Read the reference →</span>
+      </a>
+      <a class="card nav-noline" href="cli-training.html">
+        <span class="cmd">kavier-train</span>
+        <h3>Training</h3>
+        <p>Simulate a single training config — or every row of a CSV — to estimate tokens/sec and runtime across GPUs and nodes.</p>
+        <span class="go">Read the reference →</span>
+      </a>
+    </div>
+
+    <h2 id="architecture">How it fits together</h2>
+    <div class="arch">
+      <div class="arch-row">
+        <div class="node">
+          <b>Inputs</b>
+          <span class="sub">trace.csv · config</span>
+        </div>
+        <div class="node accent">
+          <b>Library</b>
+          <span class="sub">GPU + LLM specs</span>
+        </div>
+        <div class="node amber">
+          <b>Calibration</b>
+          <span class="sub">model × method × gpu</span>
+        </div>
+      </div>
+      <div class="arch-flow">▼&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼</div>
+      <div class="arch-row">
+        <div class="node">
+          <b>Inference engine</b>
+          <span class="sub">kavier-perf</span>
+        </div>
+        <div class="node">
+          <b>Training engine</b>
+          <span class="sub">kavier-train</span>
+        </div>
+      </div>
+      <div class="arch-flow">▼&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼</div>
+      <div class="arch-row">
+        <div class="node">
+          <b>OpenDC</b>
+          <span class="sub">powerSource.parquet</span>
+        </div>
+        <div class="node accent">
+          <b>Efficiency</b>
+          <span class="sub">kavier-eff</span>
+        </div>
+      </div>
+      <p class="arch-note">The <strong>library</strong> feeds both engines; <strong>calibration</strong> feeds training only. Kavier's outputs flow into <code>OpenDC</code> and back through <code>kavier-eff</code> for the final efficiency summary.</p>
+    </div>
+
+    <h2 id="structure">Structure</h2>
+    <p>Kavier is organized into 5 main components:</p>
+<pre><code>src/
+├── kavier_inference/    # Inference simulation (kavier-perf, kavier-eff)
+├── kavier_training/     # Training simulation (kavier-train)
+├── library/             # Shared GPU &amp; LLM specifications
+├── kavier_io/           # Shared I/O utilities
+└── tests/               # Test suites</code></pre>
+
+    <h2 id="install">Quick start</h2>
 <pre><code>git clone https://github.com/&lt;you&gt;/kavier.git
 cd kavier
 
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-python -m pip install -U pip</code></pre>
-
-  <h3>3. Install Kavier</h3>
-<pre><code>pip install -e ".[dev]"</code></pre>
-  <p>This</p>
-  <ul>
-    <li>Will install main dependencies and tools as defined in pyproject.toml.</li>
-    <li>Will resolve runtime deps (e.g., pandas, pyarrow, etc.) and install them.</li>
-    <li>Install CLI entry-points
-      <ul>
-        <li><code>kavier-perf</code> - for performance simulation</li>
-        <li><code>kavier-eff</code> - for efficiency simulation</li>
-      </ul>
-    </li>
-    <li>Registers editable packages so changes in <code>src/</code> are picked up instantly.</li>
-  </ul>
-
-  <h3>4. Run your first simulation</h3>
-  <h4>4.1 The lonely trace</h4>
-  <p>A tiny trace lives lonely at <code>src/data/input/input_example.csv</code> (2436 requests, 100 sessions). Visit the LLM Trace Archive and bring some it some fellow traces!</p>
-  <p>Or... you can add your own traces! Just make sure to follow the format:</p>
-  <ul>
-    <li>[REQUIRED] <code>num_input_tokens</code> (the number of input tokens in the request)</li>
-    <li>[REQUIRED] <code>num_output_tokens</code> (the number of output tokens in the response)</li>
-    <li>[OPTIONAL] <code>input_tokens</code> (the actual input tokens, e.g., "[123, 22, 816, 312...]")</li>
-    <li>[OPTIONAL] <code>output_tokens</code> (the actual output tokens, e.g., "[123, 22, 816, 312...]")</li>
-    <li>[OPTIONAL] <code>session_id</code> (the session ID, e.g., "1")</li>
-  </ul>
-
-  <h4>4.2 Your first simulation</h4>
+python -m pip install -U pip
+pip install -e ".[dev]"</code></pre>
+    <p>Run your first simulation:</p>
 <pre><code>kavier-perf --trace src/data/input/input_example.csv</code></pre>
+    <p>Congrats! You have just run your first simulation with Kavier! See <a href="getting-started.html">Getting started</a> for the full ten-minute tour.</p>
 
-  <h4>4.3 Your first output</h4>
-  <p>Artifacts will be saved in <code>src/data/output/</code>. Here you'll find three files:</p>
-  <ul>
-    <li><code>tasks.parquet</code>: one row per request,</li>
-    <li><code>fragments.parquet</code>: snapshots, each task is broken down into fragments,</li>
-    <li><code>_sim_results.txt</code>: a more readable summary.</li>
-  </ul>
-  <p>Congrats! You have just run your first simulation with Kavier!</p>
+    <div class="page-foot">
+      <span>Kavier is distributed under the MIT license. See <a href="../LICENSE.txt">LICENSE.txt</a>.</span>
+      <a class="next-link nav-noline" href="getting-started.html">
+        <span class="lbl">Next</span>Getting started →
+      </a>
+    </div>
 
-  <h3>5. A typical run</h3>
-<pre><code>kavier-perf \
-  --llm         Llama-3-8B \
-  --gpu         A10        \
-  --trace       src/data/input/input_example.csv \
-  --kv_cache    on \
-  --export_rate 0.1 \
-  --flush_size  1000</code></pre>
-  <p>See the <a href="#cli-performance">Kavier Performance CLI</a> for all flags.</p>
-
-  <h3>6. OpenDC Sustainability</h3>
-  <p>Kavier is integrated with the peer-reviewed <a href="https://opendc.org/">OpenDC</a> to provide sustainability metrics. To run a simulation with OpenDC, you need to setup OpenDC, as described in the <a href="https://opendc.org/">OpenDC documentation</a>.</p>
-  <p>Once set up, use the output of Kavier as the input for OpenDC. This is directly compatible and you don't need to change it! From OpenDC's predictions, you'll leverage <code>powerSource.parquet</code>.</p>
-
-  <h3>7. Post-processing: efficiency metrics</h3>
-  <p>If you ran all the steps so far, including step <code>6</code>, you should now have:</p>
-  <ul>
-    <li><code>tasks.parquet</code> - outputted by Kavier</li>
-    <li><code>powerSource.parquet</code> - outputted by OpenDC.</li>
-  </ul>
-<pre><code>kavier-eff \
-  --kavier data/output_traces/&lt;TIMESTAMP&gt;/tasks.parquet \
-  --opendc /path/to/powerSource.parquet \
-  --price 10            # GPU-hour price in your currency</code></pre>
-  <p>Sample output:</p>
-<pre><code>----------  Efficiency summary  ----------
- financial_efficiency (EUR / million token / s):       2.36
- sustainability_efficiency (Wh / million token / s):  84.5
- sustainability_efficiency (kgCO2 / million token / s): 0.039
- total_tokens:                                   1 234 567
- total_latency_s:                                  432.10
-------------------------------------------</code></pre>
-
-  <h3>8. Running the test-suite &amp; linters</h3>
-<pre><code>pytest -q          # 100 % pass → confidence in the math
-ruff check .       # style & import order
-mypy .             # optional static typing</code></pre>
-
-  <h3>9. Troubleshooting</h3>
-  <table>
-    <tr><th>Symptom</th><th>Fix</th></tr>
-    <tr><td><code>ModuleNotFoundError</code> for <code>kavier.*</code></td><td>Make sure the <strong>venv is active</strong> and you ran: <code>pip install -e ".[dev]"</code></td></tr>
-    <tr><td><em>Mypy</em> says a file is "found twice"</td><td>Import modules with the <strong><code>kavier.</code></strong> prefix, not a relative path.</td></tr>
-  </table>
-  <ul>
-    <li>Did you find a bug? Please open an issue!</li>
-    <li>Did you do any error that others might do? Let us know and we'll add it to this list! See <a href="#contributing">contributing guidelines</a>.</li>
-  </ul>
-
-  <h3>10. Next steps</h3>
-  <ol>
-    <li><strong>Plug in your own traces</strong> (CSV / Parquet with token counts).</li>
-    <li><strong>Tune cache policies</strong> &ndash; <code>--prefix_cache_policy full</code> is especially fun.</li>
-    <li><strong>Compare GPUs</strong> by sweeping <code>--gpu</code> and plotting metrics from <code>tasks.parquet</code>.</li>
-    <li><strong>Dive into the code</strong> and adapt the model to your research ideas.</li>
-  </ol>
-
-  <h2 id="cli-performance">CLI &mdash; Kavier Performance</h2>
-  <p>This document provides documentation on how to interact with Kavier Performance via the command-line interface (CLI).</p>
-  <table>
-    <tr><th>Flag / Option</th><th>Type</th><th>Default</th><th>Description</th></tr>
-    <tr><td><code>--llm</code></td><td><code>str</code></td><td><code>Llama-3-8B</code></td><td>Key of the LLM to simulate (see <code>LLM_SPEC_LIBRARY</code>).</td></tr>
-    <tr><td><code>--gpu</code></td><td><code>str</code></td><td><code>A10</code></td><td>GPU model (see <code>GPU_SPEC_LIBRARY</code>).</td></tr>
-    <tr><td><code>--trace</code></td><td><code>path</code></td><td><code>src/data/input/input_example.csv</code></td><td>Input trace containing per-request token counts (CSV or Parquet).</td></tr>
-    <tr><td><code>--output_folder</code></td><td><code>path</code></td><td><code>src/data/output</code></td><td>Destination directory for generated Parquet files &amp; summary.</td></tr>
-    <tr><td><code>--kv_cache</code></td><td><code>on | off</code></td><td><code>on</code></td><td>Enable/disable vLLM-style KV caching.</td></tr>
-    <tr><td><code>--prefix_len</code></td><td><code>int</code></td><td><code>1024</code></td><td>Minimum prompt length to enter the <strong>prefix cache</strong> (0 &rArr; disable).</td></tr>
-    <tr><td><code>--export_rate</code></td><td><code>float</code></td><td><code>0.1</code></td><td>Snapshot interval <strong>in seconds</strong> for utilisation traces.</td></tr>
-    <tr><td><code>--flush_size</code></td><td><code>int</code></td><td><code>1000</code></td><td>Rows to buffer before writing Parquet (<code>0 → one-shot</code>).</td></tr>
-    <tr><td><code>--prefix_cache_min_tokens</code></td><td><code>int</code></td><td><code>1024</code></td><td>Same as <code>--prefix_len</code>, kept for backwards-compatibility.</td></tr>
-    <tr><td><code>--max_cached_prompts</code></td><td><code>int</code></td><td><code>10</code></td><td>Capacity of the prefix cache (LRU).</td></tr>
-    <tr><td><code>--cache_scope</code></td><td><code>session | global</code></td><td><code>session</code></td><td>Whether the cache key includes <code>session_id</code>.</td></tr>
-    <tr><td><code>--prefix_cache_policy</code></td><td><code>none | prefill | full</code></td><td><code>prefill</code></td><td><em>prefill</em>: skip prefill on hit. <em>full</em>: skip prefill <strong>and</strong> decode.</td></tr>
-  </table>
-
-  <h4>Example: smallest</h4>
-<pre><code>kavier-perf</code></pre>
-
-  <h4>Example: medium</h4>
-<pre><code>kavier-perf  \
-  --llm         Llama-3-8B \
-  --gpu         A10 \
-  --trace       src/data/input/your_special_trace.csv \
-  --kv_cache    on \
-  --prefix_len  1024 \
-  --export_rate 0.1 \
-  --flush_size  1000</code></pre>
-
-  <h4>Example: full</h4>
-<pre><code>kavier-perf \
-  --llm                     Llama-3-8B       \
-  --gpu                     A10              \
-  --trace                   traces/workload.csv \
-  --output_folder           results/run-01   \
-  --kv_cache                on               \
-  --prefix_len              1024             \
-  --export_rate             0.05             \
-  --flush_size              1000             \
-  --prefix_cache_min_tokens 1024             \
-  --max_cached_prompts      10               \
-  --cache_scope             session          \
-  --prefix_cache_policy     prefill</code></pre>
-
-  <h2 id="cli-efficiency">CLI &mdash; Kavier Efficiency</h2>
-  <p>This document provides documentation on how to interact with Kavier Efficiency via the command-line interface (CLI).</p>
-  <table>
-    <tr><th>Flag / Option</th><th>Type</th><th>Default</th><th>Description</th></tr>
-    <tr><td><code>--kavier</code></td><td><code>path</code></td><td><strong>required</strong></td><td>Path to <strong><code>tasks.parquet</code></strong> produced by <code>kavier-perf</code>.</td></tr>
-    <tr><td><code>--opendc</code></td><td><code>path</code></td><td><strong>required</strong></td><td>Path to <strong><code>powerSource.parquet</code></strong> produced by the corresponding OpenDC run.</td></tr>
-    <tr><td><code>--price</code></td><td><code>float</code></td><td><code>10.0</code></td><td>GPU-hour price in your local currency, used when computing <em>financial efficiency</em>.</td></tr>
-    <tr><td><code>--out</code></td><td><code>FILE.json</code></td><td><em>(unset)</em></td><td>If set, writes the efficiency summary to the given JSON file in addition to printing it to stdout.</td></tr>
-  </table>
-
-  <h4>Example: smallest</h4>
-<pre><code>kavier-eff \
-  --kavier results/run-01/tasks.parquet \
-  --opendc  opendc/run-01/powerSource.parquet</code></pre>
-
-  <h4>Example: full</h4>
-<pre><code>kavier-eff \
-  --kavier results/run-01/tasks.parquet \
-  --opendc opendc/run-01/powerSource.parquet \
-  --price  12.0 \
-  --out    results/run-01/efficiency_summary.json</code></pre>
-
-  <h2 id="cli-training">CLI &mdash; Kavier Training</h2>
-  <p>Simulate every row of a CSV (e.g. <code>data/input/input_example.csv</code>).</p>
-<pre><code>kavier-train --input_csv src/data/input/input_example.csv</code></pre>
-  <p>Required for single-config runs; alternatively pass <code>--input_csv</code> to simulate every row of a CSV (e.g. <code>data/input/input_example.csv</code>). On bad/missing arguments, show a ready-to-run example command:</p>
-<pre><code>kavier-train --model_name mistral-7b-v0.1 --method lora \
-  --gpu_model NVIDIA-A100-SXM4-80GB --tokens_per_sample 1024 \
-  --batch_size 4 --number_gpus 8 --number_nodes 1</code></pre>
-
-  <h2 id="structure">Structure</h2>
-  <p>Kavier is organized into 5 main components:</p>
-<pre><code>src/
-├── kavier_inference/    # Inference simulation (kavier-perf, kavier-eff)
-├── kavier_training/     # Training simulation (kavier-train)
-├── library/             # Shared GPU & LLM specifications
-├── kavier_io/           # Shared I/O utilities
-└── tests/               # Test suites</code></pre>
-
-  <h2 id="contributing">Contributing</h2>
-  <p>First of all, thank you for wanting to contribute to our project(s)! You can contribute in various meaningful ways:</p>
-  <ul>
-    <li>Report a bug.</li>
-    <li>Propose new functionality for using this project.</li>
-    <li>Contribute improvements to the code and documentation.</li>
-    <li>Provide feedback about how we can improve the project.</li>
-    <li>Help answer questions on our <a href="https://github.com/atlarge-research/discussions">Discussions</a> page.</li>
-  </ul>
-
-  <h3>Let's get in touch!</h3>
-  <p>If you have any questions, suggestions, or just want to chat about the project, feel free to reach out to us via:</p>
-  <ul>
-    <li>mail@radu-nicolae.com</li>
-    <li>info@atlarge-research.com</li>
-  </ul>
-  <p>TIP: CC both addresses! :D</p>
-
-  <h3>Want to report a bug or suggest a feature?</h3>
-  <p>Please file an issue! First, have a look if someone has already filed an issue addressing your concern. If there already is such an issue, feel free to comment on the issue to show your support for it, or to add additional information that might be helpful. You can also just react with a thumbs-up to the issue, to indicate that you'd be interested in its resolution. This can help us prioritize what we spend our development time on.</p>
-  <p>If you can't find an issue that fits your problem or feature request, open a new one. Describe actual and expected behavior, and be as detailed as you can. We'll get back to you asap!</p>
-
-  <h3>Want to contribute code?</h3>
-  <p>That's great! If you want to contribute to this repository, <a href="https://github.com/atlarge-research/opendc/new/master">fork it</a> and submit a pull request here when you're ready! Be sure to describe <em>what</em> you changed and <em>why</em> you changed it, to help us understand what your contribution is about.</p>
-  <p>A quick note on commit messages: Please follow common Git standards when writing commit messages, see <a href="https://cbea.ms/git-commit/">this post</a> for details.</p>
-
-  <hr>
-  <p>Kavier is distributed under the MIT license. See <a href="../LICENSE.txt">LICENSE.txt</a>.</p>
+  </div>
+  </main>
 
 </div>
 </body>

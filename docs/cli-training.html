@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Training CLI — Kavier</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand nav-noline" href="index.html">
+      <span class="mark">Kavier<span class="dot">.</span></span>
+      <span class="ver">docs</span>
+    </a>
+    <nav class="nav">
+      <div class="nav-group-label">Start here</div>
+      <a href="index.html"><span class="ix">00</span> Overview</a>
+      <a href="getting-started.html"><span class="ix">01</span> Getting started</a>
+      <div class="nav-group"><div class="nav-group-label">Command line</div></div>
+      <a href="cli-performance.html"><span class="ix">02</span> Performance</a>
+      <a href="cli-efficiency.html"><span class="ix">03</span> Efficiency</a>
+      <a class="active" href="cli-training.html"><span class="ix">04</span> Training</a>
+      <div class="nav-group"><div class="nav-group-label">Reference</div></div>
+      <a href="formulas.html"><span class="ix">05</span> Core formulas</a>
+      <a href="contributing.html"><span class="ix">06</span> Contributing</a>
+    </nav>
+    <div class="sidebar-foot">
+      MIT licensed.<br>
+      <a href="../LICENSE.txt">LICENSE.txt</a> &middot;
+      <a href="https://opendc.org/">OpenDC</a>
+    </div>
+  </aside>
+
+  <main class="content">
+  <div class="page">
+
+    <div class="topbar">
+      <div class="crumbs"><a href="index.html">docs</a><span class="sep">/</span>cli<span class="sep">/</span><span class="here">training</span></div>
+      <span class="pill">kavier-train</span>
+    </div>
+
+    <header class="hero">
+      <div class="eyebrow">Command line · 04</div>
+      <h1>Kavier Training</h1>
+      <p class="lede">Simulate a single training configuration, or simulate every row of a CSV.</p>
+    </header>
+
+    <h2 id="csv">Simulate every row of a CSV</h2>
+    <p>Simulate every row of a CSV (e.g. <code>data/input/input_example.csv</code>).</p>
+<pre><code>kavier-train --input_csv src/data/input/input_example.csv</code></pre>
+    <p>Each row supplies a full config (<code>model_name</code>, <code>method</code>, <code>gpu_model</code>, <code>tokens_per_sample</code>, <code>batch_size</code>, <code>number_gpus</code>, <code>number_nodes</code>); the simulator prints one line per configuration with the resulting tokens/sec and runtime, then a count of how many configurations were simulated.</p>
+
+    <h2 id="flags">Flags &amp; options</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Flag / Option</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>--input_csv</code></td><td><code>path</code></td><td><em>(unset)</em></td><td>Simulate every row of this CSV instead of a single config.</td></tr>
+        <tr><td><code>--model_name</code></td><td><code>str</code></td><td><em>required*</em></td><td>Key of the model to simulate.</td></tr>
+        <tr><td><code>--method</code></td><td><code>full | lora | gptq-lora</code></td><td><em>required*</em></td><td>Training / fine-tuning method.</td></tr>
+        <tr><td><code>--gpu_model</code></td><td><code>str</code></td><td><em>required*</em></td><td>GPU model key, e.g. <code>NVIDIA-A100-SXM4-80GB</code>.</td></tr>
+        <tr><td><code>--tokens_per_sample</code></td><td><code>int</code></td><td><em>required*</em></td><td>Sequence length — tokens per sample.</td></tr>
+        <tr><td><code>--batch_size</code></td><td><code>int</code></td><td><em>required*</em></td><td>Samples per GPU per step.</td></tr>
+        <tr><td><code>--number_gpus</code></td><td><code>int</code></td><td><em>required*</em></td><td>GPUs per node.</td></tr>
+        <tr><td><code>--number_nodes</code></td><td><code>int</code></td><td><em>required*</em></td><td>Number of nodes (total GPUs = <code>number_gpus × number_nodes</code>).</td></tr>
+        <tr><td><code>--total_tokens</code></td><td><code>int</code></td><td><em>(unset)</em></td><td>Total tokens to train over, used to estimate full runtime.</td></tr>
+        <tr><td><code>--opendc_output_dir</code></td><td><code>path</code></td><td><em>(unset)</em></td><td>If set, export an OpenDC-compatible workload to this directory.</td></tr>
+        <tr><td><code>--opendc_task_id</code></td><td><code>int</code></td><td><code>0</code></td><td>Task id used in the OpenDC export.</td></tr>
+        <tr><td><code>--opendc_submission_time_ms</code></td><td><code>int</code></td><td><code>0</code></td><td>Submission time (ms) used in the OpenDC export.</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><em>* Required for single-config runs; alternatively pass <code>--input_csv</code> to simulate every row of a CSV.</em></p>
+
+    <h2 id="single">Single-config example</h2>
+<pre><code>kavier-train --model_name mistral-7b-v0.1 --method lora \
+  --gpu_model NVIDIA-A100-SXM4-80GB --tokens_per_sample 1024 \
+  --batch_size 4 --number_gpus 8 --number_nodes 1</code></pre>
+
+    <h2 id="on-error">On bad or missing arguments</h2>
+    <p>On bad/missing arguments, the CLI shows a ready-to-run example command:</p>
+    <div class="callout amber">
+      <span class="tag">friendly error</span>
+      <p>You may have mistaken the input — try this example instead:</p>
+    </div>
+<pre><code>kavier-train --model_name mistral-7b-v0.1 --method lora \
+  --gpu_model NVIDIA-A100-SXM4-80GB --tokens_per_sample 1024 \
+  --batch_size 4 --number_gpus 8 --number_nodes 1</code></pre>
+
+    <div class="page-foot">
+      <span>For the underlying equations, see the <a href="formulas.html">Core formulas</a>.</span>
+      <a class="next-link nav-noline" href="formulas.html">
+        <span class="lbl">Next</span>Core formulas →
+      </a>
+    </div>
+
+  </div>
+  </main>
+
+</div>
+</body>
+</html>

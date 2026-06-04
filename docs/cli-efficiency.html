@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Efficiency CLI — Kavier</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand nav-noline" href="index.html">
+      <span class="mark">Kavier<span class="dot">.</span></span>
+      <span class="ver">docs</span>
+    </a>
+    <nav class="nav">
+      <div class="nav-group-label">Start here</div>
+      <a href="index.html"><span class="ix">00</span> Overview</a>
+      <a href="getting-started.html"><span class="ix">01</span> Getting started</a>
+      <div class="nav-group"><div class="nav-group-label">Command line</div></div>
+      <a href="cli-performance.html"><span class="ix">02</span> Performance</a>
+      <a class="active" href="cli-efficiency.html"><span class="ix">03</span> Efficiency</a>
+      <a href="cli-training.html"><span class="ix">04</span> Training</a>
+      <div class="nav-group"><div class="nav-group-label">Reference</div></div>
+      <a href="formulas.html"><span class="ix">05</span> Core formulas</a>
+      <a href="contributing.html"><span class="ix">06</span> Contributing</a>
+    </nav>
+    <div class="sidebar-foot">
+      MIT licensed.<br>
+      <a href="../LICENSE.txt">LICENSE.txt</a> &middot;
+      <a href="https://opendc.org/">OpenDC</a>
+    </div>
+  </aside>
+
+  <main class="content">
+  <div class="page">
+
+    <div class="topbar">
+      <div class="crumbs"><a href="index.html">docs</a><span class="sep">/</span>cli<span class="sep">/</span><span class="here">efficiency</span></div>
+      <span class="pill">kavier-eff</span>
+    </div>
+
+    <header class="hero">
+      <div class="eyebrow">Command line · 03</div>
+      <h1>Kavier Efficiency</h1>
+      <p class="lede">This document provides documentation on how to interact with Kavier Efficiency via the command-line interface (CLI).</p>
+    </header>
+
+    <h2 id="flags">Flags &amp; options</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Flag / Option</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>--kavier</code></td><td><code>path</code></td><td><strong>required</strong></td><td>Path to <strong><code>tasks.parquet</code></strong> produced by <code>kavier-perf</code>.</td></tr>
+        <tr><td><code>--opendc</code></td><td><code>path</code></td><td><strong>required</strong></td><td>Path to <strong><code>powerSource.parquet</code></strong> produced by the corresponding OpenDC run.</td></tr>
+        <tr><td><code>--price</code></td><td><code>float</code></td><td><code>10.0</code></td><td>GPU-hour price in your local currency, used when computing <em>financial efficiency</em>.</td></tr>
+        <tr><td><code>--out</code></td><td><code>FILE.json</code></td><td><em>(unset)</em></td><td>If set, writes the efficiency summary to the given JSON file in addition to printing it to stdout.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h4>Example: smallest</h4>
+<pre><code>kavier-eff \
+  --kavier results/run-01/tasks.parquet \
+  --opendc  opendc/run-01/powerSource.parquet</code></pre>
+
+    <h4>Example: full</h4>
+<pre><code>kavier-eff \
+  --kavier results/run-01/tasks.parquet \
+  --opendc opendc/run-01/powerSource.parquet \
+  --price  12.0 \
+  --out    results/run-01/efficiency_summary.json</code></pre>
+
+    <div class="page-foot">
+      <span>Pairs Kavier's <code>tasks.parquet</code> with OpenDC's <code>powerSource.parquet</code>.</span>
+      <a class="next-link nav-noline" href="cli-training.html">
+        <span class="lbl">Next</span>Training CLI →
+      </a>
+    </div>
+
+  </div>
+  </main>
+
+</div>
+</body>
+</html>

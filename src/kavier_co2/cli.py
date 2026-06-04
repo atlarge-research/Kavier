@@ -51,6 +51,7 @@ import pandas as pd
 
 from kavier_co2.emissions import EmissionResult, Fragment, compute_emissions, load_carbon_trace
 from kavier_co2.fragments import fragments_from_powersource, fragments_from_training
+from library.lookup import UnknownSpecError
 
 _EXAMPLE_CMD = (
     "kavier-co2 --from-training --carbon_trace ct1-2025-ie-carbon-intensity.parquet "
@@ -137,7 +138,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         ps = pd.read_parquet(args.powersource)
         fragments = fragments_from_powersource(ps)
     else:
-        fragments = _fragments_from_training_args(args, parser)
+        try:
+            fragments = _fragments_from_training_args(args, parser)
+        except UnknownSpecError as exc:
+            print(f"{parser.prog}: error: {exc}", file=sys.stderr)
+            sys.exit(2)
 
     try:
         result = compute_emissions(fragments, trace)

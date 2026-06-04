@@ -4,20 +4,25 @@ Kavier Inference CLI - Main entry point for kavier-perf command.
 
 from __future__ import annotations
 
+import sys
+
 from kavier_inference.core.args import parse_args
 from kavier_inference.core.service import run_performance
+from library.lookup import UnknownSpecError
 
 
 def main() -> None:
     """Main entry point for kavier-perf command."""
     args = parse_args()
-    run_performance(args)
+    try:
+        run_performance(args)
+    except UnknownSpecError as exc:
+        print(f"kavier-perf: error: {exc}", file=sys.stderr)
+        sys.exit(2)
 
 
 def main_efficiency() -> None:
     """Deprecated entry point for the kavier-eff command (use kavier-energy)."""
-    import sys
-
     print(
         "kavier-eff is deprecated and will be removed in a future release; use kavier-energy instead.",
         file=sys.stderr,

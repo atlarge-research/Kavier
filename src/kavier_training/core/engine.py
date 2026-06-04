@@ -12,8 +12,7 @@ from kavier_training.core.calibration import (
     get_multi_gpu_correction,
     get_training_overhead_s,
 )
-from library.gpu import GPU_SPEC_LIBRARY
-from library.llm import LLM_SPEC_LIBRARY
+from library.lookup import get_gpu, get_llm
 from library.specs.GPUSpec import GPUSpec
 
 INFINIBAND_GBPS = 200.0
@@ -130,8 +129,8 @@ def simulate_training_step(
 ) -> Dict[str, float]:
     """Predict one training step. ``calibrated=False`` (the ``--no-calib`` mode) runs
     pure physics: all empirical calibration factors are neutralised."""
-    llm = LLM_SPEC_LIBRARY[model_name]
-    gpu = GPU_SPEC_LIBRARY[gpu_model]
+    llm = get_llm(model_name)
+    gpu = get_gpu(gpu_model)
 
     if grad_accum_steps < 1:
         raise ValueError(f"grad_accum_steps must be >= 1, got {grad_accum_steps}")

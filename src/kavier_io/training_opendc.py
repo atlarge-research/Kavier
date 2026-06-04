@@ -5,8 +5,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
-from library.gpu import GPU_SPEC_LIBRARY
-from library.llm import LLM_SPEC_LIBRARY
+from library.lookup import get_gpu, get_llm
 from opendc.adapter import prepare_opendc_input
 
 
@@ -30,8 +29,8 @@ def build_training_opendc_frames(
     simulate_full_training_fn: Callable[..., dict[str, Any]],
     simulate_training_step_fn: Callable[..., dict[str, float]],
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
-    llm = LLM_SPEC_LIBRARY[model_name]
-    gpu = GPU_SPEC_LIBRARY[gpu_model]
+    llm = get_llm(model_name)
+    gpu = get_gpu(gpu_model)
     summary = simulate_full_training_fn(
         model_name=model_name,
         method=method,

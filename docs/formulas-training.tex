@@ -1,24 +1,8 @@
-% Kavier training-simulator formulas — verified against
-% src/kavier_training/core/engine.py and core/calibration.py
-% (branch simplify-kavier-periphery, held-out calibration v3).
-%
-% Conventions: \textbf{bold} = computed quantity, plain = received input,
-% \underline{underline} = calibration term. Calibration terms that depend on
-% the configuration are written as FUNCTIONS with explicit arguments
-% (e.g. $\underline{E_g}(\text{gpu})$); only $\underline{c_c}$ and
-% $\underline{O_t}$ are scalars. With \texttt{--no-calib} every underlined
-% term is neutralised ($\underline{\cdot} \to 1$, $\underline{O_t} \to 0$);
-% the constants $a_1, a_2, t_l, t_m$ are part of the model itself and are
-% NOT neutralised. No Greek symbols are used: configuration arguments are
-% spelled \text{model}/\text{method}/\text{gpu}.
 
 \begin{table*}[!h]
   \centering
-  \caption{\footnotesize{Mathematical formulas Kavier underlies; symbols are
-  defined in the companion \Cref{tab:kavier-variables}. \textbf{Bold} =
-  computed quantity, plain = received input, \underline{underline} =
-  calibration term (functions take the configuration as argument; with
-  \texttt{--no-calib} all underlined terms are neutralised).}}
+  \caption{\footnotesize{Mathematical formulas Kavier underlies; symbols are defined in the companion \Cref{tab:kavier-variables}. \textbf{Bold} = computed quantity,
+  plain = received input, \underline{underline} = calibration factor.}}
   \label{tab:kavier-formulas}
   \renewcommand{\arraystretch}{1.5}
   \footnotesize
@@ -26,53 +10,43 @@
   \toprule
   \textbf{ID} & \textbf{Name} & \textbf{Formula} & \textbf{Role} & \textbf{References} \\
   \midrule
-  F0 & Throughput     & $\boldsymbol{T} = \dfrac{G_a \times B \times S \times \boldsymbol{G_n}}{\underline{m_g}(G) \times \boldsymbol{T_s}} \times \underline{c_m}(\text{method}) \times \underline{c_o}(\text{model}) \times \underline{c_i}(\text{model}, \text{method}, \text{gpu}, G)$ & Throughput output   & \cite{nicolae2025kavier, DBLP:conf/sc/NarayananSCLPKV21} \\ \midrule
+  F0 & Throughput     & $\boldsymbol{T} = \dfrac{G_a \times B \times S \times \boldsymbol{G_n}}{\underline{m_g} \times \boldsymbol{T_s}} \times \underline{c_m} \times
+  \underline{c_o} \times \underline{c_i}$ & Throughput output   & \cite{nicolae2025kavier, DBLP:conf/sc/NarayananSCLPKV21} \\ \midrule
   \addlinespace[2pt]
-  F1 & Runtime        & $\boldsymbol{R} = D \,/\, \boldsymbol{T}$ & Runtime output      & \cite{nicolae2025kavier} \\ \midrule
+  F1 & Runtime        & $\boldsymbol{R} = E_p \times N_e \,/\, \boldsymbol{T}$                                                       & Runtime output      &
+  \cite{nicolae2025kavier} \\ \midrule
   \addlinespace[3pt]
-  F2 & MFU            & $\boldsymbol{E} = E_b \times \underline{E_g}(\text{gpu}) \times \min\!\bigl(1,\, a_1 \log_2 B + a_2\bigr)$ & Compute efficiency  & \cite{DBLP:journals/jmlr/ChowdheryNDBMRBCSGSSTMRBTSPRDHPBAI23, DBLP:journals/corr/abs-2204-02311, DBLP:journals/cacm/WilliamsWP09, nicolae2025kavier} \\ \midrule
+  F2 & MFU            & $\boldsymbol{E} = E_b \times \underline{E_g} \times \min\!\bigl(1,\, \underline{a_1} \log_2 B + \underline{a_2}\bigr)$
+   & Compute efficiency  & \cite{DBLP:journals/jmlr/ChowdheryNDBMRBCSGSSTMRBTSPRDHPBAI23, DBLP:journals/corr/abs-2204-02311, DBLP:journals/cacm/WilliamsWP09,
+  nicolae2025kavier} \\ \midrule
   \addlinespace[3pt]
-  F3 & Forward        & $\boldsymbol{T_f} = \dfrac{2 \times P_a \times B \times S}{F \times \boldsymbol{E}} + \underline{O_t}$ & Forward pass       & \cite{DBLP:journals/corr/abs-1909-08053, DBLP:journals/corr/abs-2204-02311, DBLP:conf/sc/NarayananSCLPKV21} \\ \midrule
+  F3 & Forward        & $\boldsymbol{T_f} = \dfrac{2 \times P \times B \times S}{F \times \boldsymbol{E}} + \underline{O_t}$                                   &
+  Forward pass       & \cite{DBLP:journals/corr/abs-1909-08053, DBLP:journals/corr/abs-2204-02311, DBLP:conf/sc/NarayananSCLPKV21} \\ \midrule
   \addlinespace[3pt]
-  F4 & Backward       & $\boldsymbol{T_b} = f_b \times \boldsymbol{T_f}$ & Backward pass & \cite{DBLP:journals/corr/abs-1909-08053, DBLP:conf/sc/NarayananSCLPKV21} \\ \midrule
+  F4 & Backward       & $\boldsymbol{T_b} = 2 \times \boldsymbol{T_f}$                                                                            & Backward pass
+  & \cite{DBLP:journals/corr/abs-1909-08053, DBLP:conf/sc/NarayananSCLPKV21} \\ \midrule
   \addlinespace[3pt]
-  F5 & Optimizer      & $\boldsymbol{T_o} = \dfrac{20 \times \boldsymbol{P_t}}{B_m}, \;\; \boldsymbol{P_t} = \begin{cases} P & \text{full} \\ 2 r d k L & \text{LoRA, GPTQ-LoRA} \end{cases}$ & Update weights        & \cite{DBLP:conf/sc/RajbhandariRRH20, DBLP:conf/iclr/LoshchilovH19, DBLP:conf/iclr/HuSWALWWC22, DBLP:conf/nips/DettmersPHZ23} \\ \midrule
+  F5 & Optimizer      & $\boldsymbol{T_o} = \dfrac{20 \times \boldsymbol{P_t}}{B_m}, \;\; \boldsymbol{P_t} = P \text{ (full)} \;|\; 2 r d k L \text{ (LoRA)}$   &
+  memory-bound        & \cite{DBLP:conf/sc/RajbhandariRRH20, DBLP:conf/iclr/LoshchilovH19, DBLP:conf/iclr/HuSWALWWC22, DBLP:conf/nips/DettmersPHZ23} \\ \midrule
   \addlinespace[3pt]
-  F6 & Communication  & $\boldsymbol{T_c} = [\,G{>}1\,] \times \underline{c_c} \times \dfrac{4 \boldsymbol{P_t}}{W_n} \times \dfrac{G-1}{G}$\,\textsuperscript{$\dagger$} & Gradient all-reduce & \cite{DBLP:journals/ijhpca/ThakurRG05, DBLP:conf/sc/NarayananSCLPKV21, nicolae2025kavier} \\ \midrule
+  F6 & Communication  & $\boldsymbol{T_c} = \underline{c_c} \times 4 \boldsymbol{P_t} \times \bigl( \tfrac{[G>1]}{W_n} + \tfrac{[N>1]}{W_i} \bigr)$            &
+  comm-bound          & \cite{DBLP:journals/ijhpca/ThakurRG05, DBLP:conf/sc/NarayananSCLPKV21, nicolae2025kavier} \\ \midrule
   \addlinespace[3pt]
-  F7 & Step time      & $\boldsymbol{T_s} = G_a \times (\boldsymbol{T_f} + \boldsymbol{T_b}) + \boldsymbol{T_o} + \boldsymbol{T_c}$ & Time for weight update step & \cite{DBLP:journals/corr/abs-1909-08053, DBLP:conf/sc/NarayananSCLPKV21} \\
+  F7 & Step time      & $\boldsymbol{T_s} = G_a \times (\boldsymbol{T_f} + \boldsymbol{T_b}) + \boldsymbol{T_o} + \boldsymbol{T_c}$
+                  & aggregation         & \cite{DBLP:journals/corr/abs-1909-08053, DBLP:conf/sc/NarayananSCLPKV21} \\
   \bottomrule
   \end{tabular}
+  \end{table*}
 
-  \vspace{2pt}
-  {\footnotesize\raggedright $\dagger$~F6 shows the dominant bandwidth term. The
-  implemented ring all-reduce over $n$ participants at bandwidth $W$ (in Gb/s,
-  applied as $W \times 10^9 / 8$ bytes/s) is
-  $A(n, W) = t_l \log_2 n + t_m (n{-}1) + \dfrac{4 \boldsymbol{P_t}}{W}\cdot\dfrac{n-1}{n}$,
-  with latency $t_l = 5\times10^{-6}$\,s and per-message overhead
-  $t_m = 2\times10^{-6}$\,s. For a single node ($N{=}1$),
-  $\boldsymbol{T_c} = [\,G{>}1\,]\,\underline{c_c}\,A(G, W_n)$. For $N{>}1$ it is a
-  two-stage reduction, $\boldsymbol{T_c} = \underline{c_c}\bigl(A(\boldsymbol{G_n}, W_n) +
-  A(N, W_i)\bigr)$: an intra-node ring over $\boldsymbol{G_n}=\lfloor G/N\rfloor$ GPUs at
-  $W_n$ plus an inter-node ring over $N$ nodes at $W_i$. Gradient bytes are
-  $4\boldsymbol{P_t}$ (fp32). $\boldsymbol{T_c}=0$ when $G\le 1$.\par}
-\end{table*}
+\vspace*{-0,3cm}
+
+
+
 
 \begin{table*}[!h]
   \centering
-  \caption{\footnotesize{Variables, constants, and calibration terms used in
-  \Cref{tab:kavier-formulas}. Type: V = variable, K = model constant,
-  C = calibration term. Calibration terms are \emph{functions} of the
-  configuration, fitted offline on the 70/15 train+validation split (15\%
-  test held out) and stored as lookup tables; configurations absent from a
-  table fall back to the neutral value $1$ ($\underline{m_g}$ falls back to
-  the nearest fitted $G$, and is $1$ for $G \le 1$; $\underline{c_i}$ is $1$
-  for unseen configurations). Constants (K) are part of the model definition
-  and are not affected by \texttt{--no-calib}: $r{=}8$, $k{=}4$, $f_b{=}2$,
-  $a_1{=}0.0341$, $a_2{=}0.8147$, $t_l{=}5{\times}10^{-6}$\,s,
-  $t_m{=}2{\times}10^{-6}$\,s, $W_i{=}200$\,Gb/s. Bandwidths $W_n, W_i$ are
-  stated in Gb/s and enter F6 converted to bytes/s ($W \times 10^9 / 8$);
-  $P_a = P$ for dense models.}}
+  \caption{\footnotesize{Variables and calibration factors used in \Cref{tab:kavier-formulas}. Type: V = variable, C = calibration factor. \textbf{Bold} = computed,
+  plain = input, \underline{underline} = calibration factor.}}
   \label{tab:kavier-variables}
   \renewcommand{\arraystretch}{1.15}
   \footnotesize
@@ -80,41 +54,43 @@
   \toprule
   \textbf{ID} & \textbf{Symbol} & \textbf{Type} & \textbf{Name} & \textbf{Used in} & \textbf{Role} \\
   \midrule
-  1  & $B$            & V & micro-batch size                          & F0, F2, F3 & workload input \\
-  2  & $S$            & V & sequence length, in tokens                & F0, F3     & workload input \\
-  3  & $G$            & V & total number of GPUs                      & F0, F6     & workload input \\
-  4  & $N$            & V & number of nodes                           & F6         & workload input \\
-  5  & $\boldsymbol{G_n}$ & V & GPUs per node                         & F0, F6     & derived: $\lfloor G / N \rfloor$ \\
-  6  & $G_a$          & V & gradient-accumulation steps               & F0, F7     & workload input \\
-  7  & $\text{method}$ & V & fine-tuning method                       & F0, F5     & workload input \\
-  8  & $\text{model}$, $\text{gpu}$ & V & LLM identifier, GPU identifier & F0, F2 & workload input \\
-  9  & $D$            & V & total training tokens                     & F1         & workload input \\
+  1  & $B$            & V & micro-batch size                          & F0, F2, F3        & workload input \\
+  2  & $S$            & V & sequence length (tokens)                  & F0, F3            & workload input \\
+  3  & $\boldsymbol{G_n}$          & V & GPUs per node                             & F0                & derived: $G / N$ \\
+  4  & $G_a$          & V & gradient-accumulation steps               & F0, F7            & workload input (default $1$) \\
   \midrule
-  10 & $E_b$          & V & MFU efficiency factor                     & F2         & GPU library \\
-  11 & $F$            & V & peak FP16 Tensor Core throughput          & F3         & GPU library \\
-  12 & $B_m$          & V & GPU memory bandwidth                      & F5         & GPU library \\
-  13 & $W_n$          & V & intra-node network bandwidth              & F6         & GPU library \\
-  14 & $P_a$          & V & active model parameters                   & F3         & LLM library \\
-  15 & $P$            & V & total model parameters                    & F5         & LLM library \\
-  16 & $L$            & V & transformer layers                        & F5         & LLM library \\
-  17 & $d$            & V & hidden dimension                          & F5         & LLM library \\
-  18 & $\boldsymbol{P_t}$ & V & trainable parameters                  & F5, F6     & derived in F5 \\
+  5  & $E_p$          & V & training epochs                           & F1                & workload input \\
+  6  & $N_e$          & V & tokens per epoch (dataset size)           & F1                & workload input \\
   \midrule
+  7  & $E_b$          & V & nominal MFU factor                        & F2                & GPU library \\
   \midrule
-  19 & $r$, $k$       & K & LoRA rank, target modules per layer       & F5         & engine constant \\
-  20 & $f_b$          & K & backward / forward cost ratio             & F4         & engine constant \\
-  21 & $a_1$, $a_2$   & K & batch-size MFU scaling law                & F2         & engine constant \\
-  22 & $t_l$, $t_m$   & K & all-reduce latency, per-message overhead  & F6         & engine constant \\
-  23 & $W_i$          & K & inter-node network bandwidth              & F6         & engine constant \\
+  8  & $P$            & V & model parameters                          & F3, F5            & LLM library \\
+  9  & $F$            & V & peak FP16 Tensor Core throughput          & F3                & GPU library \\
+  \midrule
+  10 & $L$            & V & transformer layers                        & F5                & LLM library \\
+  11 & $d$            & V & hidden dimension                          & F5                & LLM library \\
+  12 & $r$, $k$       & V & LoRA rank, target modules per layer       & F5                & constants ($8$, $4$) \\
+  13 & $\boldsymbol{P_t}$          & V & trainable parameters                      & F5, F6            & derived in F5 \\
+  14 & $B_m$          & V & GPU memory bandwidth                      & F5                & GPU library \\
+  \midrule
+  15 & $G$            & V & total number of GPUs                      & F6                & workload input \\
+  16 & $N$            & V & number of nodes                           & F6                & workload input \\
+  17 & $W_n$          & V & intra-node bandwidth                      & F6                & GPU library (NVLink / PCIe) \\
+  18 & $W_i$          & V & inter-node bandwidth                      & F6                & constant ($200$ GB/s, InfiniBand) \\
   \midrule
   \midrule
-  24 & $\underline{m_g}(G)$ & C & multi-GPU correction                 & F0         & calibration file \\
-  25 & $\underline{c_m}(\text{method})$ & C & per-method throughput scale & F0     & calibration file \\
-  26 & $\underline{c_o}(\text{model})$ & C & per-LLM throughput scale    & F0      & calibration file \\
-  27 & $\underline{c_i}(\text{model}, \text{method}, \text{gpu}, G)$ & C & interaction throughput scale & F0 & calibration file \\
-  28 & $\underline{E_g}(\text{gpu})$ & C & per-GPU MFU multiplier        & F2      & calibration file \\
-  29 & $\underline{O_t}$ & C & per-forward training overhead (s)       & F3         & calibration file \\
-  30 & $\underline{c_c}$ & C & communication scale                     & F6         & calibration file \\
+  19 & $\underline{m_g}$          & C & multi-GPU correction                      & F0                & per $G$ \\
+  20 & $\underline{c_m}$          & C & per-method throughput scale               & F0                & per method \\
+  21 & $\underline{c_o}$          & C & per-LLM throughput scale                  & F0                & per LLM \\
+  22 & $\underline{c_i}$          & C & interaction throughput scale              & F0                & per (model, method, GPU, $G$) \\
+  \midrule
+  23 & $\underline{E_g}$          & C & per-GPU MFU multiplier                    & F2                & per GPU \\
+  24 & $\underline{a_1}$, $\underline{a_2}$   & C & batch-size MFU scaling factors            & F2                & scalar \\
+  \midrule
+  25 & $\underline{O_t}$          & C & per-forward training overhead (s)         & F3                & scalar \\
+  \midrule
+  26 & $\underline{c_c}$          & C & communication scale                       & F6                & scalar \\
   \bottomrule
   \end{tabular}
-\end{table*}
+  \end{table*}
+

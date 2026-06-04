@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "version": 3,
   "comm_scale": 0.8221945101144519,
   "training_overhead_s": 0.0,

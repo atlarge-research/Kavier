@@ -39,6 +39,29 @@ def test_calibration_json_is_valid_json_and_loads():
     assert isinstance(data, dict)
 
 
+def test_calibration_json_has_schema_version_provenance():
+    # Provenance: the on-disk format carries an integer schema_version, and the
+    # loader records the version it targets.
+    assert RAW["schema_version"] == 1
+    assert calibration.SCHEMA_VERSION == 1
+
+
+def test_loader_tolerates_unknown_top_level_keys():
+    # Descriptive/extra top-level keys (schema_version, version, _note, and any
+    # future addition) must not break loading or the getters.
+    extra = {**RAW, "an_unknown_future_key": {"nested": 1}, "another": 42}
+    saved = calibration._CAL
+    try:
+        calibration._CAL = extra
+        # Getters still work, reading only the keys they need.
+        assert calibration.get_comm_scale() == pytest.approx(RAW["comm_scale"])
+        assert calibration.get_method_scale(next(iter(RAW["method_scale"]))) == pytest.approx(
+            next(iter(RAW["method_scale"].values()))
+        )
+    finally:
+        calibration._CAL = saved
+
+
 @pytest.mark.parametrize(
     "key, expected_type",
     [

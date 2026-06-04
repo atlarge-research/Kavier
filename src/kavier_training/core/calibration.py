@@ -1,3 +1,18 @@
+"""Empirical calibration layer.
+
+Reads the fitted table from ``data/calibration.json`` into the module global
+``_CAL`` (which Coastline swaps live for recalibration ablations) and exposes
+strict per-key getters over it.
+
+Provenance / forward-compatibility: the JSON may carry purely descriptive
+top-level keys such as ``schema_version`` (the on-disk format version),
+``version`` (the calibration-run version) and ``_note``. The getters below read
+only the specific keys they need, so any unknown/extra top-level key is simply
+ignored — the table loads and works unchanged. ``SCHEMA_VERSION`` records the
+format version this loader was written against; a mismatch is tolerated, not
+fatal.
+"""
+
 from __future__ import annotations
 
 import json
@@ -5,6 +20,10 @@ from pathlib import Path
 from typing import Any
 
 _CALIBRATION_PATH = Path(__file__).resolve().parent.parent / "data" / "calibration.json"
+
+# Calibration-JSON format version this loader targets. Unknown top-level keys in
+# the file (including a higher schema_version) are tolerated, not rejected.
+SCHEMA_VERSION = 1
 
 with _CALIBRATION_PATH.open(encoding="utf-8") as f:
     _CAL: dict[str, Any] = json.load(f)

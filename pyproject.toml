@@ -62,7 +62,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["kavier_inference*", "kavier_training*", "library*", "kavier_io*", "opendc*", "kavier_energy*", "tests*"]
+include = ["kavier*", "library*", "opendc*", "tests*"]
 
 [tool.mypy]
 python_version = "3.11"

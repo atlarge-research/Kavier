@@ -16,7 +16,7 @@
   --fg:        #e6edf3;
   --fg-soft:   #b9c4d0;
   --muted:     #8593a3;
-  --faint:     #5c6b7c;
+  --faint:     #768599;   /* lifted for AA on dark panels */
 
   --accent:    #3fd4c7;   /* telemetry teal      */
   --accent-2:  #6fe3d8;
@@ -27,6 +27,13 @@
   --code-bg:   #0a0d12;
   --code-fg:   #d7e2ec;
   --kbd-bg:    #1c242e;
+  --kbd-fg:    var(--code-fg);  /* inline-code fg, scheme-aware */
+
+  /* accents used on always-dark surfaces (code-bg, accent button) —
+     stay bright in both schemes so contrast holds */
+  --accent-on-dark: var(--accent);
+  --amber-on-dark:  var(--amber);
+  --ink-on-accent:  #06231f;     /* dark text sitting on a teal fill */
 
   --glow:      rgba(63, 212, 199, 0.10);
   --glow-amber: rgba(242, 182, 90, 0.08);
@@ -52,17 +59,23 @@
     --fg:        #1f2630;
     --fg-soft:   #38424f;
     --muted:     #5d6772;
-    --faint:     #8a93a0;
+    --faint:     #5f6874;   /* darkened for AA on light panels */
 
-    --accent:    #0c8f84;
+    --accent:    #0a7a71;   /* darkened teal: AA on light bg */
     --accent-2:  #0aa093;
-    --amber:     #b6781a;
+    --amber:     #9a630f;   /* darkened amber: AA on light bg */
     --violet:    #6a55c9;
     --rule:      #e4ddcf;
 
     --code-bg:   #1a1f27;   /* keep code dark for contrast/pop */
     --code-fg:   #dce5ef;
     --kbd-bg:    #ece7da;
+    --kbd-fg:    #233040;   /* dark ink on light inline-code bg */
+
+    /* code-bg stays dark in light mode too, so keep bright accents there */
+    --accent-on-dark: #3fd4c7;
+    --amber-on-dark:  #f2b65a;
+    --ink-on-accent:  #ffffff;  /* white reads better than dark on light teal fill */
 
     --glow:      rgba(12, 143, 132, 0.08);
     --glow-amber: rgba(182, 120, 26, 0.06);
@@ -289,7 +302,7 @@ code {
   font-family: var(--font-mono);
   font-size: .85em;
   background: var(--kbd-bg);
-  color: var(--code-fg);
+  color: var(--kbd-fg);
   padding: .12em .42em;
   border-radius: 5px;
   border: 1px solid var(--border);
@@ -398,7 +411,7 @@ blockquote p, .callout p { margin: .25rem 0; }
   transition: transform .12s, border-color .15s, background .15s;
 }
 .btn:hover { transform: translateY(-1px); text-decoration: none; }
-.btn.primary { background: var(--accent); color: #06231f; border-color: var(--accent); font-weight: 600; }
+.btn.primary { background: var(--accent); color: var(--ink-on-accent); border-color: var(--accent); font-weight: 600; }
 .btn.primary:hover { background: var(--accent-2); }
 .btn.ghost { color: var(--fg); background: var(--panel); }
 .btn.ghost:hover { border-color: var(--accent); color: var(--accent); }
@@ -423,7 +436,7 @@ blockquote p, .callout p { margin: .25rem 0; }
 .card .cmd {
   font-family: var(--font-mono);
   font-size: .8rem;
-  color: var(--accent);
+  color: var(--accent-on-dark);
   margin-bottom: .55rem;
   display: inline-block;
   padding: .15rem .5rem;
@@ -492,7 +505,7 @@ blockquote p, .callout p { margin: .25rem 0; }
 .formula .num {
   font-family: var(--font-mono);
   font-size: .72rem;
-  color: #06231f;
+  color: var(--ink-on-accent);
   background: var(--accent);
   padding: .1rem .45rem;
   border-radius: 5px;
@@ -512,8 +525,8 @@ blockquote p, .callout p { margin: .25rem 0; }
   display: block;
   line-height: 1.7;
 }
-.eq .op { color: var(--accent); }
-.eq .var { color: var(--amber); }
+.eq .op { color: var(--accent-on-dark); }
+.eq .var { color: var(--amber-on-dark); }
 .formula .meta { font-size: .85rem; color: var(--muted); margin: .7rem 0 0; }
 .formula .meta a { color: var(--violet); }
 .formula ul { margin: .55rem 0 0; font-size: .88rem; }

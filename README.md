@@ -3,7 +3,7 @@
 Simulating performance, sustainability, and efficiency of LLM Ecosystems under inference and training.
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-main-green.svg)](docs)
+[![Documentation](https://img.shields.io/badge/docs-main-green.svg)](docs/index.html)
 [![CI](https://github.com/atlarge-research/kavier/actions/workflows/ci.yml/badge.svg)](https://github.com/atlarge-research/kavier/actions/workflows/ci.yml)
 
 ---
@@ -17,6 +17,26 @@ Kavier helps operators, researchers, and engineers predict:
 * **Sustainability** — energy consumption, carbon emissions (kgCO2/Mtoken/s)
 * **Financial efficiency** — cost per token/sample given GPU-hour prices
 
+## Quick start
+
+```bash
+git clone https://github.com/<you>/kavier.git
+cd kavier
+
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python -m pip install -U pip
+pip install -e ".[dev]"
+```
+
+Run your first simulation:
+
+```bash
+kavier-perf --trace src/data/input/input_example.csv
+```
+
+Congrats! You have just run your first simulation with Kavier! 🎉
+
 ## Structure
 
 Kavier is organized into 5 main components:
@@ -26,29 +46,21 @@ src/
 ├── kavier_inference/    # Inference simulation (kavier-perf, kavier-eff)
 ├── kavier_training/     # Training simulation (kavier-train)
 ├── library/             # Shared GPU & LLM specifications
-├── io/                  # Shared I/O utilities
+├── kavier_io/           # Shared I/O utilities
 └── tests/               # Test suites
 ```
 
 ## Documentation
 
-We divide the documentation into the following sections:
-
-* [Getting Started](docs/getting-started.md)
-* Using the Kavier CLI
-    * [Kavier Performance CLI](docs/cli-performance.md) - `kavier-perf`
-    * [Kavier Efficiency CLI](docs/cli-efficiency.md) - `kavier-eff`
-    * Kavier Training CLI - `kavier-train`
-* [Restructuring Summary](RESTRUCTURE_SUMMARY.md) - v0.2.0 architecture changes
-* Thesis
-* [Contributing guide](docs/contributing.md)
+See [docs/index.html](docs/index.html) for the main documentation: getting started,
+the Kavier CLI (`kavier-perf`, `kavier-eff`, `kavier-train`), structure, and the
+contributing guide.
 
 ## Contributing
 
 Questions, suggestions and contributions are welcome and appreciated!
-Please refer to the [contributing guidelines](CONTRIBUTING.md) for more details.
+Please refer to the [contributing guide](docs/contributing.md) for more details.
 
 ## License
 
 Kavier is distributed under the MIT license. See [LICENSE.txt](/LICENSE.txt).
-

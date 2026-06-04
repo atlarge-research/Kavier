@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
 
@@ -25,6 +26,35 @@ class _FriendlyParser(argparse.ArgumentParser):
         sys.exit(2)
 
 
+def _run_csv(path: str, total_tokens: int | None) -> None:
+    """Simulate every row of a CSV (e.g. data/input/input_example.csv)."""
+    with open(path, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    header = (
+        f"{'model':<28} {'method':<10} {'gpu':<22} "
+        f"{'seq':>5} {'bs':>3} {'gpus':>4} {'tok/s':>12} {'runtime_s':>10}"
+    )
+    print(header)
+    print("-" * len(header))
+    for row in rows:
+        r = simulate_full_training(
+            model_name=row["model_name"],
+            method=row["method"],
+            gpu_model=row["gpu_model"],
+            tokens_per_sample=int(row["tokens_per_sample"]),
+            batch_size=int(row["batch_size"]),
+            number_gpus=int(row["number_gpus"]),
+            number_nodes=int(row["number_nodes"]),
+            total_tokens=total_tokens,
+        )
+        print(
+            f"{row['model_name']:<28} {row['method']:<10} {row['gpu_model']:<22} "
+            f"{row['tokens_per_sample']:>5} {row['batch_size']:>3} {row['number_gpus']:>4} "
+            f"{r['train_tokens_per_second']:>12,.1f} {r['train_runtime']:>10,.1f}"
+        )
+    print(f"\n{len(rows)} configurations simulated.")
+
+
 def main() -> None:
     parser = add_training_args(
         _FriendlyParser(
@@ -33,6 +63,17 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+
+    if args.input_csv:
+        _run_csv(args.input_csv, args.total_tokens)
+        return
+
+    single_cfg_args = ("model_name", "method", "gpu_model", "tokens_per_sample",
+                       "batch_size", "number_gpus", "number_nodes")
+    missing = [f"--{a}" for a in single_cfg_args if getattr(args, a) is None]
+    if missing:
+        parser.error(f"the following arguments are required: {', '.join(missing)} (or pass --input_csv)")
+
     total_gpus = args.number_gpus * args.number_nodes
 
     print("=" * 80)

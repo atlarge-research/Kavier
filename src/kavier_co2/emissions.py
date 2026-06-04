@@ -7,19 +7,32 @@ power source's energy to carbon. A *power fragment* ``(start_time, duration_s,
 power_w)`` is the unit produced by Kavier's training simulation and by OpenDC's
 per-step output.
 
-Join semantics (window split + energy weighting)
-------------------------------------------------
+Join semantics (window split + conservative down-estimation)
+------------------------------------------------------------
 Energy is the integral of power over time, so a fragment that straddles a
 window boundary cannot use a single intensity. We split each fragment at the
 30-min window boundaries and bill every sub-interval's energy
-(``power_w * sub_duration_s``) at *its own* window's intensity. The per-window
-breakdown groups these sub-intervals by window; the total is their sum. The
-reported "average intensity" is energy-weighted (total gCO2 / total kWh), which
-equals the simple intensity when a run sits in one window.
+(``power_w * sub_duration_s``).
 
-This is the same stepwise model OpenDC uses; we make the boundary handling
-explicit rather than snapping a fragment to whichever window contains its
-start.
+Billing rule (DOWN-ESTIMATION): each split piece is billed at
+``min(intensity of its own window, intensity of the NEXT window)``. A moment
+that sits *between* two trace points (e.g. 15:34 between points at 15:00 and
+16:00) is deliberately under-estimated to ``min(intensity@15:00,
+intensity@16:00)``. The final trace window has no successor, so it bills at its
+own value. The per-window breakdown records the down-estimated intensity per
+window; the total is their sum. The reported "average intensity" is
+energy-weighted (total gCO2 / total kWh).
+
+Deviation from OpenDC
+---------------------
+OpenDC's ``CarbonModel`` (``opendc-simulator-compute``) treats the carbon trace
+as a pure *left-continuous step function*: the loader's ``fixReportTimes`` sets
+each fragment's window to ``[t_i, t_{i+1})`` and the model holds the EARLIER
+point's intensity until the next point — no interpolation, no min. So OpenDC
+bills the 15:34 moment at ``intensity@15:00`` (the left bound), whereas Kavier
+bills it at ``min(intensity@15:00, intensity@16:00)``. Kavier's total is
+therefore always <= OpenDC's left-step total. This is an intentional
+conservative (lower-bound) carbon estimate, not OpenDC's exact accounting.
 """
 
 from __future__ import annotations
@@ -161,6 +174,7 @@ def compute_emissions(fragments: Iterable[Fragment], trace: CarbonTrace) -> Emis
 
         # Walk the fragment window by window, slicing at each boundary.
         cursor = start
+        last_wi = len(trace.timestamps) - 1
         while cursor < end:
             wi = _window_index_for(cursor, trace)
             window_start = trace.timestamps[wi]
@@ -168,7 +182,14 @@ def compute_emissions(fragments: Iterable[Fragment], trace: CarbonTrace) -> Emis
             seg_end = min(end, window_end)
             seg_seconds = (seg_end - cursor).total_seconds()
             energy_kwh = frag.power_w * seg_seconds / WS_PER_KWH
-            intensity = float(trace.intensities.iloc[wi])
+            # DOWN-ESTIMATION: bill this piece at the lower of its own window's
+            # intensity and the next window's intensity. The final trace window
+            # has no successor, so it uses its own value.
+            own = float(trace.intensities.iloc[wi])
+            if wi < last_wi:
+                intensity = min(own, float(trace.intensities.iloc[wi + 1]))
+            else:
+                intensity = own
             co2_g = energy_kwh * intensity
 
             bucket = acc.setdefault(

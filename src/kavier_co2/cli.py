@@ -1,12 +1,20 @@
 """kavier-co2 — link energy consumption to CO2 emissions via a time-varying
-carbon-intensity trace, joined 1-1 by timestamp (the OpenDC way).
+carbon-intensity trace, joined by timestamp.
 
 ================================ USAGE =================================
 The CLI takes a carbon-intensity trace (--carbon_trace, a parquet with
 ['timestamp', 'carbon_intensity'] columns; intensity in gCO2/kWh, rows on a
-fixed step e.g. 30 min) and a power timeline, then bills each unit of energy at
-the carbon intensity of the window it falls in. Window-spanning intervals are
-split at boundaries and weighted by time (see kavier_co2.emissions).
+fixed step e.g. 30 min) and a power timeline, then bills each unit of energy.
+Window-spanning intervals are split at boundaries and weighted by time (see
+kavier_co2.emissions).
+
+CONSERVATIVE DOWN-ESTIMATION: each split piece is billed at the LOWER of its own
+window's intensity and the NEXT window's intensity, i.e. a moment between two
+trace points takes min(left intensity, right intensity). The last trace window
+(no successor) uses its own value. This deliberately under-estimates carbon.
+It deviates from OpenDC, whose CarbonModel holds the earlier point's intensity
+until the next point (a left-step, no min); Kavier's total is always <= that
+left-step total.
 
 Mode 1 — from a Kavier training simulation (constant-power fragment):
 

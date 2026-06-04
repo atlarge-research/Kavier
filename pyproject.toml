@@ -69,9 +69,10 @@ include = ["kavier*", "library*", "opendc*", "tests*"]
 # both are dev/demo artefacts, not runtime assets.
 [tool.setuptools.package-data]
 kavier_training = ["data/calibration.json", "data/input/input_example.csv"]
+kavier_inference = ["data/input/input_example.csv"]
 
 [tool.setuptools.exclude-package-data]
-kavier_inference = ["data/input/*.csv", "data/output/*", "data/output/**/*"]
+kavier_inference = ["data/output/*", "data/output/**/*"]
 
 [tool.mypy]
 python_version = "3.11"

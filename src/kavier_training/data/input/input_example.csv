@@ -1,0 +1,16 @@
+model_name,method,gpu_model,tokens_per_sample,batch_size,number_gpus,number_nodes,measured_throughput,measured_total_time
+mistral-7b-v0.1,full,NVIDIA-A100-SXM4-80GB,1024,4,1,1,3133.96,638.17
+mistral-7b-v0.1,full,NVIDIA-A100-SXM4-80GB,1024,4,2,1,5450.76,366.92
+mistral-7b-v0.1,full,NVIDIA-A100-SXM4-80GB,1024,4,4,1,10545.82,189.65
+mistral-7b-v0.1,full,NVIDIA-A100-SXM4-80GB,1024,4,8,1,20275.83,98.64
+mistral-7b-v0.1,lora,NVIDIA-A100-SXM4-80GB,1024,4,1,1,3614.85,553.27
+mistral-7b-v0.1,lora,NVIDIA-A100-SXM4-80GB,1024,4,8,1,27584.8,72.5
+mistral-7b-v0.1,gptq-lora,NVIDIA-A100-SXM4-80GB,512,2,1,1,3872.86,516.41
+mistral-7b-v0.1,full,NVIDIA-A100-80GB-PCIe,1024,4,2,1,4117.38,485.75
+mistral-7b-v0.1,full,L40S,512,2,2,1,856.12,2336.12
+llama3.2-3b,full,NVIDIA-A100-SXM4-80GB,1024,8,1,1,6178.04,323.73
+llama3.2-3b,lora,NVIDIA-A100-SXM4-80GB,1024,8,4,1,22279.98,89.77
+granite-3.3-8b,full,NVIDIA-A100-SXM4-80GB,1024,4,2,1,4679.05,427.44
+granite-3.3-8b,lora,NVIDIA-A100-SXM4-80GB,1024,4,8,1,19944.2,100.28
+granite-3-8b,full,NVIDIA-H100-PCIe,1024,4,1,1,3628.16,551.24
+granite-3-8b,lora,NVIDIA-H100-PCIe,1024,4,1,1,4151.87,481.71

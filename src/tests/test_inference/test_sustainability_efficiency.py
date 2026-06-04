@@ -1,6 +1,6 @@
 import pandas as pd
 
-from efficiency.metrics import sustainability_efficiency
+from kavier_energy.metrics import sustainability_efficiency
 
 
 def make_power(wh):

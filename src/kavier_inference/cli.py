@@ -15,10 +15,17 @@ def main() -> None:
 
 
 def main_efficiency() -> None:
-    """Main entry point for kavier-eff command."""
-    from efficiency.calculator import main as eff_main
+    """Deprecated entry point for the kavier-eff command (use kavier-energy)."""
+    import sys
 
-    eff_main()
+    print(
+        "kavier-eff is deprecated and will be removed in a future release; use kavier-energy instead.",
+        file=sys.stderr,
+    )
+
+    from kavier_energy.calculator import main as energy_main
+
+    energy_main()
 
 
 if __name__ == "__main__":

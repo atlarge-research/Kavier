@@ -1,6 +1,6 @@
 import pandas as pd
 
-from efficiency.metrics import financial_efficiency
+from kavier_energy.metrics import financial_efficiency
 
 
 def test_financial_efficiency_scales_with_price():

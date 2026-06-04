@@ -37,9 +37,11 @@ dev = [
 ]
 
 [project.scripts]
-kavier-perf  = "kavier_inference.cli:main"
-kavier-train = "kavier_training.cli:main"
-kavier-eff   = "kavier_inference.cli:main_efficiency"
+kavier-perf   = "kavier_inference.cli:main"
+kavier-train  = "kavier_training.cli:main"
+kavier-energy = "kavier_energy.calculator:main"
+# Deprecated alias for kavier-energy; kept for backward compatibility.
+kavier-eff    = "kavier_inference.cli:main_efficiency"
 
 # ------------------------------------------------------------------
 #  Tooling
@@ -59,7 +61,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["kavier_inference*", "kavier_training*", "library*", "kavier_io*", "opendc*", "efficiency*", "tests*"]
+include = ["kavier_inference*", "kavier_training*", "library*", "kavier_io*", "opendc*", "kavier_energy*", "tests*"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -71,6 +73,6 @@ packages = [
     "library",
     "kavier_io",
     "opendc",
-    "efficiency",
+    "kavier_energy",
 ]
 exclude = ["tests/"]

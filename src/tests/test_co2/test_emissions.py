@@ -139,11 +139,7 @@ def test_fragment_spanning_three_windows_min_rule() -> None:
     # energy per minute = 2000 W * 60 s = 120000 Ws = 120000/3.6e6 kWh
     kwh_per_min = 2000.0 * 60.0 / 3.6e6
     # w1 piece: min(100,200)=100 ; w2 piece: min(200,400)=200 ; w3 (last): 400.
-    expected = (
-        30 * kwh_per_min * 100.0
-        + 30 * kwh_per_min * 200.0
-        + 15 * kwh_per_min * 400.0
-    )
+    expected = 30 * kwh_per_min * 100.0 + 30 * kwh_per_min * 200.0 + 15 * kwh_per_min * 400.0
     assert result.total_co2_g == pytest.approx(expected)
 
 
@@ -234,9 +230,7 @@ def test_fragment_exactly_to_last_window_end_ok() -> None:
 def test_load_carbon_trace_round_trip(tmp_path) -> None:
     df = pd.DataFrame(
         {
-            "timestamp": pd.to_datetime(
-                ["2025-01-01 00:00", "2025-01-01 00:30", "2025-01-01 01:00"]
-            ),
+            "timestamp": pd.to_datetime(["2025-01-01 00:00", "2025-01-01 00:30", "2025-01-01 01:00"]),
             "carbon_intensity": [10.0, 20.0, 30.0],
         }
     )

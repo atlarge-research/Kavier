@@ -23,9 +23,7 @@ from kavier_training.core import calibration
 
 # Load the raw JSON independently of the module so we can cross-check that the
 # getters return exactly what is on disk (rather than re-hardcoding constants).
-_CAL_PATH = (
-    Path(calibration.__file__).resolve().parent.parent / "data" / "calibration.json"
-)
+_CAL_PATH = Path(calibration.__file__).resolve().parent.parent / "data" / "calibration.json"
 with _CAL_PATH.open(encoding="utf-8") as _f:
     RAW = json.load(_f)
 
@@ -73,9 +71,7 @@ def test_get_comm_scale_matches_json():
 
 
 def test_get_training_overhead_s_matches_json():
-    assert calibration.get_training_overhead_s() == pytest.approx(
-        RAW["training_overhead_s"]
-    )
+    assert calibration.get_training_overhead_s() == pytest.approx(RAW["training_overhead_s"])
     assert isinstance(calibration.get_training_overhead_s(), float)
 
 
@@ -135,9 +131,7 @@ def test_get_multi_gpu_correction_single_or_below_is_unity(num_gpus):
     assert calibration.get_multi_gpu_correction(num_gpus) == 1.0
 
 
-@pytest.mark.parametrize(
-    "num_gpus", sorted(int(k) for k in RAW["multi_gpu_correction"]["by_num_gpus"])
-)
+@pytest.mark.parametrize("num_gpus", sorted(int(k) for k in RAW["multi_gpu_correction"]["by_num_gpus"]))
 def test_get_multi_gpu_correction_exact_table_keys(num_gpus):
     expected = RAW["multi_gpu_correction"]["by_num_gpus"][str(num_gpus)]
     result = calibration.get_multi_gpu_correction(num_gpus)
@@ -157,9 +151,7 @@ def test_get_multi_gpu_correction_nearest_neighbour_above_max():
     # A count larger than every table key snaps to the largest key (128 here).
     table = RAW["multi_gpu_correction"]["by_num_gpus"]
     max_key = max(int(k) for k in table)
-    assert calibration.get_multi_gpu_correction(max_key + 1000) == pytest.approx(
-        table[str(max_key)]
-    )
+    assert calibration.get_multi_gpu_correction(max_key + 1000) == pytest.approx(table[str(max_key)])
 
 
 def test_get_multi_gpu_correction_nearest_neighbour_midpoint_uses_smaller():
@@ -179,9 +171,7 @@ def test_get_interaction_scale_known_combo_matches_json():
     # Pick a real key from the fitted table and verify it round-trips.
     sample_key = next(iter(RAW["interaction_scale"]))
     model_name, method, gpu_name, num_gpus = sample_key.split("|")
-    result = calibration.get_interaction_scale(
-        model_name, method, gpu_name, int(num_gpus)
-    )
+    result = calibration.get_interaction_scale(model_name, method, gpu_name, int(num_gpus))
     assert result == pytest.approx(RAW["interaction_scale"][sample_key])
     assert isinstance(result, float)
 
@@ -189,9 +179,7 @@ def test_get_interaction_scale_known_combo_matches_json():
 @pytest.mark.parametrize("sample_key", list(RAW["interaction_scale"]))
 def test_get_interaction_scale_all_known_keys_match_json(sample_key):
     model_name, method, gpu_name, num_gpus = sample_key.split("|")
-    result = calibration.get_interaction_scale(
-        model_name, method, gpu_name, int(num_gpus)
-    )
+    result = calibration.get_interaction_scale(model_name, method, gpu_name, int(num_gpus))
     assert result == pytest.approx(RAW["interaction_scale"][sample_key])
 
 
@@ -200,9 +188,7 @@ def test_get_interaction_scale_absent_combo_defaults_to_one():
     # leaves the prediction unchanged.
     key = "no-such-model|full|NVIDIA-A100-SXM4-80GB|1"
     assert key not in RAW["interaction_scale"]
-    assert calibration.get_interaction_scale(
-        "no-such-model", "full", "NVIDIA-A100-SXM4-80GB", 1
-    ) == 1.0
+    assert calibration.get_interaction_scale("no-such-model", "full", "NVIDIA-A100-SXM4-80GB", 1) == 1.0
 
 
 def test_get_interaction_scale_known_model_unknown_gpu_count_defaults_to_one():
@@ -210,6 +196,4 @@ def test_get_interaction_scale_known_model_unknown_gpu_count_defaults_to_one():
     # no nearest-neighbour fallback here, it must default to 1.0.
     key = "mistral-7b-v0.1|full|NVIDIA-A100-SXM4-80GB|16"
     assert key not in RAW["interaction_scale"]
-    assert calibration.get_interaction_scale(
-        "mistral-7b-v0.1", "full", "NVIDIA-A100-SXM4-80GB", 16
-    ) == 1.0
+    assert calibration.get_interaction_scale("mistral-7b-v0.1", "full", "NVIDIA-A100-SXM4-80GB", 16) == 1.0

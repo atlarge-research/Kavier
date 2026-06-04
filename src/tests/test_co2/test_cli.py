@@ -121,9 +121,7 @@ def test_cli_out_of_range_start_errors(small_trace, capsys):
 def test_cli_powersource_mode(small_trace, tmp_path, capsys):
     ps = pd.DataFrame(
         {
-            "timestamp": pd.to_datetime(
-                ["2025-06-01 00:00", "2025-06-01 00:30", "2025-06-01 01:00"]
-            ),
+            "timestamp": pd.to_datetime(["2025-06-01 00:00", "2025-06-01 00:30", "2025-06-01 01:00"]),
             "energy_usage": [3.6e6, 3.6e6, 3.6e6],  # 1 kWh each window
         }
     )

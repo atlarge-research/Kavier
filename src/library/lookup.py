@@ -28,10 +28,7 @@ class UnknownSpecError(KeyError):
     """
 
     def __init__(self, kind: str, name: str, available: list[str]) -> None:
-        self._message = (
-            f"Unknown {kind} {name!r}. Available {kind}s ({len(available)}): "
-            f"{', '.join(available)}"
-        )
+        self._message = f"Unknown {kind} {name!r}. Available {kind}s ({len(available)}): {', '.join(available)}"
         super().__init__(self._message)
 
     def __str__(self) -> str:  # KeyError.__str__ would re-quote the message

@@ -68,9 +68,7 @@ def test_fragments_from_training_requires_total_tokens() -> None:
 def test_fragments_from_powersource_with_timestamp() -> None:
     df = pd.DataFrame(
         {
-            "timestamp": pd.to_datetime(
-                ["2025-01-01 00:00:00", "2025-01-01 00:00:30", "2025-01-01 00:01:00"]
-            ),
+            "timestamp": pd.to_datetime(["2025-01-01 00:00:00", "2025-01-01 00:00:30", "2025-01-01 00:01:00"]),
             "energy_usage": [3600.0, 7200.0, 3600.0],  # Ws per row
         }
     )

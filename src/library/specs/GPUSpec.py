@@ -30,4 +30,3 @@ class GPUSpec:
         self.idle_power_w = idle_power_w if idle_power_w is not None else base_power_w * 0.25
         self.max_power_w = max_power_w if max_power_w is not None else base_power_w
         self.calibration_factor = calibration_factor
-

@@ -210,22 +210,22 @@ def test_defaults_reproduce_v0_snapshot():
     snapshot. Values pinned to the held-out calibration (fit on the 70/15 train+val
     split, seed 42; 15% test held out — see calibration.json _note). step_time moves
     with calibration too, since mfu_multiplier feeds the micro-step time."""
-    r1 = simulate_training_step(
-        "mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", num_gpus=1)
+    r1 = simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", num_gpus=1)
     assert r1["tokens_per_second"] == pytest.approx(3107.960789, rel=1e-6)
     assert r1["step_time_ms"] == pytest.approx(1166.978864, rel=1e-6)
-    r8 = simulate_training_step(
-        "mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", num_gpus=8)
+    r8 = simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", num_gpus=8)
     assert r8["tokens_per_second"] == pytest.approx(20618.241744, rel=1e-6)
 
 
 def test_grad_accum_amortizes_comm():
     """G>1 raises throughput (comm/optimizer amortized over G micro-steps), and the
     relative gain is larger where comm is larger (8 GPUs vs 1 GPU)."""
+
     def tps(ng, g):
         return simulate_training_step(
-            "mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full",
-            num_gpus=ng, grad_accum_steps=g)["tokens_per_second"]
+            "mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", num_gpus=ng, grad_accum_steps=g
+        )["tokens_per_second"]
+
     ratio_1gpu = tps(1, 4) / tps(1, 1)
     ratio_8gpu = tps(8, 4) / tps(8, 1)
     assert ratio_8gpu > 1.0
@@ -234,20 +234,20 @@ def test_grad_accum_amortizes_comm():
 
 def test_backward_factor_monotonic():
     """A heavier backward pass (checkpointing recompute) lowers throughput."""
+
     def tps(bf):
         return simulate_training_step(
-            "mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full",
-            num_gpus=1, backward_factor=bf)["tokens_per_second"]
+            "mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", num_gpus=1, backward_factor=bf
+        )["tokens_per_second"]
+
     assert tps(3.0) < tps(2.0)
 
 
 def test_invalid_grad_accum_steps_raises():
     with pytest.raises(ValueError, match="grad_accum_steps must be >= 1"):
-        simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB",
-                               1024, 4, "full", grad_accum_steps=0)
+        simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", grad_accum_steps=0)
 
 
 def test_invalid_backward_factor_raises():
     with pytest.raises(ValueError, match="backward_factor must be > 0"):
-        simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB",
-                               1024, 4, "full", backward_factor=0.0)
+        simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", backward_factor=0.0)

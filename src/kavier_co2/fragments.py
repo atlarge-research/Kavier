@@ -98,4 +98,3 @@ def fragments_from_powersource(df: pd.DataFrame) -> List[Fragment]:
         power_w = float(energy[i]) / dur
         frags.append(Fragment(start_time=ts[i], duration_s=dur, power_w=power_w))
     return frags
-

@@ -94,8 +94,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _fragments_from_training_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> List[Fragment]:
-    required = ("model_name", "method", "gpu_model", "tokens_per_sample", "batch_size",
-                "number_gpus", "number_nodes", "total_tokens", "start_time")
+    required = (
+        "model_name",
+        "method",
+        "gpu_model",
+        "tokens_per_sample",
+        "batch_size",
+        "number_gpus",
+        "number_nodes",
+        "total_tokens",
+        "start_time",
+    )
     missing = [f"--{a}" for a in required if getattr(args, a) is None]
     if missing:
         parser.error(f"--from-training requires: {', '.join(missing)}")

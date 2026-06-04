@@ -105,7 +105,6 @@ GPU_SPEC_LIBRARY = {
         max_power_w=700,
         calibration_factor=1.0,
     ),
-
     "NVIDIA-A100-80GB-PCIe": GPUSpec(
         gpu_name="NVIDIA-A100-80GB-PCIe",
         memory_gb=80,
@@ -149,4 +148,3 @@ GPU_SPEC_LIBRARY = {
         calibration_factor=1.0,
     ),
 }
-

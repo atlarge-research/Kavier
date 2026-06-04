@@ -53,7 +53,7 @@ def _calculate_gpu_power(
     if u <= 0.0:
         return float(p_idle)
 
-    return float(p_idle + (p_max - p_idle) * (2.0 * u - u ** r))
+    return float(p_idle + (p_max - p_idle) * (2.0 * u - u**r))
 
 
 def _calculate_memory_utilization(used_gbs: float, peak_gbs: float) -> float:
@@ -161,10 +161,14 @@ def simulate_training_step(
 
     mgc = get_multi_gpu_correction(num_gpus) if calibrated else 1.0
     throughput_scale = (
-        get_method_scale(method)
-        * get_model_scale(model_name)
-        * get_interaction_scale(model_name, method, gpu_model, num_gpus)
-    ) if calibrated else 1.0
+        (
+            get_method_scale(method)
+            * get_model_scale(model_name)
+            * get_interaction_scale(model_name, method, gpu_model, num_gpus)
+        )
+        if calibrated
+        else 1.0
+    )
     gpus_per_node = num_gpus // num_nodes
     tokens_per_step = grad_accum_steps * (batch_size * tokens_per_sample * gpus_per_node / mgc)
     tokens_per_second = tokens_per_step / step_time_s * throughput_scale

@@ -75,8 +75,7 @@ class CarbonTrace:
     ) -> "CarbonTrace":
         if "timestamp" not in df.columns or "carbon_intensity" not in df.columns:
             raise ValueError(
-                "carbon trace must have columns ['timestamp', 'carbon_intensity']; "
-                f"got {list(df.columns)}"
+                f"carbon trace must have columns ['timestamp', 'carbon_intensity']; got {list(df.columns)}"
             )
         df = df[["timestamp", "carbon_intensity"]].sort_values("timestamp").reset_index(drop=True)
         ts = pd.DatetimeIndex(df["timestamp"])
@@ -165,8 +164,7 @@ def compute_emissions(fragments: Iterable[Fragment], trace: CarbonTrace) -> Emis
 
         if start < cov_start or end > cov_end:
             raise ValueError(
-                f"fragment time [{start} .. {end}] is outside the carbon trace coverage: "
-                f"{trace._coverage_msg()}"
+                f"fragment time [{start} .. {end}] is outside the carbon trace coverage: {trace._coverage_msg()}"
             )
 
         if frag.duration_s == 0:
@@ -203,9 +201,7 @@ def compute_emissions(fragments: Iterable[Fragment], trace: CarbonTrace) -> Emis
 
             cursor = seg_end
 
-    breakdown = [
-        {"window_start": ws, **vals} for ws, vals in sorted(acc.items(), key=lambda kv: kv[0])
-    ]
+    breakdown = [{"window_start": ws, **vals} for ws, vals in sorted(acc.items(), key=lambda kv: kv[0])]
     return EmissionResult(
         total_energy_kwh=total_energy_kwh,
         total_co2_g=total_co2_g,

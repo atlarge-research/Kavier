@@ -33,8 +33,7 @@ def _run_csv(path: str, total_tokens: int | None) -> None:
     with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     header = (
-        f"{'model':<28} {'method':<10} {'gpu':<22} "
-        f"{'seq':>5} {'bs':>3} {'gpus':>4} {'tok/s':>12} {'runtime_s':>10}"
+        f"{'model':<28} {'method':<10} {'gpu':<22} {'seq':>5} {'bs':>3} {'gpus':>4} {'tok/s':>12} {'runtime_s':>10}"
     )
     print(header)
     print("-" * len(header))
@@ -73,8 +72,15 @@ def main() -> None:
             parser.error(str(exc))
         return
 
-    single_cfg_args = ("model_name", "method", "gpu_model", "tokens_per_sample",
-                       "batch_size", "number_gpus", "number_nodes")
+    single_cfg_args = (
+        "model_name",
+        "method",
+        "gpu_model",
+        "tokens_per_sample",
+        "batch_size",
+        "number_gpus",
+        "number_nodes",
+    )
     missing = [f"--{a}" for a in single_cfg_args if getattr(args, a) is None]
     if missing:
         parser.error(f"the following arguments are required: {', '.join(missing)} (or pass --input_csv)")

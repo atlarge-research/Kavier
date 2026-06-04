@@ -150,10 +150,20 @@ LLM_SPEC_LIBRARY = {
     # --- dense models added for the 4-model comparison set (specs from HF configs) ---
     "llama3.2-3b": LLMSpec(
         llm_name="llama3.2-3b",
-        n_layers=28, n_heads=24, d_head=128, d_model=3072, p_bytes=2, m_params=3.21e9,
+        n_layers=28,
+        n_heads=24,
+        d_head=128,
+        d_model=3072,
+        p_bytes=2,
+        m_params=3.21e9,
     ),
     "granite-3-8b": LLMSpec(
         llm_name="granite-3-8b",
-        n_layers=40, n_heads=32, d_head=128, d_model=4096, p_bytes=2, m_params=8.1e9,
+        n_layers=40,
+        n_heads=32,
+        d_head=128,
+        d_model=4096,
+        p_bytes=2,
+        m_params=8.1e9,
     ),
 }

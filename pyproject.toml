@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kavier"
-version = "0.2.0"
+version = "0.3.0"
 description = "Kavier: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference and Training"
 readme = "README.md"
 license = "MIT"
@@ -12,7 +12,7 @@ authors = [
     { name = "Radu Nicolae", email = "mail@radu-nicolae.com" },
     { name = "AtLarge Research", email = "info@atlarge-research.com" }
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.7",
     "pandas>=2.2",
@@ -21,8 +21,6 @@ dependencies = [
     "tqdm",
     "cachetools>=5.3",
     "rich>=13",
-    "pytest>=8.2",
-    "hypothesis>=6.102",
 ]
 
 [project.optional-dependencies]

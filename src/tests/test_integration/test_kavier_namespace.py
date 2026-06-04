@@ -69,11 +69,13 @@ def test_deep_imports_share_legacy_module_objects():
     # The function object reached through the kavier.* alias must be the exact
     # same object as via the legacy path (no duplicate module).
     from kavier.training.core.engine import simulate_training_step as via_alias
+
     from kavier_training.core.engine import simulate_training_step as via_legacy
 
     assert via_alias is via_legacy
 
     import kavier.library.gpu as alias_gpu
+
     from library.gpu import GPU_SPEC_LIBRARY as legacy_gpu
 
     assert alias_gpu.GPU_SPEC_LIBRARY is legacy_gpu
@@ -82,6 +84,7 @@ def test_deep_imports_share_legacy_module_objects():
 def test_calibration_module_identity_across_spellings():
     # Critical for the _CAL swap contract: both spellings must be one module.
     import kavier.training.core.calibration as via_alias
+
     import kavier_training.core.calibration as via_legacy
 
     assert via_alias is via_legacy

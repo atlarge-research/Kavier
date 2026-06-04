@@ -40,6 +40,7 @@ dev = [
 kavier-perf  = "kavier_inference.cli:main"
 kavier-train = "kavier_training.cli:main"
 kavier-eff   = "kavier_inference.cli:main_efficiency"
+kavier-co2   = "kavier_co2.cli:main"
 
 # ------------------------------------------------------------------
 #  Tooling

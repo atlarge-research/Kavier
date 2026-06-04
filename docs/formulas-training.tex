@@ -66,54 +66,55 @@
   configuration, fitted offline on the 70/15 train+validation split (15\%
   test held out) and stored as lookup tables; configurations absent from a
   table fall back to the neutral value $1$ ($\underline{m_g}$ falls back to
-  the nearest fitted $G$, and is $1$ for $G \le 1$). Constants (K) are part of
-  the model definition and are not affected by \texttt{--no-calib}.
-  Bandwidths $W_n, W_i$ are stated in Gb/s and enter F6 converted to bytes/s
-  ($W \times 10^9 / 8$).}}
+  the nearest fitted $G$, and is $1$ for $G \le 1$; $\underline{c_i}$ is $1$
+  for unseen configurations). Constants (K) are part of the model definition
+  and are not affected by \texttt{--no-calib}: $r{=}8$, $k{=}4$, $f_b{=}2$,
+  $a_1{=}0.0341$, $a_2{=}0.8147$, $t_l{=}5{\times}10^{-6}$\,s,
+  $t_m{=}2{\times}10^{-6}$\,s, $W_i{=}200$\,Gb/s. Bandwidths $W_n, W_i$ are
+  stated in Gb/s and enter F6 converted to bytes/s ($W \times 10^9 / 8$);
+  $P_a = P$ for dense models.}}
   \label{tab:kavier-variables}
   \renewcommand{\arraystretch}{1.15}
   \footnotesize
   \begin{tabular}{@{}l l c l l l@{}}
   \toprule
-  \textbf{ID} & \textbf{Symbol} & \textbf{Type} & \textbf{Name} & \textbf{Used in} & \textbf{Role / value} \\
+  \textbf{ID} & \textbf{Symbol} & \textbf{Type} & \textbf{Name} & \textbf{Used in} & \textbf{Role} \\
   \midrule
-  1  & $B$            & V & micro-batch size                          & F0, F2, F3        & workload input \\
-  2  & $S$            & V & sequence length, in tokens                & F0, F3            & workload input \\
-  3  & $G$            & V & total number of GPUs                      & F0, F6            & workload input \\
-  4  & $N$            & V & number of nodes                           & F6                & workload input \\
-  5  & $\boldsymbol{G_n}$ & V & GPUs per node                         & F0, F6            & derived: $\lfloor G / N \rfloor$ \\
-  6  & $G_a$          & V & gradient-accumulation steps               & F0, F7            & workload input (default $1$) \\
-  7  & $\text{method}$ & V & fine-tuning method                       & F0, F5            & workload input: full $|$ LoRA $|$ GPTQ-LoRA \\
-  8  & $\text{model}$, $\text{gpu}$ & V & LLM identifier, GPU identifier & F0, F2       & workload input (library keys) \\
+  1  & $B$            & V & micro-batch size                          & F0, F2, F3 & workload input \\
+  2  & $S$            & V & sequence length, in tokens                & F0, F3     & workload input \\
+  3  & $G$            & V & total number of GPUs                      & F0, F6     & workload input \\
+  4  & $N$            & V & number of nodes                           & F6         & workload input \\
+  5  & $\boldsymbol{G_n}$ & V & GPUs per node                         & F0, F6     & derived: $\lfloor G / N \rfloor$ \\
+  6  & $G_a$          & V & gradient-accumulation steps               & F0, F7     & workload input \\
+  7  & $\text{method}$ & V & fine-tuning method                       & F0, F5     & workload input \\
+  8  & $\text{model}$, $\text{gpu}$ & V & LLM identifier, GPU identifier & F0, F2 & workload input \\
+  9  & $D$            & V & total training tokens                     & F1         & workload input \\
   \midrule
-  9  & $D$            & V & total training tokens                     & F1                & workload input (single value, \texttt{--total\_tokens}) \\
-  \midrule
-  10 & $E_b$          & V & MFU efficiency factor                     & F2                & GPU library \\
-  11 & $P_a$          & V & active model parameters                   & F3                & LLM library ($P_a = P$ for dense models) \\
-  12 & $P$            & V & total model parameters                    & F5                & LLM library \\
-  13 & $F$            & V & peak FP16 Tensor Core throughput          & F3                & GPU library \\
-  \midrule
-  14 & $L$            & V & transformer layers                        & F5                & LLM library \\
-  15 & $d$            & V & hidden dimension                          & F5                & LLM library \\
-  16 & $\boldsymbol{P_t}$ & V & trainable parameters                  & F5, F6            & derived in F5 \\
-  17 & $B_m$          & V & GPU memory bandwidth                      & F5                & GPU library \\
-  18 & $W_n$          & V & intra-node network bandwidth              & F6                & GPU library (NVLink / PCIe), Gb/s (default $400$) \\
+  10 & $E_b$          & V & MFU efficiency factor                     & F2         & GPU library \\
+  11 & $F$            & V & peak FP16 Tensor Core throughput          & F3         & GPU library \\
+  12 & $B_m$          & V & GPU memory bandwidth                      & F5         & GPU library \\
+  13 & $W_n$          & V & intra-node network bandwidth              & F6         & GPU library \\
+  14 & $P_a$          & V & active model parameters                   & F3         & LLM library \\
+  15 & $P$            & V & total model parameters                    & F5         & LLM library \\
+  16 & $L$            & V & transformer layers                        & F5         & LLM library \\
+  17 & $d$            & V & hidden dimension                          & F5         & LLM library \\
+  18 & $\boldsymbol{P_t}$ & V & trainable parameters                  & F5, F6     & derived in F5 \\
   \midrule
   \midrule
-  19 & $r$, $k$       & K & LoRA rank, target modules per layer       & F5                & constants ($8$, $4$) \\
-  20 & $f_b$          & K & backward / forward cost ratio             & F4                & parameter, default $2$ \\
-  21 & $a_1$, $a_2$   & K & batch-size MFU scaling law                & F2                & constants ($0.0341$, $0.8147$) \\
-  22 & $t_l$, $t_m$   & K & all-reduce latency, per-message overhead  & F6                & constants ($5\times10^{-6}$\,s, $2\times10^{-6}$\,s) \\
-  23 & $W_i$          & K & inter-node network bandwidth              & F6                & constant ($200$ Gb/s, InfiniBand) \\
+  19 & $r$, $k$       & K & LoRA rank, target modules per layer       & F5         & engine constant \\
+  20 & $f_b$          & K & backward / forward cost ratio             & F4         & engine constant \\
+  21 & $a_1$, $a_2$   & K & batch-size MFU scaling law                & F2         & engine constant \\
+  22 & $t_l$, $t_m$   & K & all-reduce latency, per-message overhead  & F6         & engine constant \\
+  23 & $W_i$          & K & inter-node network bandwidth              & F6         & engine constant \\
   \midrule
   \midrule
-  24 & $\underline{m_g}(G)$ & C & multi-GPU correction                 & F0                & function of $G$; nearest fitted $G$ fallback; $1$ for $G \le 1$ \\
-  25 & $\underline{c_m}(\text{method})$ & C & per-method throughput scale & F0           & function of method \\
-  26 & $\underline{c_o}(\text{model})$ & C & per-LLM throughput scale    & F0            & function of LLM \\
-  27 & $\underline{c_i}(\text{model}, \text{method}, \text{gpu}, G)$ & C & interaction throughput scale & F0  & function of (LLM, method, GPU, $G$); $1$ if unseen \\
-  28 & $\underline{E_g}(\text{gpu})$ & C & per-GPU MFU multiplier        & F2                & function of GPU \\
-  29 & $\underline{O_t}$ & C & per-forward training overhead (s)       & F3                & scalar \\
-  30 & $\underline{c_c}$ & C & communication scale                     & F6                & scalar \\
+  24 & $\underline{m_g}(G)$ & C & multi-GPU correction                 & F0         & calibration file \\
+  25 & $\underline{c_m}(\text{method})$ & C & per-method throughput scale & F0     & calibration file \\
+  26 & $\underline{c_o}(\text{model})$ & C & per-LLM throughput scale    & F0      & calibration file \\
+  27 & $\underline{c_i}(\text{model}, \text{method}, \text{gpu}, G)$ & C & interaction throughput scale & F0 & calibration file \\
+  28 & $\underline{E_g}(\text{gpu})$ & C & per-GPU MFU multiplier        & F2      & calibration file \\
+  29 & $\underline{O_t}$ & C & per-forward training overhead (s)       & F3         & calibration file \\
+  30 & $\underline{c_c}$ & C & communication scale                     & F6         & calibration file \\
   \bottomrule
   \end{tabular}
 \end{table*}

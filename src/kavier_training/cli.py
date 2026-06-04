@@ -2,15 +2,35 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 
 from kavier_io.training_opendc import export_training_opendc
 from kavier_training.core.cli_args import add_training_args
 from kavier_training.core.engine import simulate_full_training, simulate_training_step
 
+_EXAMPLE_CMD = (
+    "kavier-train --model_name mistral-7b-v0.1 --method lora "
+    "--gpu_model NVIDIA-A100-SXM4-80GB --tokens_per_sample 1024 "
+    "--batch_size 4 --number_gpus 8 --number_nodes 1"
+)
+
+
+class _FriendlyParser(argparse.ArgumentParser):
+    """On bad/missing arguments, show a ready-to-run example command."""
+
+    def error(self, message: str) -> None:  # type: ignore[override]
+        self.print_usage(sys.stderr)
+        print(f"{self.prog}: error: {message}", file=sys.stderr)
+        print(f"\nYou may have mistaken the input — try this example instead:\n  {_EXAMPLE_CMD}", file=sys.stderr)
+        sys.exit(2)
+
 
 def main() -> None:
     parser = add_training_args(
-        argparse.ArgumentParser(description="Kavier training simulator"),
+        _FriendlyParser(
+            description="Kavier training simulator",
+            epilog=f"Example: {_EXAMPLE_CMD}",
+        ),
     )
     args = parser.parse_args()
     total_gpus = args.number_gpus * args.number_nodes

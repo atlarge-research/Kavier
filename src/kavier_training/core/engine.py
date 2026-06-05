@@ -70,7 +70,11 @@ def _estimate_memory_bandwidth_usage(
     bytes_per_param = 2
     param_traffic = model_params * bytes_per_param * 5
     activation_traffic = batch_size * seq_length * hidden_dim * bytes_per_param
-    return (param_traffic + activation_traffic) / (1024**3) / step_time_s
+    # Bytes -> GB (1e9), matching the GB-denominated capacity this is compared
+    # against in simulate_training_step (gpu.bandwidth_bps / 1e9). Using GiB
+    # (1024**3) here while the capacity is GB systematically underestimated the
+    # exposed gpu_memory_utilization field by ~7%.
+    return (param_traffic + activation_traffic) / 1e9 / step_time_s
 
 
 def _lora_trainable_params(
@@ -132,6 +136,8 @@ def simulate_training_step(
     llm = get_llm(model_name)
     gpu = get_gpu(gpu_model)
 
+    if batch_size < 1:
+        raise ValueError(f"batch_size must be >= 1, got {batch_size}")
     if grad_accum_steps < 1:
         raise ValueError(f"grad_accum_steps must be >= 1, got {grad_accum_steps}")
     if backward_factor <= 0.0:
@@ -186,6 +192,7 @@ def simulate_training_step(
     return {
         "step_time_ms": step_time_s * 1000,
         "tokens_per_second": tokens_per_second,
+        "tokens_per_step": tokens_per_step,
         "gpu_compute_utilization": mfu * 100,
         "gpu_memory_utilization": memory_util * 100,
         "gpu_power_watts": power,
@@ -217,10 +224,17 @@ def simulate_full_training(
         backward_factor=backward_factor,
     )
     tps = step["tokens_per_second"]
-    tokens_per_step = tokens_per_sample * batch_size * grad_accum_steps
+    # Use the engine's own per-(optimizer-)step token count so steps/s is the
+    # exact inverse of how tps was produced (it already folds in gpus_per_node,
+    # the multi-gpu correction and the calibrated throughput scale). The previous
+    # local formula (tokens_per_sample*batch_size*grad_accum) omitted those and
+    # inflated train_steps_per_second on multi-node configs. Single-node results
+    # are identical (PD1 is all single-node).
+    tokens_per_step = step["tokens_per_step"]
     return {
         "train_tokens_per_second": tps,
-        "train_tokens_per_gpu_per_second": tps / number_gpus,
+        # Divide by TOTAL gpus (gpus/node * nodes), not just gpus/node.
+        "train_tokens_per_gpu_per_second": tps / total_gpus,
         "train_samples_per_second": tps / tokens_per_sample,
         "train_steps_per_second": tps / tokens_per_step,
         "train_runtime": total_tokens / tps if total_tokens is not None else 0.0,

@@ -251,3 +251,77 @@ def test_invalid_grad_accum_steps_raises():
 def test_invalid_backward_factor_raises():
     with pytest.raises(ValueError, match="backward_factor must be > 0"):
         simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", backward_factor=0.0)
+
+
+@pytest.mark.parametrize("bs", [0, -1])
+def test_invalid_batch_size_raises(bs):
+    # math.log2(batch_size) in the MFU model would crash (ValueError for 0,
+    # math-domain for negatives) — guard it explicitly like grad_accum_steps.
+    with pytest.raises(ValueError, match="batch_size must be >= 1"):
+        simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, bs, "full")
+
+
+def test_simulate_full_training_single_node_fields_pinned():
+    """Single-node output fields are pinned to their (unchanged) post-fix values.
+
+    PD1 is 100% single-node, so the simulate_full_training output-field fixes
+    (train_tokens_per_gpu_per_second -> /total_gpus; train_steps_per_second from
+    the engine's real per-step token count) must NOT move single-node numbers.
+    For number_nodes=1, total_gpus == number_gpus, and at num_gpus=1 the engine's
+    tokens_per_step equals the old local formula, so these are exact.
+    """
+    r = simulate_full_training(
+        model_name="mistral-7b-v0.1",
+        method="full",
+        gpu_model="NVIDIA-A100-SXM4-80GB",
+        tokens_per_sample=1024,
+        batch_size=4,
+        number_gpus=1,
+        number_nodes=1,
+        total_tokens=1_000_000,
+    )
+    assert r["train_tokens_per_second"] == pytest.approx(3107.960789, rel=1e-6)
+    assert r["train_tokens_per_gpu_per_second"] == pytest.approx(3107.960789, rel=1e-6)
+    assert r["train_samples_per_second"] == pytest.approx(3.03511, rel=1e-5)
+    assert r["train_steps_per_second"] == pytest.approx(0.75877949, rel=1e-6)
+    assert r["number_gpus"] == 1
+
+
+def test_simulate_full_training_multi_node_divides_by_total_gpus():
+    """Multi-node: train_tokens_per_gpu_per_second must divide the cluster
+    throughput by TOTAL gpus (gpus/node * nodes), not just gpus/node."""
+    r = simulate_full_training(
+        model_name="mistral-7b-v0.1",
+        method="full",
+        gpu_model="NVIDIA-A100-SXM4-80GB",
+        tokens_per_sample=1024,
+        batch_size=4,
+        number_gpus=8,
+        number_nodes=2,
+        total_tokens=1_000_000,
+    )
+    assert r["number_gpus"] == 16
+    assert r["train_tokens_per_gpu_per_second"] == pytest.approx(r["train_tokens_per_second"] / 16, rel=1e-9)
+    # steps/s consistent with the engine's own per-optimizer-step token count.
+    step = simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", num_gpus=16, num_nodes=2)
+    assert r["train_steps_per_second"] == pytest.approx(
+        r["train_tokens_per_second"] / step["tokens_per_step"], rel=1e-9
+    )
+
+
+def test_memory_bandwidth_util_uses_gb_not_gib():
+    """mem_util numerator and capacity denominator must both be GB (1e9). Using
+    GiB (1024**3) in the numerator while the capacity is GB underestimated the
+    exposed gpu_memory_utilization by the GiB/GB ratio (~7.4%)."""
+    r = simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", num_gpus=1)
+    # Hand calc: param_traffic + activation_traffic, /1e9, /step_time_s, /capacity_GB.
+    from library.lookup import get_gpu, get_llm
+
+    llm = get_llm("mistral-7b-v0.1")
+    gpu = get_gpu("NVIDIA-A100-SXM4-80GB")
+    step_time_s = r["step_time_ms"] / 1000.0
+    param_traffic = llm.m_params * 2 * 5
+    activation_traffic = 4 * 1024 * llm.d_model * 2
+    bw_used_gb = (param_traffic + activation_traffic) / 1e9 / step_time_s
+    expected = min(1.0, bw_used_gb / (gpu.bandwidth_bps / 1e9)) * 100
+    assert r["gpu_memory_utilization"] == pytest.approx(expected, rel=1e-9)

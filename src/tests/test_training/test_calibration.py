@@ -108,9 +108,14 @@ def test_get_mfu_multiplier_known_keys(gpu_name):
     assert isinstance(result, float)
 
 
-def test_get_mfu_multiplier_unknown_gpu_raises_keyerror():
-    with pytest.raises(KeyError):
-        calibration.get_mfu_multiplier("NVIDIA-DOES-NOT-EXIST")
+def test_get_mfu_multiplier_unknown_gpu_falls_back_to_one_with_warning():
+    # Graceful: a spec'd-but-uncalibrated GPU (7 of 11 library GPUs have no fitted
+    # multiplier) must NOT crash a calibrated=True call. It returns the neutral 1.0
+    # and warns once naming the uncovered key.
+    calibration._WARNED_KEYS.discard("NVIDIA-DOES-NOT-EXIST")
+    with pytest.warns(UserWarning, match="NVIDIA-DOES-NOT-EXIST"):
+        result = calibration.get_mfu_multiplier("NVIDIA-DOES-NOT-EXIST")
+    assert result == 1.0
 
 
 # --------------------------------------------------------------------------- #
@@ -123,9 +128,12 @@ def test_get_method_scale_known_keys(method):
     assert isinstance(result, float)
 
 
-def test_get_method_scale_unknown_method_raises_keyerror():
-    with pytest.raises(KeyError):
-        calibration.get_method_scale("definitely-not-a-method")
+def test_get_method_scale_unknown_method_falls_back_to_one_with_warning():
+    # Graceful neutral-1.0 fallback (one-time warning) for an uncalibrated method.
+    calibration._WARNED_KEYS.discard("definitely-not-a-method")
+    with pytest.warns(UserWarning, match="definitely-not-a-method"):
+        result = calibration.get_method_scale("definitely-not-a-method")
+    assert result == 1.0
 
 
 # --------------------------------------------------------------------------- #
@@ -138,11 +146,28 @@ def test_get_model_scale_known_keys(model_name):
     assert isinstance(result, float)
 
 
-def test_get_model_scale_uncalibrated_model_raises_keyerror():
-    # Strict: an uncalibrated model must NOT silently fall back to a default.
+def test_get_model_scale_uncalibrated_model_falls_back_to_one_with_warning():
+    # Graceful: an uncalibrated model must NOT crash; it falls back to a neutral
+    # 1.0 and warns once (so unseen models leave the prediction unscaled rather
+    # than KeyError-ing).
     assert "totally-uncalibrated-model" not in RAW["model_scale"]
-    with pytest.raises(KeyError):
-        calibration.get_model_scale("totally-uncalibrated-model")
+    calibration._WARNED_KEYS.discard("totally-uncalibrated-model")
+    with pytest.warns(UserWarning, match="totally-uncalibrated-model"):
+        result = calibration.get_model_scale("totally-uncalibrated-model")
+    assert result == 1.0
+
+
+def test_calibration_getter_warnings_are_one_time_per_key():
+    # The fallback warning fires at most once per distinct uncovered key over the
+    # process lifetime (so a calibrated sweep over many uncovered GPUs doesn't spam).
+    import warnings as _warnings
+
+    calibration._WARNED_KEYS.discard("one-shot-gpu")
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        calibration.get_mfu_multiplier("one-shot-gpu")
+        calibration.get_mfu_multiplier("one-shot-gpu")
+    assert sum("one-shot-gpu" in str(w.message) for w in caught) == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -164,17 +189,36 @@ def test_get_multi_gpu_correction_exact_table_keys(num_gpus):
 
 def test_get_multi_gpu_correction_nearest_neighbour_for_absent_count():
     # Table has 2,4,8,32,128 but not 5. 5 is closer to 4 (dist 1) than 8 (dist 3),
-    # so the getter should snap to the value for 4 GPUs.
+    # so the getter should snap to the value for 4 GPUs — and warn about the
+    # absent count (no interpolation, value unchanged).
     table = RAW["multi_gpu_correction"]["by_num_gpus"]
     assert "5" not in table
-    assert calibration.get_multi_gpu_correction(5) == pytest.approx(table["4"])
+    calibration._WARNED_KEYS.discard("num_gpus=5")
+    with pytest.warns(UserWarning, match="num_gpus=5"):
+        result = calibration.get_multi_gpu_correction(5)
+    assert result == pytest.approx(table["4"])
 
 
 def test_get_multi_gpu_correction_nearest_neighbour_above_max():
     # A count larger than every table key snaps to the largest key (128 here).
     table = RAW["multi_gpu_correction"]["by_num_gpus"]
     max_key = max(int(k) for k in table)
-    assert calibration.get_multi_gpu_correction(max_key + 1000) == pytest.approx(table[str(max_key)])
+    calibration._WARNED_KEYS.discard(f"num_gpus={max_key + 1000}")
+    with pytest.warns(UserWarning, match=f"num_gpus={max_key + 1000}"):
+        result = calibration.get_multi_gpu_correction(max_key + 1000)
+    assert result == pytest.approx(table[str(max_key)])
+
+
+def test_get_multi_gpu_correction_cliff_64_snaps_to_32_with_warning():
+    # The documented nearest-neighbour cliff: 64 is closer to 32 (dist 32) than to
+    # 128 (dist 64), so it silently took 32's correction. The value is unchanged
+    # (no interpolation) but the getter now warns about the uncovered count.
+    table = RAW["multi_gpu_correction"]["by_num_gpus"]
+    assert "64" not in table and {"32", "128"} <= set(table)
+    calibration._WARNED_KEYS.discard("num_gpus=64")
+    with pytest.warns(UserWarning, match="num_gpus=64"):
+        result = calibration.get_multi_gpu_correction(64)
+    assert result == pytest.approx(table["32"])
 
 
 def test_get_multi_gpu_correction_nearest_neighbour_midpoint_uses_smaller():
@@ -184,7 +228,11 @@ def test_get_multi_gpu_correction_nearest_neighbour_midpoint_uses_smaller():
     table = RAW["multi_gpu_correction"]["by_num_gpus"]
     assert "6" not in table
     assert {"4", "8"} <= set(table)
-    assert calibration.get_multi_gpu_correction(6) == pytest.approx(table["4"])
+    import warnings as _warnings
+
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("ignore")
+        assert calibration.get_multi_gpu_correction(6) == pytest.approx(table["4"])
 
 
 # --------------------------------------------------------------------------- #

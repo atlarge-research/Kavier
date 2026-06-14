@@ -175,8 +175,12 @@ def simulate_training_step(
         if calibrated
         else 1.0
     )
-    gpus_per_node = num_gpus // num_nodes
-    tokens_per_step = grad_accum_steps * (batch_size * tokens_per_sample * gpus_per_node / mgc)
+    # Data-parallel width = num_gpus: every GPU is a DP replica running its own
+    # batch_size micro-batch, so per-step tokens scale with the TOTAL GPU count.
+    # (Previously used gpus_per_node = num_gpus // num_nodes, which capped this at one
+    # node's 8 GPUs — multi-node configs gained zero throughput, only comm cost. No-op
+    # for single-node <=8-GPU configs where num_gpus == gpus_per_node.)
+    tokens_per_step = grad_accum_steps * (batch_size * tokens_per_sample * num_gpus / mgc)
     tokens_per_second = tokens_per_step / step_time_s * throughput_scale
 
     bw_used = _estimate_memory_bandwidth_usage(
@@ -225,7 +229,7 @@ def simulate_full_training(
     )
     tps = step["tokens_per_second"]
     # Use the engine's own per-(optimizer-)step token count so steps/s is the
-    # exact inverse of how tps was produced (it already folds in gpus_per_node,
+    # exact inverse of how tps was produced (it already folds in num_gpus,
     # the multi-gpu correction and the calibrated throughput scale). The previous
     # local formula (tokens_per_sample*batch_size*grad_accum) omitted those and
     # inflated train_steps_per_second on multi-node configs. Single-node results

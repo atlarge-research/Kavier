@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from library.gpu import GPU_SPEC_LIBRARY
-from library.llm import LLM_SPEC_LIBRARY
-from library.specs.GPUSpec import GPUSpec
-from library.specs.LLMSpec import LLMSpec
+from kavier_library.gpu import GPU_SPEC_LIBRARY
+from kavier_library.llm import LLM_SPEC_LIBRARY
+from kavier_library.specs.GPUSpec import GPUSpec
+from kavier_library.specs.LLMSpec import LLMSpec
 
 __all__ = ["UnknownSpecError", "get_gpu", "get_llm"]
 

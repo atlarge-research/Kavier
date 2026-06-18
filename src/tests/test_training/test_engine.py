@@ -314,7 +314,7 @@ def test_memory_bandwidth_util_uses_gb_not_gib():
     exposed gpu_memory_utilization by the GiB/GB ratio (~7.4%)."""
     r = simulate_training_step("mistral-7b-v0.1", "NVIDIA-A100-SXM4-80GB", 1024, 4, "full", num_gpus=1)
     # Hand calc: param_traffic + activation_traffic, /1e9, /step_time_s, /capacity_GB.
-    from library.lookup import get_gpu, get_llm
+    from kavier_library.lookup import get_gpu, get_llm
 
     llm = get_llm("mistral-7b-v0.1")
     gpu = get_gpu("NVIDIA-A100-SXM4-80GB")

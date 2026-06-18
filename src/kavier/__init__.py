@@ -9,15 +9,15 @@ from types import ModuleType as _ModuleType
 from typing import Any as _Any
 from typing import Sequence as _Sequence
 
-# Map ``kavier.<alias>`` -> legacy top-level package name.
+# Map ``kavier.<alias>`` -> underlying top-level package name.
 _ALIAS_TO_LEGACY = {
     "training": "kavier_training",
     "inference": "kavier_inference",
     "io": "kavier_io",
     "energy": "kavier_energy",
     "co2": "kavier_co2",
-    "library": "library",
-    "opendc": "opendc",
+    "library": "kavier_library",
+    "opendc": "kavier_opendc",
 }
 
 
@@ -71,8 +71,8 @@ from kavier_training.core.engine import (  # noqa: E402
     simulate_full_training,
     simulate_training_step,
 )
-from library.gpu import GPU_SPEC_LIBRARY  # noqa: E402
-from library.llm import LLM_SPEC_LIBRARY  # noqa: E402
+from kavier_library.gpu import GPU_SPEC_LIBRARY  # noqa: E402
+from kavier_library.llm import LLM_SPEC_LIBRARY  # noqa: E402
 
 __all__ = [
     "simulate_training_step",

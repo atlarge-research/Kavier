@@ -6,7 +6,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from opendc.schema import FRAGMENTS_SCHEMA, TASKS_SCHEMA
+from kavier_opendc.schema import FRAGMENTS_SCHEMA, TASKS_SCHEMA
 
 
 def _coerce_tasks_df(df: pd.DataFrame) -> pd.DataFrame:

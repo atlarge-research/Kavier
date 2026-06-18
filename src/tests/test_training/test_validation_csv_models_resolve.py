@@ -3,8 +3,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from library.gpu import GPU_SPEC_LIBRARY
-from library.llm import LLM_SPEC_LIBRARY
+from kavier_library.gpu import GPU_SPEC_LIBRARY
+from kavier_library.llm import LLM_SPEC_LIBRARY
 
 from .conftest import simulatable_mask
 

@@ -1,6 +1,6 @@
 from kavier_io.constants import COMPUTE_EFFICIENCY, PREFILL_OVERHEAD_S
-from library.specs.GPUSpec import GPUSpec
-from library.specs.LLMSpec import LLMSpec
+from kavier_library.specs.GPUSpec import GPUSpec
+from kavier_library.specs.LLMSpec import LLMSpec
 
 
 def get_prefill_time_s(n_in: int, llm: LLMSpec, gpu: GPUSpec) -> float:

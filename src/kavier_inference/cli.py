@@ -4,7 +4,7 @@ import sys
 
 from kavier_inference.core.args import parse_args
 from kavier_inference.core.service import run_performance
-from library.lookup import UnknownSpecError
+from kavier_library.lookup import UnknownSpecError
 
 
 def main() -> None:

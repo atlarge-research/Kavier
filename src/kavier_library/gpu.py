@@ -1,4 +1,4 @@
-from library.specs.GPUSpec import GPUSpec
+from kavier_library.specs.GPUSpec import GPUSpec
 
 GPU_SPEC_LIBRARY = {
     "A10": GPUSpec(

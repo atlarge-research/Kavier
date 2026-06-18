@@ -1,5 +1,5 @@
-from library.specs.GPUSpec import GPUSpec
-from library.specs.LLMSpec import LLMSpec
+from kavier_library.specs.GPUSpec import GPUSpec
+from kavier_library.specs.LLMSpec import LLMSpec
 
 
 def get_kv_cache_utilization(

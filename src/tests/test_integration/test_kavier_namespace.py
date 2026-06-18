@@ -1,10 +1,11 @@
 """Tests for the canonical ``kavier`` namespace package.
 
-The ``kavier`` package is an additive re-export layer over the legacy sibling
-packages (``kavier_training``, ``library``, ...). New consumers should be able
-to ``import kavier`` and reach the public API, while every alias must resolve to
-the *same* module/object as the legacy spelling (so there is never a duplicate
-module that would, e.g., break the live ``calibration._CAL`` swap contract).
+The ``kavier`` package is an additive re-export layer over the underlying
+sibling packages (``kavier_training``, ``kavier_library``, ...). New consumers
+should be able to ``import kavier`` and reach the public API, while every alias
+must resolve to the *same* module/object as the underlying spelling (so there is
+never a duplicate module that would, e.g., break the live ``calibration._CAL``
+swap contract).
 """
 
 from __future__ import annotations
@@ -39,8 +40,8 @@ def test_top_level_symbols_are_identical_to_legacy():
     from kavier_training.core.engine import (
         simulate_training_step as legacy_step,
     )
-    from library.gpu import GPU_SPEC_LIBRARY as legacy_gpu
-    from library.llm import LLM_SPEC_LIBRARY as legacy_llm
+    from kavier_library.gpu import GPU_SPEC_LIBRARY as legacy_gpu
+    from kavier_library.llm import LLM_SPEC_LIBRARY as legacy_llm
 
     assert simulate_training_step is legacy_step
     assert simulate_full_training is legacy_full
@@ -57,8 +58,8 @@ def test_submodule_aliases_resolve_to_legacy_packages():
         "io": "kavier_io",
         "energy": "kavier_energy",
         "co2": "kavier_co2",
-        "library": "library",
-        "opendc": "opendc",
+        "library": "kavier_library",
+        "opendc": "kavier_opendc",
     }
     for alias, legacy_name in expected.items():
         module = getattr(kavier, alias)
@@ -76,7 +77,7 @@ def test_deep_imports_share_legacy_module_objects():
 
     import kavier.library.gpu as alias_gpu
 
-    from library.gpu import GPU_SPEC_LIBRARY as legacy_gpu
+    from kavier_library.gpu import GPU_SPEC_LIBRARY as legacy_gpu
 
     assert alias_gpu.GPU_SPEC_LIBRARY is legacy_gpu
 

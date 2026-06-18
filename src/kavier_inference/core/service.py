@@ -10,8 +10,8 @@ from kavier_inference.core.engine import simulate
 from kavier_io.input_spec import InputSpec
 from kavier_io.log import log
 from kavier_io.stream_writer import StreamingParquetWriter
-from library.lookup import get_gpu, get_llm
-from opendc.adapter import output_kavier_specs, prepare_opendc_input
+from kavier_library.lookup import get_gpu, get_llm
+from kavier_opendc.adapter import output_kavier_specs, prepare_opendc_input
 
 
 def run_performance(args) -> str:

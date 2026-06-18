@@ -60,7 +60,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["kavier*", "library*", "opendc*", "tests*"]
+include = ["kavier*"]
 
 # Ship only the *small* runtime data: the training calibration table (required
 # at import time by kavier_training.core.calibration) and the small training
@@ -80,9 +80,9 @@ mypy_path = "src"
 packages = [
     "kavier_inference",
     "kavier_training",
-    "library",
+    "kavier_library",
     "kavier_io",
-    "opendc",
+    "kavier_opendc",
     "kavier_energy",
 ]
 exclude = ["tests/"]

@@ -8,7 +8,7 @@ import pandas as pd
 
 from kavier_co2.emissions import EmissionResult, Fragment, compute_emissions, load_carbon_trace
 from kavier_co2.fragments import fragments_from_powersource, fragments_from_training
-from library.lookup import UnknownSpecError
+from kavier_library.lookup import UnknownSpecError
 
 _EXAMPLE_CMD = (
     "kavier-co2 --from-training --carbon_trace ct1-2025-ie-carbon-intensity.parquet "

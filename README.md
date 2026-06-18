@@ -45,7 +45,8 @@ Kavier is organized into 5 main components:
 src/
 ├── kavier_inference/    # Inference simulation (kavier-perf, kavier-eff)
 ├── kavier_training/     # Training simulation (kavier-train)
-├── library/             # Shared GPU & LLM specifications
+├── kavier_library/      # Shared GPU & LLM specifications
+├── kavier_opendc/       # OpenDC workload export (tasks/fragments)
 ├── kavier_io/           # Shared I/O utilities
 └── tests/               # Test suites
 ```

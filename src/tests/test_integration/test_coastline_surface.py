@@ -23,9 +23,9 @@ def test_engine_symbols_importable():
 
 def test_io_library_and_opendc_symbols_importable():
     from kavier_io.training_opendc import build_training_opendc_frames
-    from library.gpu import GPU_SPEC_LIBRARY
-    from library.llm import LLM_SPEC_LIBRARY
-    from opendc.adapter import prepare_opendc_input
+    from kavier_library.gpu import GPU_SPEC_LIBRARY
+    from kavier_library.llm import LLM_SPEC_LIBRARY
+    from kavier_opendc.adapter import prepare_opendc_input
 
     assert callable(build_training_opendc_frames)
     assert callable(prepare_opendc_input)

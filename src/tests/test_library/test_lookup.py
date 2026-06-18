@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-from library.gpu import GPU_SPEC_LIBRARY
-from library.llm import LLM_SPEC_LIBRARY
-from library.lookup import UnknownSpecError, get_gpu, get_llm
+from kavier_library.gpu import GPU_SPEC_LIBRARY
+from kavier_library.llm import LLM_SPEC_LIBRARY
+from kavier_library.lookup import UnknownSpecError, get_gpu, get_llm
 
 
 def test_get_gpu_known_returns_same_object():

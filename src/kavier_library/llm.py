@@ -1,4 +1,4 @@
-from library.specs.LLMSpec import LLMSpec
+from kavier_library.specs.LLMSpec import LLMSpec
 
 LLM_SPEC_LIBRARY = {
     "MPT-7B": LLMSpec(

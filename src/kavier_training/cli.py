@@ -9,7 +9,7 @@ from typing import NoReturn
 from kavier_io.training_opendc import export_training_opendc
 from kavier_training.core.cli_args import add_training_args
 from kavier_training.core.engine import simulate_full_training, simulate_training_step
-from library.lookup import UnknownSpecError
+from kavier_library.lookup import UnknownSpecError
 
 _EXAMPLE_CMD = (
     "kavier-train --model_name mistral-7b-v0.1 --method lora "

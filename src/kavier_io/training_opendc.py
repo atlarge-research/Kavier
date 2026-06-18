@@ -5,8 +5,8 @@ from typing import Any, Callable
 
 import pandas as pd
 
-from library.lookup import get_gpu, get_llm
-from opendc.adapter import prepare_opendc_input
+from kavier_library.lookup import get_gpu, get_llm
+from kavier_opendc.adapter import prepare_opendc_input
 
 
 def estimate_task_memory_mb(llm_params: float, gpu_memory_gb: float, total_gpus: int) -> int:

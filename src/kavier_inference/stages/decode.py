@@ -1,6 +1,6 @@
 from kavier_io.constants import COMPUTE_EFFICIENCY, MEMORY_EFFICIENCY
-from library.specs.GPUSpec import GPUSpec
-from library.specs.LLMSpec import LLMSpec
+from kavier_library.specs.GPUSpec import GPUSpec
+from kavier_library.specs.LLMSpec import LLMSpec
 
 
 def get_decode_time_s(n_out: int, llm: LLMSpec, gpu: GPUSpec, kv_cache: bool) -> float:

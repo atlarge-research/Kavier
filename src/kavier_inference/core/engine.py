@@ -13,8 +13,8 @@ from kavier_inference.core.metrics import Metrics
 from kavier_inference.core.runner import simulate_one
 from kavier_io.input_spec import InputSpec
 from kavier_io.stream_writer import StreamingParquetWriter
-from library.specs.GPUSpec import GPUSpec
-from library.specs.LLMSpec import LLMSpec
+from kavier_library.specs.GPUSpec import GPUSpec
+from kavier_library.specs.LLMSpec import LLMSpec
 
 
 def simulate(

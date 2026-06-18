@@ -12,8 +12,8 @@ from kavier_training.core.calibration import (
     get_multi_gpu_correction,
     get_training_overhead_s,
 )
-from library.lookup import get_gpu, get_llm
-from library.specs.GPUSpec import GPUSpec
+from kavier_library.lookup import get_gpu, get_llm
+from kavier_library.specs.GPUSpec import GPUSpec
 
 INFINIBAND_GBPS = 200.0
 MFU_BATCH_ALPHA = 0.0341

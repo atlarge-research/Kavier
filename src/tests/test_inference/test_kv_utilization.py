@@ -1,6 +1,6 @@
 from kavier_inference.stages.kv_usage import get_kv_cache_utilization
-from library.specs.GPUSpec import GPUSpec
-from library.specs.LLMSpec import LLMSpec
+from kavier_library.specs.GPUSpec import GPUSpec
+from kavier_library.specs.LLMSpec import LLMSpec
 
 gpu = GPUSpec(
     gpu_name="A10",

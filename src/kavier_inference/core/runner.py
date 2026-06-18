@@ -7,8 +7,8 @@ from kavier_inference.core.config import SimConfig
 from kavier_inference.stages.decode import get_decode_time_s
 from kavier_inference.stages.gpu_usage import get_gpu_utilization
 from kavier_inference.stages.prefill import get_prefill_time_s
-from library.specs.GPUSpec import GPUSpec
-from library.specs.LLMSpec import LLMSpec
+from kavier_library.specs.GPUSpec import GPUSpec
+from kavier_library.specs.LLMSpec import LLMSpec
 
 
 def simulate_one(

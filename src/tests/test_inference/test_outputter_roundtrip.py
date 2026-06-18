@@ -3,7 +3,7 @@ from tempfile import TemporaryDirectory
 import pandas as pd
 import pyarrow.parquet as pq
 
-from opendc.adapter import write_fragments_opendc, write_tasks_opendc
+from kavier_opendc.adapter import write_fragments_opendc, write_tasks_opendc
 
 
 def test_tasks_parquet_roundtrip():

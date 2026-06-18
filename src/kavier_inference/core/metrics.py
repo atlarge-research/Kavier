@@ -7,8 +7,8 @@ import pandas as pd
 
 from kavier_inference.core.cache import PrefixCache
 from kavier_inference.core.config import SimConfig
-from library.specs.GPUSpec import GPUSpec
-from library.specs.LLMSpec import LLMSpec
+from kavier_library.specs.GPUSpec import GPUSpec
+from kavier_library.specs.LLMSpec import LLMSpec
 
 
 @dataclass

@@ -7,7 +7,8 @@ from kavier_energy.metrics import (
 
 
 def make_power_wh(wh):
-    return pd.DataFrame({"energy_usage": [wh * 1_000]})  # Wh -> Ws (the stored unit)
+    # OpenDC stores energy_usage in Joules; 1 Wh = 3600 J
+    return pd.DataFrame({"energy_usage": [wh * 3600]})
 
 
 def make_tasks(seconds):

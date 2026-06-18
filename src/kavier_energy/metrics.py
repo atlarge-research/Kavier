@@ -8,8 +8,11 @@ TOKENS_PER_UNIT = 1_000_000
 
 
 def _extract_energy_wh(powerSource: pd.DataFrame) -> float:
+    # OpenDC writes energy_usage in JOULES (= W·s). Confirmed in OpenDC SimPowerSource.java:
+    # `energyUsage = powerSupplied * passedTime * 0.001` (W × ms × 0.001 = W·s), documented
+    # "(in J)". 1 Wh = 3600 J, so J -> Wh is /3600 (the old /1000 over-counted energy 3.6x).
     if "energy_usage" in powerSource.columns:
-        return powerSource["energy_usage"].sum() / 1_000  # Ws -> Wh
+        return powerSource["energy_usage"].sum() / 3_600  # J (W·s) -> Wh
     raise ValueError("energy_usage not in the powerSource.parquet file")
 
 

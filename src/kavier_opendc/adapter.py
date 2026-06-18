@@ -21,6 +21,8 @@ def _coerce_tasks_df(df: pd.DataFrame) -> pd.DataFrame:
         tasks["gpu_count"] = tasks["gpu_count"].astype("Int32")
     if "gpu_capacity" in tasks:
         tasks["gpu_capacity"] = tasks["gpu_capacity"].astype("float64")
+    if "total_tokens" in tasks:
+        tasks["total_tokens"] = tasks["total_tokens"].astype("int64")
     return tasks
 
 

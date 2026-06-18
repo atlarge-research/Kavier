@@ -49,6 +49,8 @@ def simulate_one(
         "mem_capacity": int(gpu.memory_gb * 1024),
         "gpu_count": 1,
         "gpu_capacity": gpu_capacity,
+        # carried so the efficiency step (kavier-energy) can normalise per token
+        "total_tokens": int(n_in_tokens + n_out_tokens),
     }
 
     fragments: List[dict] = []

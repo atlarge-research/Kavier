@@ -40,3 +40,9 @@ def test_subsecond_request_not_truncated_to_zero():
     task, fragments, _t_prefill, _t_decode = _run(1, 1)
     assert task["duration"] >= 1
     assert sum(f["duration"] for f in fragments) == task["duration"]
+
+
+def test_task_carries_total_tokens():
+    # kavier-energy normalises efficiency per token, so the task must carry the count
+    task, _frags, _tp, _td = _run(40, 60)
+    assert task["total_tokens"] == 100  # n_in + n_out

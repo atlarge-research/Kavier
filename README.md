@@ -32,7 +32,7 @@ pip install -e ".[dev]"
 Run your first simulation:
 
 ```bash
-kavier-perf --trace src/data/input/input_example.csv
+kavier-perf --trace src/kavier_inference/data/input/input_example.csv
 ```
 
 Congrats! You have just run your first simulation with Kavier! 🎉

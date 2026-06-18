@@ -10,7 +10,10 @@ from kavier_opendc.schema import FRAGMENTS_SCHEMA, TASKS_SCHEMA
 
 
 def _coerce_tasks_df(df: pd.DataFrame) -> pd.DataFrame:
-    tasks = df.loc[:, TASKS_SCHEMA.names].copy()
+    # total_tokens is inference-only (for the kavier-energy per-token efficiency step);
+    # keep it when present but don't require it (training tasks don't carry it).
+    cols = list(TASKS_SCHEMA.names) + (["total_tokens"] if "total_tokens" in df.columns else [])
+    tasks = df.loc[:, cols].copy()
     tasks["id"] = tasks["id"].astype("int32")
     tasks["submission_time"] = pd.to_datetime(tasks["submission_time"], unit="ms", utc=True)
     tasks["duration"] = tasks["duration"].astype("int64")
@@ -40,8 +43,12 @@ def _coerce_fragments_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def write_tasks_opendc(df: pd.DataFrame, path: str) -> None:
+    coerced = _coerce_tasks_df(df)
+    schema = TASKS_SCHEMA
+    if "total_tokens" in coerced.columns:  # inference path: carry it for the efficiency step
+        schema = schema.append(pa.field("total_tokens", pa.int64(), True))
     pq.write_table(
-        pa.Table.from_pandas(_coerce_tasks_df(df), schema=TASKS_SCHEMA, preserve_index=False),
+        pa.Table.from_pandas(coerced, schema=schema, preserve_index=False),
         path,
         compression="zstd",
         use_dictionary=True,

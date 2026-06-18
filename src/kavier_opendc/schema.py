@@ -10,9 +10,6 @@ TASKS_SCHEMA = pa.schema(
         pa.field("mem_capacity", pa.int64(), False),
         pa.field("gpu_count", pa.int32(), True),
         pa.field("gpu_capacity", pa.float64(), True),
-        # carried through for the kavier-energy efficiency step (per-token normalisation).
-        # OpenDC reads tasks by column name and ignores this extra field.
-        pa.field("total_tokens", pa.int64(), True),
     ]
 )
 

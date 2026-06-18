@@ -1,18 +1,3 @@
-"""Empirical calibration layer.
-
-Reads the fitted table from ``data/calibration.json`` into the module global
-``_CAL`` (which Coastline swaps live for recalibration ablations) and exposes
-strict per-key getters over it.
-
-Provenance / forward-compatibility: the JSON may carry purely descriptive
-top-level keys such as ``schema_version`` (the on-disk format version),
-``version`` (the calibration-run version) and ``_note``. The getters below read
-only the specific keys they need, so any unknown/extra top-level key is simply
-ignored — the table loads and works unchanged. ``SCHEMA_VERSION`` records the
-format version this loader was written against; a mismatch is tolerated, not
-fatal.
-"""
-
 from __future__ import annotations
 
 import json
@@ -100,16 +85,6 @@ def get_model_scale(model_name: str) -> float:
 
 
 def get_interaction_scale(model_name: str, method: str, gpu_name: str, num_gpus: int) -> float:
-    """Per-(model x method x gpu x gpu-count) residual correction. Defaults to 1.0 for
-    any combination not present in the fitted table (so unseen configs are unaffected).
-
-    This silent 1.0 default is intentional and covers, among others, every
-    mixtral-8x7b combination: mixtral has a fitted ``model_scale`` but zero
-    ``interaction_scale`` entries, so its interaction residual is always the
-    neutral 1.0. Other uncovered (model, method, gpu, gpu-count) tuples behave the
-    same. Unlike the mfu/method/model/mgc getters, no warning is emitted here: the
-    interaction table is sparse by design (only a fraction of fitted rows get a
-    residual), so missing combos are the expected common case, not an anomaly."""
     table = _CAL.get("interaction_scale", {})
     key = f"{model_name}|{method}|{gpu_name}|{int(num_gpus)}"
     return float(table.get(key, 1.0))

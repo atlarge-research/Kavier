@@ -209,16 +209,19 @@ def test_get_multi_gpu_correction_nearest_neighbour_above_max():
     assert result == pytest.approx(table[str(max_key)])
 
 
-def test_get_multi_gpu_correction_cliff_64_snaps_to_32_with_warning():
-    # The documented nearest-neighbour cliff: 64 is closer to 32 (dist 32) than to
-    # 128 (dist 64), so it silently took 32's correction. The value is unchanged
-    # (no interpolation) but the getter now warns about the uncovered count.
+def test_get_multi_gpu_correction_16_and_64_are_exact_no_snap():
+    # 16 and 64 are now interpolated table entries (the table is gap-free over the
+    # canonical power-of-two counts 2..128), so each returns its OWN value with no
+    # nearest-neighbour snap and no warning.
     table = RAW["multi_gpu_correction"]["by_num_gpus"]
-    assert "64" not in table and {"32", "128"} <= set(table)
-    calibration._WARNED_KEYS.discard("num_gpus=64")
-    with pytest.warns(UserWarning, match="num_gpus=64"):
-        result = calibration.get_multi_gpu_correction(64)
-    assert result == pytest.approx(table["32"])
+    assert {"16", "64"} <= set(table)
+    import warnings as _warnings
+
+    for g in (16, 64):
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error")  # a nearest-neighbour snap would warn -> raise
+            result = calibration.get_multi_gpu_correction(g)
+        assert result == pytest.approx(table[str(g)])
 
 
 def test_get_multi_gpu_correction_nearest_neighbour_midpoint_uses_smaller():

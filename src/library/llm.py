@@ -166,4 +166,27 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=8.1e9,
     ),
+    # --- in-vitro (rwt3-llmbuild) models added for the real-trace cluster run ---
+    # granite-3.1-8b shares the granite-3.0-8b architecture (HF config: 4096 d_model,
+    # 40 layers, 32 heads, head_dim 128, ~8.1B params); calibrated on its own PD1 rows.
+    "granite-3.1-8b-instruct": LLMSpec(
+        llm_name="granite-3.1-8b-instruct",
+        n_layers=40,
+        n_heads=32,
+        d_head=128,
+        d_model=4096,
+        p_bytes=2,
+        m_params=8.1e9,
+    ),
+    # granite-3.1-2b HF config: 2048 d_model, 40 layers, 32 heads, 8 KV heads (GQA),
+    # head_dim 64, ffn 8192, vocab 49152 -> ~2.53B params (tied embeddings).
+    "granite-3.1-2b": LLMSpec(
+        llm_name="granite-3.1-2b",
+        n_layers=40,
+        n_heads=32,
+        d_head=64,
+        d_model=2048,
+        p_bytes=2,
+        m_params=2.53e9,
+    ),
 }

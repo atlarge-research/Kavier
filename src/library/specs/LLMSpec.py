@@ -2,12 +2,6 @@ from __future__ import annotations
 
 
 class LLMSpec:
-    """LLM specification consumed by the Kavier physics engine.
-
-    Sparse-architecture models (formerly MoE) are encoded by setting
-    ``active_params`` to the per-token active subset; the engine reasons over
-    that single number and does not track expert structure explicitly."""
-
     def __init__(
         self,
         llm_name: str,

@@ -31,20 +31,6 @@ def _calculate_gpu_power(
     memory_utilization: float,
     gpu_spec: GPUSpec,
 ) -> float:
-    """MSE power model — same formula as OpenDC.
-
-    P(u) = P_idle + (P_max - P_idle) × (2u - u^r)
-
-    where:
-        u = effective utilization (max of compute and memory, clamped to [0,1])
-        r = calibration_factor (shapes the non-linear power curve)
-        P_idle = idle power (watts)
-        P_max = max power / TDP (watts)
-
-    Reference:
-        OpenDC simulator — MseCpuPowerModel
-        Calibrated via Mean Squared Error against real telemetry.
-    """
     u = max(min(max(compute_utilization, memory_utilization), 1.0), 0.0)
     r = gpu_spec.calibration_factor
     p_idle = gpu_spec.idle_power_w
@@ -131,8 +117,6 @@ def simulate_training_step(
     backward_factor: float = 2.0,
     calibrated: bool = True,
 ) -> Dict[str, float]:
-    """Predict one training step. ``calibrated=False`` (the ``--no-calib`` mode) runs
-    pure physics: all empirical calibration factors are neutralised."""
     llm = get_llm(model_name)
     gpu = get_gpu(gpu_model)
 

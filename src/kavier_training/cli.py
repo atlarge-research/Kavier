@@ -19,8 +19,6 @@ _EXAMPLE_CMD = (
 
 
 class _FriendlyParser(argparse.ArgumentParser):
-    """On bad/missing arguments, show a ready-to-run example command."""
-
     def error(self, message: str) -> NoReturn:
         self.print_usage(sys.stderr)
         print(f"{self.prog}: error: {message}", file=sys.stderr)
@@ -29,7 +27,6 @@ class _FriendlyParser(argparse.ArgumentParser):
 
 
 def _run_csv(path: str, total_tokens: int | None) -> None:
-    """Simulate every row of a CSV (e.g. data/input/input_example.csv)."""
     with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     header = (

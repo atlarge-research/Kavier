@@ -14,9 +14,12 @@
       "2": 1.0716124626178782,
       "4": 1.1062281338121924,
       "8": 1.148332636706796,
-      "32": 1.2927,
-      "128": 4.2471
-    }
+      "16": 2.37,
+      "32": 4.89,
+      "64": 9.33,
+      "128": 17.79
+    },
+    "_note": "2/4/8: dense-4 curated fit (<=8 GPU, single-node). 32/128: mgc-only fit on the raw multi-node trace with all other scales frozen at the <=8 calibration (a joint refit is non-identifiable). 16/64: log2-geometric interpolation. >8 is a scalar extrapolation: no interaction_scale coverage above 8 GPU, and 16 has no clean single-model data."
   },
   "method_scale": {
     "full": 0.8792836340923946,
@@ -24,13 +27,12 @@
     "lora": 0.9710346393993383
   },
   "model_scale": {
-    "granite-3.1-3b-a800m-instruct": 0.2522,
-    "llama3.1-70b": 1.29,
     "mistral-7b-v0.1": 0.9795220669767422,
-    "mixtral-8x7b-instruct-v0.1": 0.9799,
     "granite-3.3-8b": 0.9726307904861383,
     "granite-3-8b": 1.0191135496630135,
-    "llama3.2-3b": 0.8473407000126818
+    "llama3.2-3b": 0.8473407000126818,
+    "granite-3.1-2b": 0.743075,
+    "granite-3.1-8b-instruct": 0.913236
   },
   "interaction_scale": {
     "granite-3-8b|full|NVIDIA-H100-PCIe|1": 1.0469,
@@ -68,7 +70,23 @@
     "mistral-7b-v0.1|lora|NVIDIA-A100-SXM4-80GB|1": 1.0049,
     "mistral-7b-v0.1|lora|NVIDIA-A100-SXM4-80GB|2": 1.0503,
     "mistral-7b-v0.1|lora|NVIDIA-A100-SXM4-80GB|4": 1.0521,
-    "mistral-7b-v0.1|lora|NVIDIA-A100-SXM4-80GB|8": 1.1047
+    "mistral-7b-v0.1|lora|NVIDIA-A100-SXM4-80GB|8": 1.1047,
+    "granite-3.1-2b|full|NVIDIA-A100-SXM4-80GB|1": 1.0363,
+    "granite-3.1-2b|full|NVIDIA-A100-SXM4-80GB|2": 1.0578,
+    "granite-3.1-2b|full|NVIDIA-A100-SXM4-80GB|4": 1.0335,
+    "granite-3.1-2b|full|NVIDIA-A100-SXM4-80GB|8": 1.034,
+    "granite-3.1-2b|lora|NVIDIA-A100-SXM4-80GB|1": 0.9993,
+    "granite-3.1-2b|lora|NVIDIA-A100-SXM4-80GB|2": 0.8745,
+    "granite-3.1-2b|lora|NVIDIA-A100-SXM4-80GB|4": 0.8641,
+    "granite-3.1-2b|lora|NVIDIA-A100-SXM4-80GB|8": 0.886,
+    "granite-3.1-8b-instruct|full|NVIDIA-A100-SXM4-80GB|1": 0.5059,
+    "granite-3.1-8b-instruct|full|NVIDIA-A100-SXM4-80GB|2": 0.8564,
+    "granite-3.1-8b-instruct|full|NVIDIA-A100-SXM4-80GB|4": 0.992,
+    "granite-3.1-8b-instruct|full|NVIDIA-A100-SXM4-80GB|8": 0.9898,
+    "granite-3.1-8b-instruct|lora|NVIDIA-A100-SXM4-80GB|1": 1.0606,
+    "granite-3.1-8b-instruct|lora|NVIDIA-A100-SXM4-80GB|2": 1.0314,
+    "granite-3.1-8b-instruct|lora|NVIDIA-A100-SXM4-80GB|4": 1.0164,
+    "granite-3.1-8b-instruct|lora|NVIDIA-A100-SXM4-80GB|8": 1.0338
   },
   "_note": "Kavier calibrated on the 70/15 train+val (85%) split, seed 42; 15% test held out."
 }

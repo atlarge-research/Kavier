@@ -11,10 +11,9 @@ from kavier_training.core.engine import simulate_full_training, simulate_trainin
 TRAINING_CONFIGS = [
     {"model_name": "mistral-7b-v0.1", "gpu_model": "NVIDIA-A100-SXM4-80GB", "method": "full"},
     {"model_name": "mistral-7b-v0.1", "gpu_model": "NVIDIA-A100-80GB-PCIe", "method": "lora"},
-    {"model_name": "llama3.1-70b", "gpu_model": "NVIDIA-A100-SXM4-80GB", "method": "lora"},
-    {"model_name": "granite-3.1-3b-a800m-instruct", "gpu_model": "NVIDIA-A100-80GB-PCIe", "method": "full"},
-    {"model_name": "mixtral-8x7b-instruct-v0.1", "gpu_model": "NVIDIA-A100-SXM4-80GB", "method": "full"},
-    {"model_name": "mixtral-8x7b-instruct-v0.1", "gpu_model": "NVIDIA-A100-80GB-PCIe", "method": "gptq-lora"},
+    {"model_name": "granite-3.3-8b", "gpu_model": "NVIDIA-A100-SXM4-80GB", "method": "full"},
+    {"model_name": "granite-3-8b", "gpu_model": "NVIDIA-H100-PCIe", "method": "lora"},
+    {"model_name": "llama3.2-3b", "gpu_model": "NVIDIA-A100-SXM4-80GB", "method": "gptq-lora"},
 ]
 
 

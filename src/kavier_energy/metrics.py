@@ -8,9 +8,6 @@ def financial_efficiency(
     total_tokens: int,
     gpu_hour_price: float,
 ) -> float:
-    """
-    Return in euros / million tokens / second.
-    """
     total_latency_s = tasks["duration"].sum() / 1_000
     throughput_tps = total_tokens / total_latency_s
 
@@ -37,9 +34,6 @@ def sustainability_efficiency(
     tasks: pd.DataFrame,
     total_tokens: int,
 ) -> float:
-    """
-    Result in Wh / million tokens / second.
-    """
     energy_kWh = _extract_energy_wh(powerSource) / 1_000
     total_latency_s = tasks["duration"].sum() / 1_000
     return (energy_kWh * total_latency_s) / (total_tokens / 1_000_000)
@@ -50,9 +44,6 @@ def sustainability_efficiency_CO2(
     tasks: pd.DataFrame,
     total_tokens: int,
 ) -> float:
-    """
-    Result in kgCO2 / million tokens / second.
-    """
     co2_kg = _extract_co2_emission_kg(powerSource)
     total_latency_s = tasks["duration"].sum() / 1_000
     return (co2_kg * total_latency_s) / (total_tokens / 1_000_000)

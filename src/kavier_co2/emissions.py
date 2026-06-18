@@ -1,40 +1,3 @@
-"""Carbon-emission accounting for power timelines.
-
-A *carbon trace* is a step function over time. Each row covers a window
-``[timestamp, timestamp + step)`` and supplies a constant carbon intensity in
-gCO2/kWh for that window — exactly the shape OpenDC consumes when it converts a
-power source's energy to carbon. A *power fragment* ``(start_time, duration_s,
-power_w)`` is the unit produced by Kavier's training simulation and by OpenDC's
-per-step output.
-
-Join semantics (window split + conservative down-estimation)
-------------------------------------------------------------
-Energy is the integral of power over time, so a fragment that straddles a
-window boundary cannot use a single intensity. We split each fragment at the
-30-min window boundaries and bill every sub-interval's energy
-(``power_w * sub_duration_s``).
-
-Billing rule (DOWN-ESTIMATION): each split piece is billed at
-``min(intensity of its own window, intensity of the NEXT window)``. A moment
-that sits *between* two trace points (e.g. 15:34 between points at 15:00 and
-16:00) is deliberately under-estimated to ``min(intensity@15:00,
-intensity@16:00)``. The final trace window has no successor, so it bills at its
-own value. The per-window breakdown records the down-estimated intensity per
-window; the total is their sum. The reported "average intensity" is
-energy-weighted (total gCO2 / total kWh).
-
-Deviation from OpenDC
----------------------
-OpenDC's ``CarbonModel`` (``opendc-simulator-compute``) treats the carbon trace
-as a pure *left-continuous step function*: the loader's ``fixReportTimes`` sets
-each fragment's window to ``[t_i, t_{i+1})`` and the model holds the EARLIER
-point's intensity until the next point — no interpolation, no min. So OpenDC
-bills the 15:34 moment at ``intensity@15:00`` (the left bound), whereas Kavier
-bills it at ``min(intensity@15:00, intensity@16:00)``. Kavier's total is
-therefore always <= OpenDC's left-step total. This is an intentional
-conservative (lower-bound) carbon estimate, not OpenDC's exact accounting.
-"""
-
 from __future__ import annotations
 
 import datetime as dt
@@ -48,8 +11,6 @@ WS_PER_KWH = 3.6e6  # watt-seconds in one kilowatt-hour
 
 @dataclass(frozen=True)
 class Fragment:
-    """A constant-power interval. ``power_w`` is aggregate (all GPUs)."""
-
     start_time: pd.Timestamp
     duration_s: float
     power_w: float
@@ -57,12 +18,6 @@ class Fragment:
 
 @dataclass(frozen=True)
 class CarbonTrace:
-    """A step-function carbon-intensity trace, sorted by timestamp.
-
-    ``timestamps[i]`` opens a window of width ``step`` carrying
-    ``intensities[i]`` gCO2/kWh. Coverage is ``[timestamps[0], last + step)``.
-    """
-
     timestamps: pd.DatetimeIndex
     intensities: "pd.Series"
     step: dt.timedelta
@@ -95,7 +50,6 @@ class CarbonTrace:
 
     @property
     def coverage_end(self) -> pd.Timestamp:
-        """Exclusive upper bound: the end of the last window."""
         return self.timestamps[-1] + self.step
 
     def _coverage_msg(self) -> str:
@@ -114,35 +68,22 @@ class EmissionResult:
 
     @property
     def average_intensity(self) -> float:
-        """Energy-weighted mean intensity (gCO2/kWh); 0 if no energy."""
         if self.total_energy_kwh == 0:
             return 0.0
         return self.total_co2_g / self.total_energy_kwh
 
 
 def load_carbon_trace(path: str, step_minutes: int | None = None) -> CarbonTrace:
-    """Load a carbon-intensity parquet into a :class:`CarbonTrace`."""
     df = pd.read_parquet(path)
     step = dt.timedelta(minutes=step_minutes) if step_minutes else None
     return CarbonTrace.from_dataframe(df, step=step)
 
 
 def _window_index_for(ts: pd.Timestamp, trace: CarbonTrace) -> int:
-    """Return the index of the window covering ``ts``.
-
-    ``searchsorted(..., side='right') - 1`` finds the last window whose start is
-    ``<= ts``. Callers guarantee ``ts`` is within coverage.
-    """
     return int(trace.timestamps.searchsorted(ts, side="right")) - 1
 
 
 def compute_emissions(fragments: Iterable[Fragment], trace: CarbonTrace) -> EmissionResult:
-    """Join power fragments against the carbon trace and total the emissions.
-
-    Each fragment is split at window boundaries; every sub-interval's energy is
-    billed at its window's intensity. Fragments touching time outside the trace
-    coverage raise ``ValueError`` naming the coverage.
-    """
     # window_start (Timestamp) -> {"carbon_intensity", "energy_kwh", "co2_g"}
     acc: dict[pd.Timestamp, dict] = {}
     total_energy_kwh = 0.0

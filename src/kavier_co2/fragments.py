@@ -1,6 +1,3 @@
-"""Build power fragments from Kavier's training simulation or from an OpenDC
-``powerSource.parquet``."""
-
 from __future__ import annotations
 
 from typing import List
@@ -23,12 +20,6 @@ def fragments_from_training(
     total_tokens: int | None,
     start_time: pd.Timestamp,
 ) -> List[Fragment]:
-    """Simulate a training run and express it as one constant-power fragment.
-
-    ``simulate_training_step`` gives the steady-state per-GPU power; aggregate
-    power is that times the total GPU count. ``simulate_full_training`` gives the
-    wall-clock runtime, which becomes the fragment duration.
-    """
     if total_tokens is None:
         raise ValueError("--total_tokens is required to derive a training runtime")
 
@@ -59,14 +50,6 @@ def fragments_from_training(
 
 
 def fragments_from_powersource(df: pd.DataFrame) -> List[Fragment]:
-    """Convert an OpenDC ``powerSource.parquet`` into power fragments.
-
-    OpenDC writes one row per sampling step with ``energy_usage`` in watt-seconds
-    (Joules) consumed during that step. We require a ``timestamp`` column so each
-    row can be placed on the carbon timeline; each row's duration is the gap to
-    the next timestamp (the last row reuses the previous gap). Average power over
-    a step is ``energy_usage / duration_s``.
-    """
     if "timestamp" not in df.columns:
         raise ValueError(
             "powerSource parquet has no 'timestamp' column, so its energy cannot be "

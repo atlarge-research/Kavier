@@ -5,15 +5,6 @@ from library.specs.LLMSpec import LLMSpec
 def get_kv_cache_utilization(
     llm: LLMSpec, gpu: GPUSpec, t_prefill, t_decode, t, prompt_len, response_len, kv_cache
 ) -> float:
-    """
-    KV-cache usage (%) of GPU VRAM at time t.
-    :param llm: LLMSpec, the LLM specification, needs .n_layers, d_model, p_bytes.
-    :param gpu: GPUSpec, the GPU specification, needs .memory_gb.
-    :param t_prefill: time taken for prefill phase in seconds.
-    :param t_decode: time taken for decode phase in seconds.
-    :param t: current time in seconds.
-    :return:
-    """
     if not kv_cache:
         return 0
 

@@ -62,6 +62,29 @@ def test_loader_tolerates_unknown_top_level_keys():
         calibration._CAL = saved
 
 
+# Release guard (Blocker 1): the *shipped* calibration.json must always be valid
+# JSON carrying the keys the engine reads at import time. This is the single,
+# explicit regression anchor wired into CI so a malformed/incomplete file (e.g.
+# the trailing-comma edit that once crashed `import kavier_training`) can never
+# ship again. Loaded straight from disk (not via the module) on purpose.
+_REQUIRED_CALIBRATION_KEYS = (
+    "comm_scale",
+    "mfu_multiplier",
+    "multi_gpu_correction",
+    "model_scale",
+    "interaction_scale",
+)
+
+
+def test_shipped_calibration_json_loads_and_has_required_keys():
+    assert _CAL_PATH.is_file(), f"shipped calibration.json missing at {_CAL_PATH}"
+    with _CAL_PATH.open(encoding="utf-8") as f:
+        data = json.load(f)  # raises JSONDecodeError if malformed
+    assert isinstance(data, dict)
+    missing = [k for k in _REQUIRED_CALIBRATION_KEYS if k not in data]
+    assert not missing, f"calibration.json missing required keys: {missing}"
+
+
 @pytest.mark.parametrize(
     "key, expected_type",
     [

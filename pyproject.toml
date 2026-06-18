@@ -64,13 +64,15 @@ package-dir = {"" = "src"}
 where = ["src"]
 include = ["kavier*"]
 
-# Ship only the *small* runtime data: the training calibration table (required
-# at import time by kavier_training.core.calibration) and the small training
-# input example. We deliberately do NOT ship kavier_inference/data — its
-# input_example.csv is a dev/demo trace and the data/output dir holds
-# simulation outputs; neither is a runtime asset.
+# Ship only the *small* runtime/demo data: the training calibration table
+# (required at import time by kavier_training.core.calibration), the small
+# training input example, and the tiny (~562 B) SYNTHETIC inference demo trace
+# so the kavier-perf quickstart resolves for pip-installed users too. The
+# inference data/output dir (simulation outputs) is never shipped; the original
+# large (~74 MB) inference trace is kept out of the package (see examples-local/).
 [tool.setuptools.package-data]
 kavier_training = ["data/calibration.json", "data/input/input_example.csv"]
+kavier_inference = ["data/input/input_example.csv"]
 
 [tool.setuptools.exclude-package-data]
 kavier_inference = ["data/output/*", "data/output/**/*"]

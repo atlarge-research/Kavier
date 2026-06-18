@@ -53,3 +53,7 @@ src/kavier_training/validation/*
 src/kavier_training/data/output/
 
 src/reader/
+
+# Large inference demo trace: kept locally for reference, never shipped or
+# committed (size + dataset-license). See examples-local/README.md.
+examples-local/*.csv

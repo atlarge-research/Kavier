@@ -17,11 +17,9 @@ def main() -> None:
 
 
 def main_efficiency() -> None:
-    print(
-        "kavier-eff is deprecated and will be removed in a future release; use kavier-energy instead.",
-        file=sys.stderr,
-    )
-
+    """``kavier-eff``: the efficiency entry point. Currently delegates to the energy
+    calculator (the same engine as ``kavier-energy``); kept as a first-class command
+    for the efficiency workflow."""
     from kavier_energy.calculator import main as energy_main
 
     energy_main()

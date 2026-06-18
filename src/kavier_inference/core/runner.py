@@ -34,7 +34,11 @@ def simulate_one(
         if hit and cfg.cache.action == "full":
             t_decode = 0.0
 
-    total_ms = int((t_prefill + t_decode))
+    total_s = t_prefill + t_decode
+    # Durations are stored in MILLISECONDS (the downstream fragments + kavier_energy
+    # treat `duration` as ms). Previously this stored raw seconds -> a 1000x under-count,
+    # and `int()` truncated any sub-second request to 0. Convert s->ms, round, floor at 1.
+    total_ms = max(1, int(round(total_s * 1000)))
     gpu_capacity = float(gpu.core_max_mhz * gpu.cores)
     task = {
         "id": int(idx),
@@ -48,16 +52,21 @@ def simulate_one(
     }
 
     fragments: List[dict] = []
-    total_s = t_prefill + t_decode
     num_snaps = max(1, int(total_s / export_rate_s))
+    fragment_duration_ms = max(1, int(round(export_rate_s * 1000)))
     t_sec = 0.0
-    fragment_duration_ms = int(export_rate_s * 1000)
-    for _ in range(num_snaps):
+    for i in range(num_snaps):
         gpu_use = get_gpu_utilization(t_sec, t_prefill, t_decode)
+        # The final fragment absorbs the residual so the fragments sum EXACTLY to the
+        # task duration (integer truncation of num_snaps would otherwise under-cover it).
+        if i == num_snaps - 1:
+            duration_ms = max(1, total_ms - i * fragment_duration_ms)
+        else:
+            duration_ms = fragment_duration_ms
         fragments.append(
             {
                 "id": int(idx),
-                "duration": fragment_duration_ms,
+                "duration": duration_ms,
                 "cpu_count": 1,
                 "cpu_usage": 0.0,
                 "gpu_count": 1,

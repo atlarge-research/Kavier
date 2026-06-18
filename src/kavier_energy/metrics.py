@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import pandas as pd
 
+# Efficiency is reported per MILLION tokens (the industry-standard unit, e.g. "$ / 1M
+# tokens"); raw per-token values are tiny and hard to read. One knob sets the scale.
+TOKENS_PER_UNIT = 1_000_000
+
 
 def _extract_energy_wh(powerSource: pd.DataFrame) -> float:
     if "energy_usage" in powerSource.columns:
@@ -24,29 +28,27 @@ def _total_gpu_hours(tasks: pd.DataFrame) -> float:
 def sustainability_efficiency(
     powerSource: pd.DataFrame, tasks: pd.DataFrame, total_tokens: int
 ) -> float:
-    """Energy efficiency: **Wh per token** (lower = better) = energy / tokens.
+    """Energy efficiency: **Wh per million tokens** (lower = better) = energy / tokens.
 
     ``tasks`` is accepted for a stable call signature but unused: energy-per-token has no
-    time term. (The previous version multiplied by total latency -- a dimensional error
-    that made the metric scale with how long the run took.)"""
-    return _extract_energy_wh(powerSource) / total_tokens
+    time term (the previous version multiplied by latency -- a dimensional error)."""
+    return _extract_energy_wh(powerSource) / total_tokens * TOKENS_PER_UNIT
 
 
 def sustainability_efficiency_CO2(
     powerSource: pd.DataFrame, tasks: pd.DataFrame, total_tokens: int
 ) -> float:
-    """Carbon efficiency: **gCO2 per token** (lower = better) = carbon / tokens."""
-    return _extract_co2_emission_g(powerSource) / total_tokens
+    """Carbon efficiency: **gCO2 per million tokens** (lower = better) = carbon / tokens."""
+    return _extract_co2_emission_g(powerSource) / total_tokens * TOKENS_PER_UNIT
 
 
 def financial_efficiency(tasks: pd.DataFrame, total_tokens: int, gpu_hour_price: float) -> float:
-    """Cost efficiency: **$ per token** (lower = better) = GPU-hours x price / tokens.
+    """Cost efficiency: **$ per million tokens** (lower = better) = GPU-hours x price / tokens.
 
-    GPUs dominate the cost, so this is GPU-hours x the user's GPU-hour rate; electricity
-    is a rounding error (~2-5%) and is left out. The rate is user-supplied -- there is no
-    baked-in default. (Note: the seconds cancel here -- ($/s) / (tokens/s) = $/token --
-    so this is per token, not per token-second.)"""
-    return (_total_gpu_hours(tasks) * gpu_hour_price) / total_tokens
+    GPUs dominate the cost, so this is GPU-hours x the user's GPU-hour rate; electricity is
+    a rounding error (~2-5%) and is left out. The rate is user-supplied -- no baked-in
+    default. (The seconds cancel: ($/s) / (tokens/s) = $/token, then scaled to per-million.)"""
+    return _total_gpu_hours(tasks) * gpu_hour_price / total_tokens * TOKENS_PER_UNIT
 
 
 def efficiency_summary(
@@ -55,12 +57,12 @@ def efficiency_summary(
     total_tokens: int,
     gpu_hour_price: float | None = None,
 ) -> dict[str, float | None]:
-    """The three per-token efficiency metrics (lower = better). ``financial`` is ``None``
-    until the caller supplies ``gpu_hour_price`` -- the GPU cost is the user's to set."""
+    """The three per-million-token efficiency metrics (lower = better). ``financial`` is
+    ``None`` until the caller supplies ``gpu_hour_price`` -- the GPU cost is the user's to set."""
     return {
-        "energy_efficiency (Wh/token)": sustainability_efficiency(powerSource_df, tasks_df, total_tokens),
-        "carbon_efficiency (gCO2/token)": sustainability_efficiency_CO2(powerSource_df, tasks_df, total_tokens),
-        "financial_efficiency ($/token)": (
+        "energy_efficiency (Wh/Mtoken)": sustainability_efficiency(powerSource_df, tasks_df, total_tokens),
+        "carbon_efficiency (gCO2/Mtoken)": sustainability_efficiency_CO2(powerSource_df, tasks_df, total_tokens),
+        "financial_efficiency ($/Mtoken)": (
             financial_efficiency(tasks_df, total_tokens, gpu_hour_price)
             if gpu_hour_price is not None else None
         ),

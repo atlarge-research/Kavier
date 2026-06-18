@@ -17,8 +17,11 @@ def _extract_energy_wh(powerSource: pd.DataFrame) -> float:
 
 
 def _extract_co2_emission_g(powerSource: pd.DataFrame) -> float:
+    # OpenDC writes carbon_emission in GRAMS. Confirmed in OpenDC SimPowerSource.java:
+    # carbonEmission += carbonIntensity * (energyUsage_J / 3_600_000) = gCO2/kWh * kWh = g
+    # (the /3.6e6 J->kWh pins carbonIntensity to gCO2/kWh). So no conversion is needed.
     if "carbon_emission" in powerSource.columns:
-        return float(powerSource["carbon_emission"].sum())  # already grams
+        return float(powerSource["carbon_emission"].sum())  # grams, as-is
     raise ValueError("carbon_emission not in the powerSource.parquet file")
 
 

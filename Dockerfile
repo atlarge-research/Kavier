@@ -7,27 +7,15 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install poetry
-RUN curl -sSL https://install.python-poetry.org | python3 - && \
-    ln -s /root/.local/bin/poetry /usr/local/bin/poetry
-
-# Copy poetry files
-COPY pyproject.toml poetry.lock* ./
-
-# Configure poetry to not create virtual env (we're in container)
-RUN poetry config virtualenvs.create false
-
-# Install dependencies only (skip root project - setuptools will handle it)
-RUN poetry install --no-interaction --no-ansi --no-root
-
-# Copy the rest of the application (including src/)
+# Copy the application (including src/). pyproject.toml is the single source of
+# dependencies; pip resolves and installs them from it.
 COPY . .
 
-# Install the project using pip (setuptools-based)
-RUN pip install -e .
+# Install the project (setuptools-based) plus its dependencies from pyproject.
+RUN python -m pip install --upgrade pip && \
+    pip install -e .
 
 # Set Python path
 ENV PYTHONPATH=/app/src:$PYTHONPATH

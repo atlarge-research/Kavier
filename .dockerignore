@@ -29,9 +29,6 @@ Thumbs.db
 .git/
 .gitignore
 
-# Poetry
-poetry.lock
-
 # Analysis (local only)
 analysis/
 

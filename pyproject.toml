@@ -16,10 +16,12 @@ requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.7",
     "pandas>=2.2",
-    "pyarrow>=16.0",
-    "numpy",
-    "tqdm",
-    "cachetools>=5.3",
+    # pyarrow>=23.0.1 clears GHSA / Apache Arrow use-after-free on IPC pre-buffered
+    # reads (dependabot high-sev); was >=16.0.
+    "pyarrow>=23.0.1",
+    "numpy>=2.2.6",
+    "tqdm>=4.67.1",
+    "cachetools>=6.1",
     "rich>=13",
 ]
 

@@ -3,66 +3,66 @@ from __future__ import annotations
 import pandas as pd
 
 
-def financial_efficiency(
-    tasks: pd.DataFrame,
-    total_tokens: int,
-    gpu_hour_price: float,
-) -> float:
-    total_latency_s = tasks["duration"].sum() / 1_000
-    throughput_tps = total_tokens / total_latency_s
-
-    gpu_price_per_s = gpu_hour_price / 3_600
-
-    eur_per_token_per_s = gpu_price_per_s / throughput_tps
-    return eur_per_token_per_s * 1_000_000
-
-
 def _extract_energy_wh(powerSource: pd.DataFrame) -> float:
     if "energy_usage" in powerSource.columns:
-        return powerSource["energy_usage"].sum() / 1_000  # convert from Ws to Wh
-    raise ValueError("energy_usage not in powerSource the powerSource.parquet file")
+        return powerSource["energy_usage"].sum() / 1_000  # Ws -> Wh
+    raise ValueError("energy_usage not in the powerSource.parquet file")
 
 
-def _extract_co2_emission_kg(powerSource: pd.DataFrame) -> float:
+def _extract_co2_emission_g(powerSource: pd.DataFrame) -> float:
     if "carbon_emission" in powerSource.columns:
-        return powerSource["carbon_emission"].sum() / 1_000  # convert from g to kg
-    raise ValueError("carbon_emission not in powerSource the powerSource.parquet file")
+        return float(powerSource["carbon_emission"].sum())  # already grams
+    raise ValueError("carbon_emission not in the powerSource.parquet file")
+
+
+def _total_gpu_hours(tasks: pd.DataFrame) -> float:
+    """Total GPU-hours. Inference runs 1 GPU per task and ``duration`` is the per-task
+    latency in ms, so the summed duration is the total GPU-time. ms -> h."""
+    return tasks["duration"].sum() / 1_000 / 3_600
 
 
 def sustainability_efficiency(
-    powerSource: pd.DataFrame,
-    tasks: pd.DataFrame,
-    total_tokens: int,
+    powerSource: pd.DataFrame, tasks: pd.DataFrame, total_tokens: int
 ) -> float:
-    energy_kWh = _extract_energy_wh(powerSource) / 1_000
-    total_latency_s = tasks["duration"].sum() / 1_000
-    return (energy_kWh * total_latency_s) / (total_tokens / 1_000_000)
+    """Energy efficiency: **Wh per token** (lower = better) = energy / tokens.
+
+    ``tasks`` is accepted for a stable call signature but unused: energy-per-token has no
+    time term. (The previous version multiplied by total latency -- a dimensional error
+    that made the metric scale with how long the run took.)"""
+    return _extract_energy_wh(powerSource) / total_tokens
 
 
 def sustainability_efficiency_CO2(
-    powerSource: pd.DataFrame,
-    tasks: pd.DataFrame,
-    total_tokens: int,
+    powerSource: pd.DataFrame, tasks: pd.DataFrame, total_tokens: int
 ) -> float:
-    co2_kg = _extract_co2_emission_kg(powerSource)
-    total_latency_s = tasks["duration"].sum() / 1_000
-    return (co2_kg * total_latency_s) / (total_tokens / 1_000_000)
+    """Carbon efficiency: **gCO2 per token** (lower = better) = carbon / tokens."""
+    return _extract_co2_emission_g(powerSource) / total_tokens
+
+
+def financial_efficiency(tasks: pd.DataFrame, total_tokens: int, gpu_hour_price: float) -> float:
+    """Cost efficiency: **$ per token** (lower = better) = GPU-hours x price / tokens.
+
+    GPUs dominate the cost, so this is GPU-hours x the user's GPU-hour rate; electricity
+    is a rounding error (~2-5%) and is left out. The rate is user-supplied -- there is no
+    baked-in default. (Note: the seconds cancel here -- ($/s) / (tokens/s) = $/token --
+    so this is per token, not per token-second.)"""
+    return (_total_gpu_hours(tasks) * gpu_hour_price) / total_tokens
 
 
 def efficiency_summary(
     tasks_df: pd.DataFrame,
     powerSource_df: pd.DataFrame,
     total_tokens: int,
-    gpu_hour_price: float = 10.0,
-) -> dict[str, float]:
-    e_fin = financial_efficiency(tasks_df, total_tokens, gpu_hour_price)
-    e_sus_wh = sustainability_efficiency(powerSource_df, tasks_df, total_tokens)
-    e_sus_co2 = sustainability_efficiency_CO2(powerSource_df, tasks_df, total_tokens)
-    total_latency_s = tasks_df["duration"].sum() / 1_000
+    gpu_hour_price: float | None = None,
+) -> dict[str, float | None]:
+    """The three per-token efficiency metrics (lower = better). ``financial`` is ``None``
+    until the caller supplies ``gpu_hour_price`` -- the GPU cost is the user's to set."""
     return {
-        "financial_efficiency (EUR / million token / s)": e_fin,
-        "sustainability_efficiency (Wh / million token / s)": e_sus_wh,
-        "sustainability_efficiency (kgCO2 / million token / s)": e_sus_co2,
+        "energy_efficiency (Wh/token)": sustainability_efficiency(powerSource_df, tasks_df, total_tokens),
+        "carbon_efficiency (gCO2/token)": sustainability_efficiency_CO2(powerSource_df, tasks_df, total_tokens),
+        "financial_efficiency ($/token)": (
+            financial_efficiency(tasks_df, total_tokens, gpu_hour_price)
+            if gpu_hour_price is not None else None
+        ),
         "total_tokens": total_tokens,
-        "total_latency_s": total_latency_s,
     }

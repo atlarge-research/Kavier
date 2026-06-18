@@ -35,7 +35,10 @@ def main() -> None:
 
     print("\n----------  Efficiency summary  ----------")
     for k, v in summary.items():
-        print(f"{k:>42}: {v:,.6g}")
+        if v is None:
+            print(f"{k:>42}: N/A  (pass --price to compute)")
+        else:
+            print(f"{k:>42}: {v:,.6g}")
     print("------------------------------------------")
 
     if args.out:

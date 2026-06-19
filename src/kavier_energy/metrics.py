@@ -75,5 +75,5 @@ def efficiency_summary(
             financial_efficiency(tasks_df, total_tokens, gpu_hour_price)
             if gpu_hour_price is not None else None
         ),
-        "total_tokens": total_tokens,
+        "total_tokens": int(total_tokens),
     }

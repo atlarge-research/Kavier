@@ -30,6 +30,7 @@ venv/
 .vscode/
 .idea/
 .bob/
+.claude/
 
 # ── Simulator output ─────────────────────
 data/output_traces/

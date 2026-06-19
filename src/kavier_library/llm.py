@@ -1,44 +1,11 @@
+"""Built-in catalogue of LLMSpec entries keyed by model name."""
+
 from kavier_library.specs.LLMSpec import LLMSpec
 
+#: Mapping of model name -> LLMSpec; look up via ``get_llm``.
 LLM_SPEC_LIBRARY = {
-    "MPT-7B": LLMSpec(
-        llm_name="MPT-7B",
-        n_layers=32,
-        n_heads=32,
-        d_head=128,
-        d_model=4096,
-        p_bytes=2,
-        m_params=7e9,
-    ),
-    "OPT-7B": LLMSpec(
-        llm_name="OPT-7B",
-        n_layers=32,
-        n_heads=32,
-        d_head=128,
-        d_model=4096,
-        p_bytes=2,
-        m_params=7e9,
-    ),
     "Llama-3-8B": LLMSpec(
         llm_name="Llama-3-8B",
-        n_layers=32,
-        n_heads=32,
-        d_head=128,
-        d_model=4096,
-        p_bytes=2,
-        m_params=8e9,
-    ),
-    "Granite-8B": LLMSpec(
-        llm_name="Granite-8B",
-        n_layers=40,
-        n_heads=32,
-        d_head=128,
-        d_model=4096,
-        p_bytes=2,
-        m_params=8e9,
-    ),
-    "GPT-4o-mini": LLMSpec(
-        llm_name="GPT-4o-mini",
         n_layers=32,
         n_heads=32,
         d_head=128,

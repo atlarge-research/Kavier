@@ -335,6 +335,36 @@ pre code {
   color: var(--code-fg);
 }
 
+/* a small language tag, top-right of a code block */
+pre[data-lang]::after {
+  content: attr(data-lang);
+  position: absolute;
+  top: .5rem; right: .7rem;
+  font-family: var(--font-mono);
+  font-size: .6rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  pointer-events: none;
+}
+
+/* ---------- syntax highlighting (self-contained, no external assets) ----------
+   Tokens are hand-tagged with <span class="t-*"> in the HTML. Colours sit on the
+   always-dark --code-bg, so they use the on-dark accents and stay legible in both
+   light and dark schemes. */
+.t-cmd  { color: #8fd6ff; font-weight: 600; }              /* executable / command  */
+.t-flag { color: var(--amber-on-dark); }                   /* --flags               */
+.t-str  { color: #a6e3a1; }                                /* "strings", paths      */
+.t-num  { color: #f4b8e4; }                                /* numbers               */
+.t-cmt  { color: var(--faint); font-style: italic; }       /* # comments            */
+.t-kw   { color: var(--violet); }                          /* python keywords       */
+.t-fn   { color: #8fd6ff; }                                /* function / call       */
+.t-var  { color: var(--code-fg); }                         /* plain identifiers     */
+.t-op   { color: var(--accent-on-dark); }                  /* operators / pipes     */
+.t-key  { color: var(--amber-on-dark); }                   /* JSON / output keys    */
+.t-path { color: #a6e3a1; }                                /* file paths            */
+.t-tree { color: var(--faint); }                           /* dir-tree glyphs       */
+
 /* ---------- tables ---------- */
 .table-wrap { overflow-x: auto; margin: 1.2rem 0; border: 1px solid var(--border); border-radius: var(--radius); }
 table { border-collapse: collapse; width: 100%; font-size: .88rem; }

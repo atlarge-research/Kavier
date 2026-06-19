@@ -19,12 +19,13 @@
       <a href="index.html"><span class="ix">00</span> Overview</a>
       <a class="active" href="getting-started.html"><span class="ix">01</span> Getting started</a>
       <div class="nav-group"><div class="nav-group-label">Command line</div></div>
-      <a href="cli-performance.html"><span class="ix">02</span> Performance</a>
-      <a href="cli-efficiency.html"><span class="ix">03</span> Efficiency</a>
-      <a href="cli-training.html"><span class="ix">04</span> Training</a>
+      <a href="cli-performance.html"><span class="ix">02</span> Inference</a>
+      <a href="cli-training.html"><span class="ix">03</span> Training</a>
+      <a href="cli-efficiency.html"><span class="ix">04</span> Efficiency</a>
+      <a href="cli-co2.html"><span class="ix">05</span> CO<sub>2</sub></a>
       <div class="nav-group"><div class="nav-group-label">Reference</div></div>
-      <a href="formulas.html"><span class="ix">05</span> Core formulas</a>
-      <a href="contributing.html"><span class="ix">06</span> Contributing</a>
+      <a href="formulas.html"><span class="ix">06</span> Core formulas</a>
+      <a href="contributing.html"><span class="ix">07</span> Contributing</a>
     </nav>
     <div class="sidebar-foot">
       MIT licensed.<br>
@@ -49,7 +50,7 @@
 
     <h2 id="prereqs">1. Pre-requisites</h2>
     <ol>
-      <li>Python &gt;= 3.9 (<strong>3.11 preferrably</strong>)</li>
+      <li>Python &gt;= <strong>3.11</strong> (required by <code>pyproject.toml</code>)</li>
       <li>pip &gt;= 23 &amp; virtualenv / venv</li>
     </ol>
     <div class="callout amber">
@@ -58,95 +59,91 @@
     </div>
 
     <h2 id="venv">2. Clone &amp; create a virtual environment</h2>
-<pre><code>git clone https://github.com/&lt;you&gt;/kavier.git
-cd kavier
+<pre data-lang="bash"><code><span class="t-cmd">git</span> clone https://github.com/&lt;you&gt;/kavier.git
+<span class="t-cmd">cd</span> kavier
 
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-python -m pip install -U pip</code></pre>
+<span class="t-cmd">python</span> <span class="t-flag">-m</span> venv .venv
+<span class="t-cmd">source</span> .venv/bin/activate   <span class="t-cmt"># Windows: .venv\Scripts\activate</span>
+<span class="t-cmd">python</span> <span class="t-flag">-m</span> pip install <span class="t-flag">-U</span> pip</code></pre>
 
     <h2 id="install">3. Install Kavier</h2>
-<pre><code>pip install -e ".[dev]"</code></pre>
-    <p>This</p>
+<pre data-lang="bash"><code><span class="t-cmd">pip</span> install <span class="t-flag">-e</span> <span class="t-str">".[dev]"</span></code></pre>
+    <p>This resolves runtime deps (pandas, pyarrow, numpy, …), registers editable packages so edits in <code>src/</code> apply instantly, and installs the CLI entry points:</p>
     <ul>
-      <li>Will install main dependencies and tools as defined in pyproject.toml.</li>
-      <li>Will resolve runtime deps (e.g., pandas, pyarrow, etc.) and install them.</li>
-      <li>Install CLI entry-points
-        <ul>
-          <li><code>kavier-perf</code> - for performance simulation</li>
-          <li><code>kavier-eff</code> - for efficiency simulation</li>
-        </ul>
-      </li>
-      <li>Registers editable packages so changes in <code>src/</code> are picked up instantly.</li>
+      <li><code>kavier-perf</code> — inference simulation</li>
+      <li><code>kavier-train</code> — fine-tuning (training) prediction</li>
+      <li><code>kavier-energy</code> — efficiency per million tokens (alias: <code>kavier-eff</code>)</li>
+      <li><code>kavier-co2</code> — emissions against a carbon trace</li>
     </ul>
 
     <h2 id="first-run">4. Run your first simulation</h2>
 
-    <h4>4.1 The lonely trace</h4>
-    <p>A tiny trace lives lonely at <code>src/data/input/input_example.csv</code> (2436 requests, 100 sessions). Visit the LLM Trace Archive and bring some it some fellow traces!</p>
-    <p>Or... you can add your own traces! Just make sure to follow the format:</p>
+    <h4>4.1 The bundled trace</h4>
+    <p>A tiny inference trace ships at <code>src/kavier_inference/data/input/input_example.csv</code>. Or bring your own — the columns are:</p>
     <ul>
-      <li>[REQUIRED] <code>num_input_tokens</code> (the number of input tokens in the request)</li>
-      <li>[REQUIRED] <code>num_output_tokens</code> (the number of output tokens in the response)</li>
-      <li>[OPTIONAL] <code>input_tokens</code> (the actual input tokens, e.g., "[123, 22, 816, 312...]")</li>
-      <li>[OPTIONAL] <code>output_tokens</code> (the actual output tokens, e.g., "[123, 22, 816, 312...]")</li>
-      <li>[OPTIONAL] <code>session_id</code> (the session ID, e.g., "1")</li>
+      <li>[REQUIRED] <code>num_input_tokens</code> — input tokens in the request</li>
+      <li>[REQUIRED] <code>num_output_tokens</code> — output tokens in the response</li>
+      <li>[OPTIONAL] <code>session_id</code> — session id (used by <code>--cache_scope session</code>)</li>
+      <li>[OPTIONAL] <code>input_tokens</code> / <code>output_tokens</code> — actual token-id lists</li>
     </ul>
 
     <h4>4.2 Your first simulation</h4>
-<pre><code>kavier-perf --trace src/data/input/input_example.csv</code></pre>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-perf</span> <span class="t-flag">--trace</span> <span class="t-str">src/kavier_inference/data/input/input_example.csv</span></code></pre>
 
     <h4>4.3 Your first output</h4>
-    <p>Artifacts will be saved in <code>src/data/output/</code>. Here you'll find three files:</p>
+    <p>A timestamped folder appears under <code>--output_folder</code> with two Parquet files, plus an OpenDC-compatible export; a readable summary prints to your terminal.</p>
     <ul>
-      <li><code>tasks.parquet</code>: one row per request,</li>
-      <li><code>fragments.parquet</code>: snapshots, each task is broken down into fragments,</li>
-      <li><code>_sim_results.txt</code>: a more readable summary.</li>
+      <li><code>tasks.parquet</code> — one row per request (latency, <code>total_tokens</code>, …)</li>
+      <li><code>fragments.parquet</code> — GPU-utilisation snapshots</li>
+      <li>a <strong>SIMULATION SUMMARY</strong> table on <strong>stdout</strong> (prefill/decode time, p95 latency, cache hit ratio)</li>
     </ul>
     <div class="callout">
       <span class="tag">Milestone</span>
-      <p>Congrats! You have just run your first simulation with Kavier!</p>
+      <p>Congrats — you just ran your first Kavier inference simulation!</p>
     </div>
 
-    <h2 id="typical">5. A typical run</h2>
-<pre><code>kavier-perf \
-  --llm         Llama-3-8B \
-  --gpu         A10        \
-  --trace       src/data/input/input_example.csv \
-  --kv_cache    on \
-  --export_rate 0.1 \
-  --flush_size  1000</code></pre>
-    <p>See the <a href="cli-performance.html">Performance CLI</a> for all flags.</p>
+    <h2 id="typical">5. A typical inference run</h2>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-perf</span> \
+  <span class="t-flag">--llm</span>         Llama-3-8B \
+  <span class="t-flag">--gpu</span>         A10 \
+  <span class="t-flag">--trace</span>       <span class="t-str">src/kavier_inference/data/input/input_example.csv</span> \
+  <span class="t-flag">--kv_cache</span>    on \
+  <span class="t-flag">--export_rate</span> <span class="t-num">0.1</span> \
+  <span class="t-flag">--flush_size</span>  <span class="t-num">1000</span></code></pre>
+    <p>See the <a href="cli-performance.html">Inference CLI</a> for all flags.</p>
 
-    <h2 id="opendc">6. OpenDC Sustainability</h2>
-    <p>Kavier is integrated with the peer-reviewed <a href="https://opendc.org/">OpenDC</a> to provide sustainability metrics. To run a simulation with OpenDC, you need to setup OpenDC, as described in the <a href="https://opendc.org/">OpenDC documentation</a>.</p>
-    <p>Once set up, use the output of Kavier as the input for OpenDC. This is directly compatible and you don't need to change it! From OpenDC's predictions, you'll leverage <code>powerSource.parquet</code>.</p>
+    <h2 id="train">6. Predicting a fine-tuning job</h2>
+    <p>Training is a <strong>separate</strong> analytical model — no trace, just a config:</p>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-train</span> \
+  <span class="t-flag">--model_name</span> mistral-7b-v0.1 <span class="t-flag">--method</span> lora \
+  <span class="t-flag">--gpu_model</span> NVIDIA-A100-SXM4-80GB <span class="t-flag">--tokens_per_sample</span> <span class="t-num">1024</span> \
+  <span class="t-flag">--batch_size</span> <span class="t-num">4</span> <span class="t-flag">--number_gpus</span> <span class="t-num">8</span> <span class="t-flag">--number_nodes</span> <span class="t-num">1</span></code></pre>
+    <p>It prints a JSON object with tokens/sec, MFU and power. See the <a href="cli-training.html">Training CLI</a>.</p>
 
-    <h2 id="efficiency">7. Post-processing: efficiency metrics</h2>
-    <p>If you ran all the steps so far, including step <code>6</code>, you should now have:</p>
-    <ul>
-      <li><code>tasks.parquet</code> - outputted by Kavier</li>
-      <li><code>powerSource.parquet</code> - outputted by OpenDC.</li>
-    </ul>
-<pre><code>kavier-eff \
-  --kavier data/output_traces/&lt;TIMESTAMP&gt;/tasks.parquet \
-  --opendc /path/to/powerSource.parquet \
-  --price 10            # GPU-hour price in your currency</code></pre>
-    <p>Sample output:</p>
-<pre><code>----------  Efficiency summary  ----------
- financial_efficiency (EUR / million token / s):       2.36
- sustainability_efficiency (Wh / million token / s):  84.5
- sustainability_efficiency (kgCO2 / million token / s): 0.039
- total_tokens:                                   1 234 567
- total_latency_s:                                  432.10
+    <h2 id="opendc">7. OpenDC sustainability</h2>
+    <p>Kavier integrates with the peer-reviewed <a href="https://opendc.org/">OpenDC</a> for sustainability. After an inference run, feed the exported workload through OpenDC (see its docs) to produce a <code>powerSource.parquet</code> — no manual conversion needed.</p>
+
+    <h2 id="efficiency">8. Post-processing: efficiency metrics</h2>
+    <p>With a <code>tasks.parquet</code> (from Kavier) and a <code>powerSource.parquet</code> (from OpenDC):</p>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-energy</span> \
+  <span class="t-flag">--kavier</span> <span class="t-str">src/data/output/&lt;TIMESTAMP&gt;/tasks.parquet</span> \
+  <span class="t-flag">--opendc</span> <span class="t-str">/path/to/powerSource.parquet</span> \
+  <span class="t-flag">--price</span>  <span class="t-num">10</span>            <span class="t-cmt"># optional GPU-hour price → enables the $ metric</span></code></pre>
+    <p>Sample output (all metrics per million tokens, lower is better):</p>
+<pre data-lang="text"><code>----------  Efficiency summary  ----------
+   <span class="t-key">energy_efficiency (Wh/Mtoken)</span>: <span class="t-num">84.5</span>
+ <span class="t-key">carbon_efficiency (gCO2/Mtoken)</span>: <span class="t-num">39.0</span>
+ <span class="t-key">financial_efficiency ($/Mtoken)</span>: <span class="t-num">2.36</span>
+                    <span class="t-key">total_tokens</span>: <span class="t-num">1234567</span>
 ------------------------------------------</code></pre>
+    <p>For time-and-grid-aware emissions instead, see <a href="cli-co2.html">kavier-co2</a>.</p>
 
-    <h2 id="tests">8. Running the test-suite &amp; linters</h2>
-<pre><code>pytest -q          # 100 % pass → confidence in the math
-ruff check .       # style &amp; import order
-mypy .             # optional static typing</code></pre>
+    <h2 id="tests">9. Running the test-suite &amp; linters</h2>
+<pre data-lang="bash"><code><span class="t-cmd">pytest</span> <span class="t-flag">-q</span>          <span class="t-cmt"># the math has tests</span>
+<span class="t-cmd">ruff</span> check .       <span class="t-cmt"># style &amp; import order</span>
+<span class="t-cmd">mypy</span> .             <span class="t-cmt"># static typing (strict)</span></code></pre>
 
-    <h2 id="troubleshooting">9. Troubleshooting</h2>
+    <h2 id="troubleshooting">10. Troubleshooting</h2>
     <div class="table-wrap">
     <table>
       <thead><tr><th>Symptom</th><th>Fix</th></tr></thead>
@@ -161,18 +158,18 @@ mypy .             # optional static typing</code></pre>
       <li>Did you do any error that others might do? Let us know and we'll add it to this list! See <a href="contributing.html">contributing guidelines</a>.</li>
     </ul>
 
-    <h2 id="next">10. Next steps</h2>
+    <h2 id="next">11. Next steps</h2>
     <ol>
-      <li><strong>Plug in your own traces</strong> (CSV / Parquet with token counts).</li>
-      <li><strong>Tune cache policies</strong> &ndash; <code>--prefix_cache_policy full</code> is especially fun.</li>
-      <li><strong>Compare GPUs</strong> by sweeping <code>--gpu</code> and plotting metrics from <code>tasks.parquet</code>.</li>
-      <li><strong>Dive into the code</strong> and adapt the model to your research ideas.</li>
+      <li><strong>Plug in your own traces</strong> (CSV / Parquet with token counts) for inference.</li>
+      <li><strong>Tune cache policies</strong> &ndash; try <code>--prefix_cache_policy full</code> vs <code>prefill</code>.</li>
+      <li><strong>Sweep training configs</strong> with <code>kavier-train --input_csv</code> to compare GPUs, methods and batch sizes.</li>
+      <li><strong>Read the <a href="formulas.html">Core formulas</a></strong> to see exactly what each engine computes.</li>
     </ol>
 
     <div class="page-foot">
       <span>Happy simulating!</span>
       <a class="next-link nav-noline" href="cli-performance.html">
-        <span class="lbl">Next</span>Performance CLI →
+        <span class="lbl">Next</span>Inference CLI →
       </a>
     </div>
 

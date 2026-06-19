@@ -22,15 +22,16 @@
       <div class="nav-group">
         <div class="nav-group-label">Command line</div>
       </div>
-      <a href="cli-performance.html"><span class="ix">02</span> Performance</a>
-      <a href="cli-efficiency.html"><span class="ix">03</span> Efficiency</a>
-      <a href="cli-training.html"><span class="ix">04</span> Training</a>
+      <a href="cli-performance.html"><span class="ix">02</span> Inference</a>
+      <a href="cli-training.html"><span class="ix">03</span> Training</a>
+      <a href="cli-efficiency.html"><span class="ix">04</span> Efficiency</a>
+      <a href="cli-co2.html"><span class="ix">05</span> CO<sub>2</sub></a>
 
       <div class="nav-group">
         <div class="nav-group-label">Reference</div>
       </div>
-      <a href="formulas.html"><span class="ix">05</span> Core formulas</a>
-      <a href="contributing.html"><span class="ix">06</span> Contributing</a>
+      <a href="formulas.html"><span class="ix">06</span> Core formulas</a>
+      <a href="contributing.html"><span class="ix">07</span> Contributing</a>
     </nav>
     <div class="sidebar-foot">
       MIT licensed.<br>
@@ -44,58 +45,60 @@
 
     <div class="topbar">
       <div class="crumbs"><span class="here">~/kavier/docs</span></div>
-      <span class="pill">discrete-event · cache-aware</span>
+      <span class="pill">two predictors · one library</span>
     </div>
 
     <header class="hero">
       <div class="eyebrow">Scientific instrument for LLM ecosystems</div>
-      <h1><span class="accent">Kavier</span> — simulate performance, sustainability &amp; efficiency.</h1>
-      <p class="lede">Simulating performance, sustainability, and efficiency of LLM ecosystems under inference and training.</p>
+      <h1><span class="accent">Kavier</span> — predict the performance, sustainability &amp; efficiency of LLM workloads.</h1>
+      <p class="lede">Two distinct predictors share one GPU/LLM library: a discrete-event <strong>inference</strong> simulator for serving, and an analytical <strong>training</strong> model for fine-tuning steps.</p>
 
       <div class="cta-row">
         <a class="btn primary nav-noline" href="getting-started.html">Get started →</a>
-        <a class="btn ghost nav-noline" href="cli-performance.html">Browse the CLIs</a>
-        <a class="btn ghost nav-noline" href="formulas.html">The math</a>
+        <a class="btn ghost nav-noline" href="cli-performance.html">Inference</a>
+        <a class="btn ghost nav-noline" href="cli-training.html">Training</a>
       </div>
     </header>
 
-    <h2 id="overview">Overview</h2>
-    <p>This repository is the home of Kavier, the first scientific instrument for predicting performance, sustainability, and efficiency of LLM ecosystems under inference and training, through discrete-event, cache-aware simulation.</p>
-    <p>Kavier helps operators, researchers, and engineers predict:</p>
+    <h2 id="overview">Two predictors, kept separate</h2>
+    <p>Kavier is a research tool from <a href="https://atlarge-research.com/">AtLarge Research</a> and IBM for sizing LLM workloads before you run them. Inference and training are <strong>different problems</strong>, so Kavier keeps them in separate engines:</p>
 
     <div class="stats">
       <div class="stat">
-        <span class="k">Performance</span>
-        <div class="l">inference latencies, training throughput, GPU utilization</div>
+        <span class="k">Inference</span>
+        <div class="l"><code>kavier-perf</code> — replays a request trace through a discrete-event, KV/prefix-cache-aware simulator. Predicts prefill &amp; decode latency, p95, throughput, cache hit ratio.</div>
       </div>
       <div class="stat">
-        <span class="k">Sustainability</span>
-        <div class="l">energy consumption, carbon emissions <span style="white-space:nowrap">(kgCO2/Mtoken/s)</span></div>
-      </div>
-      <div class="stat">
-        <span class="k">Efficiency <span class="u">€</span></span>
-        <div class="l">cost per token / sample given GPU-hour prices</div>
+        <span class="k">Training</span>
+        <div class="l"><code>kavier-train</code> — an analytical model of one fine-tuning step (forward + backward + optimizer + all-reduce). Predicts step throughput, runtime, MFU, GPU power.</div>
       </div>
     </div>
+    <p>Both feed two sustainability tools that reuse <a href="https://opendc.org/">OpenDC</a>'s power model: <code>kavier-energy</code> (efficiency per million tokens) and <code>kavier-co2</code> (emissions against a carbon-intensity trace).</p>
 
-    <h2 id="clis">The three CLIs at a glance</h2>
+    <h2 id="clis">The four CLIs</h2>
     <div class="cards">
       <a class="card nav-noline" href="cli-performance.html">
         <span class="cmd">kavier-perf</span>
-        <h3>Performance</h3>
-        <p>Replay a request trace through a discrete-event, cache-aware simulator to predict latencies, throughput and GPU utilisation.</p>
-        <span class="go">Read the reference →</span>
-      </a>
-      <a class="card nav-noline" href="cli-efficiency.html">
-        <span class="cmd">kavier-energy</span>
-        <h3>Efficiency</h3>
-        <p>Combine Kavier's <code>tasks.parquet</code> with OpenDC's <code>powerSource.parquet</code> into financial and sustainability efficiency metrics.</p>
+        <h3>Inference</h3>
+        <p>Discrete-event, cache-aware serving simulator. Replays a request trace to predict prefill/decode latency, throughput and GPU utilisation.</p>
         <span class="go">Read the reference →</span>
       </a>
       <a class="card nav-noline" href="cli-training.html">
         <span class="cmd">kavier-train</span>
         <h3>Training</h3>
-        <p>Simulate a single training config — or every row of a CSV — to estimate tokens/sec and runtime across GPUs and nodes.</p>
+        <p>Analytical fine-tuning model. Predicts step throughput, runtime, MFU and power for one config — or every row of a CSV.</p>
+        <span class="go">Read the reference →</span>
+      </a>
+      <a class="card nav-noline" href="cli-efficiency.html">
+        <span class="cmd">kavier-energy</span>
+        <h3>Efficiency</h3>
+        <p>Combines a <code>tasks.parquet</code> with OpenDC's <code>powerSource.parquet</code> into energy, carbon and (optional) cost per million tokens.</p>
+        <span class="go">Read the reference →</span>
+      </a>
+      <a class="card nav-noline" href="cli-co2.html">
+        <span class="cmd">kavier-co2</span>
+        <h3>CO<sub>2</sub></h3>
+        <p>Walks a workload's power profile through a carbon-intensity trace (gCO<sub>2</sub>/kWh) to estimate total emissions, per time window.</p>
         <span class="go">Read the reference →</span>
       </a>
     </div>
@@ -103,65 +106,84 @@
     <h2 id="architecture">How it fits together</h2>
     <div class="arch">
       <div class="arch-row">
-        <div class="node">
-          <b>Inputs</b>
-          <span class="sub">trace.csv · config</span>
-        </div>
         <div class="node accent">
           <b>Library</b>
           <span class="sub">GPU + LLM specs</span>
         </div>
         <div class="node amber">
           <b>Calibration</b>
-          <span class="sub">model × method × gpu</span>
-        </div>
-      </div>
-      <div class="arch-flow">▼&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼</div>
-      <div class="arch-row">
-        <div class="node">
-          <b>Inference engine</b>
-          <span class="sub">kavier-perf</span>
-        </div>
-        <div class="node">
-          <b>Training engine</b>
-          <span class="sub">kavier-train</span>
+          <span class="sub">training only</span>
         </div>
       </div>
       <div class="arch-flow">▼&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼</div>
       <div class="arch-row">
         <div class="node">
-          <b>OpenDC</b>
-          <span class="sub">powerSource.parquet</span>
+          <b>Inference engine</b>
+          <span class="sub">kavier-perf · trace.csv</span>
         </div>
+        <div class="node">
+          <b>Training engine</b>
+          <span class="sub">kavier-train · config</span>
+        </div>
+      </div>
+      <div class="arch-flow">▼&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼</div>
+      <div class="arch-row">
         <div class="node accent">
           <b>Efficiency</b>
           <span class="sub">kavier-energy</span>
         </div>
+        <div class="node accent">
+          <b>Emissions</b>
+          <span class="sub">kavier-co2</span>
+        </div>
       </div>
-      <p class="arch-note">The <strong>library</strong> feeds both engines; <strong>calibration</strong> feeds training only. Kavier's outputs flow into <code>OpenDC</code> and back through <code>kavier-energy</code> for the final efficiency summary.</p>
+      <p class="arch-note">The <strong>library</strong> feeds both engines; <strong>calibration</strong> applies to training only. The inference engine can also export an OpenDC-compatible workload; OpenDC's <code>powerSource.parquet</code> then flows into <code>kavier-energy</code>.</p>
+    </div>
+
+    <h2 id="validation">What it has been validated against</h2>
+    <p>The analytical training model is the one with published accuracy numbers. On the held-out 15% test split of a ~30k-run IBM fine-tuning profiling dataset (PD1 / <em>Sfttrainer</em>), and for the specific models and GPUs it was calibrated on:</p>
+    <div class="stats">
+      <div class="stat">
+        <span class="k">~6.2<span class="u">% MdAPE</span></span>
+        <div class="l">calibrated training model (throughput &amp; runtime), down from ~15% uncalibrated.</div>
+      </div>
+      <div class="stat">
+        <span class="k">~0.8<span class="u">ms</span></span>
+        <div class="l">to make 100 training predictions — fast enough for million-point grid sweeps.</div>
+      </div>
+      <div class="stat">
+        <span class="k">≈0<span class="u">Δ</span></span>
+        <div class="l">power vs. OpenDC's MSE model (Kavier reuses it), at ~24,000× the speed.</div>
+      </div>
+    </div>
+    <div class="callout amber">
+      <span class="tag">honest caveat</span>
+      <p>These figures are for the <strong>analytical training model</strong>, measured on one held-out test set and a fixed set of models/GPUs — they are not a universal accuracy guarantee, and the inference simulator is not validated with the same MdAPE study. Treat predictions as planning estimates, not ground truth.</p>
     </div>
 
     <h2 id="structure">Structure</h2>
-    <p>Kavier is organized into 5 main components:</p>
-<pre><code>src/
-├── kavier_inference/    # Inference simulation (kavier-perf)
-├── kavier_training/     # Training simulation (kavier-train)
-├── kavier_energy/       # Efficiency &amp; sustainability metrics (kavier-energy)
-├── library/             # Shared GPU &amp; LLM specifications
-├── kavier_io/           # Shared I/O utilities
-└── tests/               # Test suites</code></pre>
+    <p>Source lives under <code>src/</code>, one package per concern:</p>
+<pre data-lang="text"><code><span class="t-tree">src/</span>
+<span class="t-tree">├──</span> kavier_inference/   <span class="t-cmt"># discrete-event inference simulator (kavier-perf, kavier-eff)</span>
+<span class="t-tree">├──</span> kavier_training/    <span class="t-cmt"># analytical fine-tuning model    (kavier-train)</span>
+<span class="t-tree">├──</span> kavier_energy/      <span class="t-cmt"># efficiency per million tokens   (kavier-energy)</span>
+<span class="t-tree">├──</span> kavier_co2/         <span class="t-cmt"># emissions vs. carbon trace      (kavier-co2)</span>
+<span class="t-tree">├──</span> kavier_library/     <span class="t-cmt"># shared GPU &amp; LLM specifications</span>
+<span class="t-tree">├──</span> kavier_opendc/      <span class="t-cmt"># OpenDC workload export (tasks/fragments)</span>
+<span class="t-tree">├──</span> kavier_io/          <span class="t-cmt"># shared I/O utilities</span>
+<span class="t-tree">└──</span> tests/              <span class="t-cmt"># test suites</span></code></pre>
 
     <h2 id="install">Quick start</h2>
-<pre><code>git clone https://github.com/&lt;you&gt;/kavier.git
-cd kavier
+<pre data-lang="bash"><code><span class="t-cmd">git</span> clone https://github.com/&lt;you&gt;/kavier.git
+<span class="t-cmd">cd</span> kavier
 
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-python -m pip install -U pip
-pip install -e ".[dev]"</code></pre>
-    <p>Run your first simulation:</p>
-<pre><code>kavier-perf --trace src/data/input/input_example.csv</code></pre>
-    <p>Congrats! You have just run your first simulation with Kavier! See <a href="getting-started.html">Getting started</a> for the full ten-minute tour.</p>
+<span class="t-cmd">python</span> <span class="t-flag">-m</span> venv .venv
+<span class="t-cmd">source</span> .venv/bin/activate   <span class="t-cmt"># Windows: .venv\Scripts\activate</span>
+<span class="t-cmd">python</span> <span class="t-flag">-m</span> pip install <span class="t-flag">-U</span> pip
+<span class="t-cmd">pip</span> install <span class="t-flag">-e</span> <span class="t-str">".[dev]"</span></code></pre>
+    <p>Run your first (inference) simulation:</p>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-perf</span> <span class="t-flag">--trace</span> <span class="t-str">src/kavier_inference/data/input/input_example.csv</span></code></pre>
+    <p>That writes Parquet artifacts and prints a summary. See <a href="getting-started.html">Getting started</a> for the full tour.</p>
 
     <div class="page-foot">
       <span>Kavier is distributed under the MIT license. See <a href="../LICENSE.txt">LICENSE.txt</a>.</span>

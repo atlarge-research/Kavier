@@ -19,12 +19,13 @@
       <a href="index.html"><span class="ix">00</span> Overview</a>
       <a href="getting-started.html"><span class="ix">01</span> Getting started</a>
       <div class="nav-group"><div class="nav-group-label">Command line</div></div>
-      <a href="cli-performance.html"><span class="ix">02</span> Performance</a>
-      <a href="cli-efficiency.html"><span class="ix">03</span> Efficiency</a>
-      <a class="active" href="cli-training.html"><span class="ix">04</span> Training</a>
+      <a href="cli-performance.html"><span class="ix">02</span> Inference</a>
+      <a class="active" href="cli-training.html"><span class="ix">03</span> Training</a>
+      <a href="cli-efficiency.html"><span class="ix">04</span> Efficiency</a>
+      <a href="cli-co2.html"><span class="ix">05</span> CO<sub>2</sub></a>
       <div class="nav-group"><div class="nav-group-label">Reference</div></div>
-      <a href="formulas.html"><span class="ix">05</span> Core formulas</a>
-      <a href="contributing.html"><span class="ix">06</span> Contributing</a>
+      <a href="formulas.html"><span class="ix">06</span> Core formulas</a>
+      <a href="contributing.html"><span class="ix">07</span> Contributing</a>
     </nav>
     <div class="sidebar-foot">
       MIT licensed.<br>
@@ -42,15 +43,16 @@
     </div>
 
     <header class="hero">
-      <div class="eyebrow">Command line · 04</div>
-      <h1>Kavier Training</h1>
-      <p class="lede">Simulate a single training configuration, or simulate every row of a CSV.</p>
+      <div class="eyebrow">Command line · 03 · training</div>
+      <h1>kavier-train — fine-tuning</h1>
+      <p class="lede">An <strong>analytical</strong> model of one fine-tuning step. Predicts step throughput, runtime, MFU and GPU power for a single config — or every row of a CSV.</p>
     </header>
 
+    <p>Unlike the discrete-event <a href="cli-performance.html">inference simulator</a>, <code>kavier-train</code> evaluates a closed-form model: it sums the forward pass, backward pass, optimizer update and (multi-GPU) gradient all-reduce into a step time, then derives throughput and runtime. It supports <code>full</code>, <code>lora</code> and <code>gptq-lora</code> methods, and its predictions are calibrated against a real fine-tuning trace (see <a href="formulas.html">Core formulas</a> and the <a href="index.html#validation">validation note</a>).</p>
+
     <h2 id="csv">Simulate every row of a CSV</h2>
-    <p>Simulate every row of a CSV (e.g. <code>data/input/input_example.csv</code>).</p>
-<pre><code>kavier-train --input_csv src/data/input/input_example.csv</code></pre>
-    <p>Each row supplies a full config (<code>model_name</code>, <code>method</code>, <code>gpu_model</code>, <code>tokens_per_sample</code>, <code>batch_size</code>, <code>number_gpus</code>, <code>number_nodes</code>); the simulator prints one line per configuration with the resulting tokens/sec and runtime, then a count of how many configurations were simulated.</p>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-train</span> <span class="t-flag">--input_csv</span> <span class="t-str">src/kavier_training/data/input/input_example.csv</span></code></pre>
+    <p>Each row supplies a full config (<code>model_name</code>, <code>method</code>, <code>gpu_model</code>, <code>tokens_per_sample</code>, <code>batch_size</code>, <code>number_gpus</code>, <code>number_nodes</code>). The CLI prints one line per row with tokens/sec and runtime, then a count of rows simulated.</p>
 
     <h2 id="flags">Flags &amp; options</h2>
     <div class="table-wrap">
@@ -73,26 +75,46 @@
     </table>
     </div>
     <p><em>* Required for single-config runs; alternatively pass <code>--input_csv</code> to simulate every row of a CSV.</em></p>
+    <div class="callout">
+      <span class="tag">tip</span>
+      <p><code>train_runtime</code> is <code>0</code> unless you pass <code>--total_tokens</code> (the dataset size to train over). Without it you still get per-step throughput, MFU and power.</p>
+    </div>
 
     <h2 id="single">Single-config example</h2>
-<pre><code>kavier-train --model_name mistral-7b-v0.1 --method lora \
-  --gpu_model NVIDIA-A100-SXM4-80GB --tokens_per_sample 1024 \
-  --batch_size 4 --number_gpus 8 --number_nodes 1</code></pre>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-train</span> \
+  <span class="t-flag">--model_name</span> mistral-7b-v0.1 \
+  <span class="t-flag">--method</span> lora \
+  <span class="t-flag">--gpu_model</span> NVIDIA-A100-SXM4-80GB \
+  <span class="t-flag">--tokens_per_sample</span> <span class="t-num">1024</span> \
+  <span class="t-flag">--batch_size</span> <span class="t-num">4</span> \
+  <span class="t-flag">--number_gpus</span> <span class="t-num">8</span> \
+  <span class="t-flag">--number_nodes</span> <span class="t-num">1</span> \
+  <span class="t-flag">--total_tokens</span> <span class="t-num">100000000</span></code></pre>
+
+    <h2 id="output">Output</h2>
+    <p>A single-config run prints a header and a JSON object:</p>
+<pre data-lang="json"><code>{
+  <span class="t-key">"train_tokens_per_second"</span>: <span class="t-num">18452.7</span>,
+  <span class="t-key">"train_tokens_per_gpu_per_second"</span>: <span class="t-num">2306.6</span>,
+  <span class="t-key">"train_samples_per_second"</span>: <span class="t-num">18.02</span>,
+  <span class="t-key">"train_steps_per_second"</span>: <span class="t-num">0.563</span>,
+  <span class="t-key">"train_runtime"</span>: <span class="t-num">5419.3</span>,
+  <span class="t-key">"model_name"</span>: <span class="t-str">"mistral-7b-v0.1"</span>,
+  <span class="t-key">"gpu_name"</span>: <span class="t-str">"NVIDIA-A100-SXM4-80GB"</span>,
+  <span class="t-key">"method"</span>: <span class="t-str">"lora"</span>,
+  <span class="t-key">"batch_size"</span>: <span class="t-num">4</span>,
+  <span class="t-key">"tokens_per_sample"</span>: <span class="t-num">1024</span>,
+  <span class="t-key">"number_gpus"</span>: <span class="t-num">8</span>
+}</code></pre>
+    <p>Internally the step model also computes <code>gpu_compute_utilization</code> (MFU %), <code>gpu_memory_utilization</code> and <code>gpu_power_watts</code> — the power figure (OpenDC's MSE model) is what <a href="cli-co2.html">kavier-co2</a> consumes. A <code>--input_csv</code> run instead prints a one-line-per-row table and a final count. With <code>--opendc_output_dir</code> it also exports an OpenDC-compatible workload.</p>
 
     <h2 id="on-error">On bad or missing arguments</h2>
-    <p>On bad/missing arguments, the CLI shows a ready-to-run example command:</p>
-    <div class="callout amber">
-      <span class="tag">friendly error</span>
-      <p>You may have mistaken the input — try this example instead:</p>
-    </div>
-<pre><code>kavier-train --model_name mistral-7b-v0.1 --method lora \
-  --gpu_model NVIDIA-A100-SXM4-80GB --tokens_per_sample 1024 \
-  --batch_size 4 --number_gpus 8 --number_nodes 1</code></pre>
+    <p>If required flags are missing, the CLI prints a ready-to-run example command to copy.</p>
 
     <div class="page-foot">
       <span>For the underlying equations, see the <a href="formulas.html">Core formulas</a>.</span>
-      <a class="next-link nav-noline" href="formulas.html">
-        <span class="lbl">Next</span>Core formulas →
+      <a class="next-link nav-noline" href="cli-efficiency.html">
+        <span class="lbl">Next</span>Efficiency CLI →
       </a>
     </div>
 

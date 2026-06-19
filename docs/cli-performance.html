@@ -19,12 +19,13 @@
       <a href="index.html"><span class="ix">00</span> Overview</a>
       <a href="getting-started.html"><span class="ix">01</span> Getting started</a>
       <div class="nav-group"><div class="nav-group-label">Command line</div></div>
-      <a class="active" href="cli-performance.html"><span class="ix">02</span> Performance</a>
-      <a href="cli-efficiency.html"><span class="ix">03</span> Efficiency</a>
-      <a href="cli-training.html"><span class="ix">04</span> Training</a>
+      <a class="active" href="cli-performance.html"><span class="ix">02</span> Inference</a>
+      <a href="cli-training.html"><span class="ix">03</span> Training</a>
+      <a href="cli-efficiency.html"><span class="ix">04</span> Efficiency</a>
+      <a href="cli-co2.html"><span class="ix">05</span> CO<sub>2</sub></a>
       <div class="nav-group"><div class="nav-group-label">Reference</div></div>
-      <a href="formulas.html"><span class="ix">05</span> Core formulas</a>
-      <a href="contributing.html"><span class="ix">06</span> Contributing</a>
+      <a href="formulas.html"><span class="ix">06</span> Core formulas</a>
+      <a href="contributing.html"><span class="ix">07</span> Contributing</a>
     </nav>
     <div class="sidebar-foot">
       MIT licensed.<br>
@@ -37,15 +38,17 @@
   <div class="page">
 
     <div class="topbar">
-      <div class="crumbs"><a href="index.html">docs</a><span class="sep">/</span>cli<span class="sep">/</span><span class="here">performance</span></div>
+      <div class="crumbs"><a href="index.html">docs</a><span class="sep">/</span>cli<span class="sep">/</span><span class="here">inference</span></div>
       <span class="pill">kavier-perf</span>
     </div>
 
     <header class="hero">
-      <div class="eyebrow">Command line · 02</div>
-      <h1>Kavier Performance</h1>
-      <p class="lede">This document provides documentation on how to interact with Kavier Performance via the command-line interface (CLI).</p>
+      <div class="eyebrow">Command line · 02 · inference</div>
+      <h1>kavier-perf — inference</h1>
+      <p class="lede">Replay a request trace through a discrete-event, KV/prefix-cache-aware serving simulator. This is the <strong>inference</strong> CLI; for fine-tuning steps, see <a href="cli-training.html">kavier-train</a>.</p>
     </header>
+
+    <p>For each request in the trace, <code>kavier-perf</code> simulates a <strong>prefill</strong> stage (encoding the prompt) and a <strong>decode</strong> stage (autoregressive generation), tracking KV-cache memory and an optional cross-request <strong>prefix cache</strong>. It reports per-request latency, throughput and GPU utilisation — the metrics that matter for serving, not training.</p>
 
     <h2 id="flags">Flags &amp; options</h2>
     <div class="table-wrap">
@@ -67,36 +70,74 @@
     </table>
     </div>
 
+    <p class="meta" style="color:var(--muted);font-size:.85rem">LLM and GPU names must match keys in the library, e.g. LLMs <code>Llama-3-8B</code>, <code>mistral-7b-v0.1</code>, <code>granite-3.3-8b</code>, <code>mixtral-8x7b-instruct-v0.1</code>; GPUs <code>A10</code>, <code>A100-80GB</code>, <code>H100-SXM</code>, <code>L40S</code>.</p>
+
     <h4>Example: smallest</h4>
-<pre><code>kavier-perf</code></pre>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-perf</span> <span class="t-flag">--trace</span> <span class="t-str">src/kavier_inference/data/input/input_example.csv</span></code></pre>
 
     <h4>Example: medium</h4>
-<pre><code>kavier-perf  \
-  --llm         Llama-3-8B \
-  --gpu         A10 \
-  --trace       src/data/input/your_special_trace.csv \
-  --kv_cache    on \
-  --export_rate 0.1 \
-  --flush_size  1000</code></pre>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-perf</span> \
+  <span class="t-flag">--llm</span>         Llama-3-8B \
+  <span class="t-flag">--gpu</span>         A10 \
+  <span class="t-flag">--trace</span>       <span class="t-str">traces/your_workload.csv</span> \
+  <span class="t-flag">--kv_cache</span>    on \
+  <span class="t-flag">--export_rate</span> <span class="t-num">0.1</span> \
+  <span class="t-flag">--flush_size</span>  <span class="t-num">1000</span></code></pre>
 
     <h4>Example: full</h4>
-<pre><code>kavier-perf \
-  --llm                     Llama-3-8B       \
-  --gpu                     A10              \
-  --trace                   traces/workload.csv \
-  --output_folder           results/run-01   \
-  --kv_cache                on               \
-  --export_rate             0.05             \
-  --flush_size              1000             \
-  --prefix_cache_min_tokens 1024             \
-  --max_cached_prompts      10               \
-  --cache_scope             session          \
-  --prefix_cache_policy     prefill</code></pre>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-perf</span> \
+  <span class="t-flag">--llm</span>                     Llama-3-8B \
+  <span class="t-flag">--gpu</span>                     A10 \
+  <span class="t-flag">--trace</span>                   <span class="t-str">traces/workload.csv</span> \
+  <span class="t-flag">--output_folder</span>           <span class="t-str">results/run-01</span> \
+  <span class="t-flag">--kv_cache</span>                on \
+  <span class="t-flag">--export_rate</span>             <span class="t-num">0.05</span> \
+  <span class="t-flag">--flush_size</span>              <span class="t-num">1000</span> \
+  <span class="t-flag">--prefix_cache_min_tokens</span> <span class="t-num">1024</span> \
+  <span class="t-flag">--max_cached_prompts</span>      <span class="t-num">10</span> \
+  <span class="t-flag">--cache_scope</span>             session \
+  <span class="t-flag">--prefix_cache_policy</span>     prefill</code></pre>
+
+    <h2 id="trace">Input trace format</h2>
+    <p>The trace is a CSV (or Parquet) with one row per request:</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Column</th><th>Required</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>num_input_tokens</code></td><td>yes</td><td>Prompt length (tokens).</td></tr>
+        <tr><td><code>num_output_tokens</code></td><td>yes</td><td>Generated length (tokens).</td></tr>
+        <tr><td><code>session_id</code></td><td>optional</td><td>Groups requests for <code>--cache_scope session</code>.</td></tr>
+        <tr><td><code>input_tokens</code> / <code>output_tokens</code></td><td>optional</td><td>Actual token id lists, if available.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h2 id="output">Output</h2>
+    <p>Each run writes a timestamped folder under <code>--output_folder</code> containing <code>tasks.parquet</code> (one row per request, with a <code>duration</code> latency in ms and a <code>total_tokens</code> column for efficiency) and <code>fragments.parquet</code> (GPU-utilisation snapshots every <code>--export_rate</code> seconds). An OpenDC-compatible workload is also exported for downstream sustainability. A summary is printed to <strong>stdout</strong> (not a file):</p>
+<pre data-lang="text"><code>──────────────────────────────────────────────
+              SIMULATION SUMMARY
+──────────────────────────────────────────────
+<span class="t-key">GPU</span>                        │ A10
+<span class="t-key">Model</span>                      │ Llama-3-8B
+<span class="t-key">Export rate (s)</span>            │ <span class="t-num">0.1</span>
+<span class="t-key">KV cache enabled</span>           │ on
+<span class="t-key">Prefix cache</span>               │ prefill | ≥1024t | session
+<span class="t-key">Prefill time</span>               │   <span class="t-num">1,234.5</span>s (  <span class="t-num">0.34</span> h)
+<span class="t-key">Decode time</span>                │   <span class="t-num">5,678.9</span>s (  <span class="t-num">1.58</span> h)
+<span class="t-key">Total time</span>                 │   <span class="t-num">6,913.4</span> s  (  <span class="t-num">1.92</span> h)
+<span class="t-key">p95 latency</span>                │     <span class="t-num">812</span> ms
+<span class="t-key">Cache hit ratio</span>            │    <span class="t-num">37.5%</span>
+<span class="t-key">LRU evictions</span>              │       <span class="t-num">14</span>
+──────────────────────────────────────────────</code></pre>
+    <div class="callout amber">
+      <span class="tag">note</span>
+      <p>The bundled <code>--trace</code> default in argparse points at <code>src/data/input/…</code>, which may not exist in a fresh checkout. Use the shipped example path above (<code>src/kavier_inference/data/input/input_example.csv</code>) or your own trace.</p>
+    </div>
 
     <div class="page-foot">
-      <span>Outputs <code>tasks.parquet</code>, <code>fragments.parquet</code> and <code>_sim_results.txt</code>.</span>
-      <a class="next-link nav-noline" href="cli-efficiency.html">
-        <span class="lbl">Next</span>Efficiency CLI →
+      <span>Outputs <code>tasks.parquet</code> + <code>fragments.parquet</code>; summary printed to stdout.</span>
+      <a class="next-link nav-noline" href="cli-training.html">
+        <span class="lbl">Next</span>Training CLI →
       </a>
     </div>
 

@@ -19,12 +19,13 @@
       <a href="index.html"><span class="ix">00</span> Overview</a>
       <a href="getting-started.html"><span class="ix">01</span> Getting started</a>
       <div class="nav-group"><div class="nav-group-label">Command line</div></div>
-      <a href="cli-performance.html"><span class="ix">02</span> Performance</a>
-      <a class="active" href="cli-efficiency.html"><span class="ix">03</span> Efficiency</a>
-      <a href="cli-training.html"><span class="ix">04</span> Training</a>
+      <a href="cli-performance.html"><span class="ix">02</span> Inference</a>
+      <a href="cli-training.html"><span class="ix">03</span> Training</a>
+      <a class="active" href="cli-efficiency.html"><span class="ix">04</span> Efficiency</a>
+      <a href="cli-co2.html"><span class="ix">05</span> CO<sub>2</sub></a>
       <div class="nav-group"><div class="nav-group-label">Reference</div></div>
-      <a href="formulas.html"><span class="ix">05</span> Core formulas</a>
-      <a href="contributing.html"><span class="ix">06</span> Contributing</a>
+      <a href="formulas.html"><span class="ix">06</span> Core formulas</a>
+      <a href="contributing.html"><span class="ix">07</span> Contributing</a>
     </nav>
     <div class="sidebar-foot">
       MIT licensed.<br>
@@ -42,40 +43,63 @@
     </div>
 
     <header class="hero">
-      <div class="eyebrow">Command line · 03</div>
-      <h1>Kavier Efficiency</h1>
-      <p class="lede">This document provides documentation on how to interact with Kavier Efficiency via the command-line interface (CLI).</p>
+      <div class="eyebrow">Command line · 04 · efficiency</div>
+      <h1>kavier-energy — efficiency</h1>
+      <p class="lede">Combine a Kavier <code>tasks.parquet</code> with OpenDC's <code>powerSource.parquet</code> into three per-million-token efficiency metrics. (Also available as the alias <code>kavier-eff</code>.)</p>
     </header>
+
+    <p>This is a post-processing step: run <a href="cli-performance.html">kavier-perf</a>, feed its OpenDC-compatible export through <a href="https://opendc.org/">OpenDC</a> to get a <code>powerSource.parquet</code>, then join the two here. All metrics are <strong>lower-is-better</strong> and reported <strong>per million tokens</strong>.</p>
 
     <h2 id="flags">Flags &amp; options</h2>
     <div class="table-wrap">
     <table>
       <thead><tr><th>Flag / Option</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
       <tbody>
-        <tr><td><code>--kavier</code></td><td><code>path</code></td><td><strong>required</strong></td><td>Path to <strong><code>tasks.parquet</code></strong> produced by <code>kavier-perf</code>.</td></tr>
-        <tr><td><code>--opendc</code></td><td><code>path</code></td><td><strong>required</strong></td><td>Path to <strong><code>powerSource.parquet</code></strong> produced by the corresponding OpenDC run.</td></tr>
-        <tr><td><code>--price</code></td><td><code>float</code></td><td><code>10.0</code></td><td>GPU-hour price in your local currency, used when computing <em>financial efficiency</em>.</td></tr>
-        <tr><td><code>--out</code></td><td><code>FILE.json</code></td><td><em>(unset)</em></td><td>If set, writes the efficiency summary to the given JSON file in addition to printing it to stdout.</td></tr>
+        <tr><td><code>--kavier</code></td><td><code>path</code></td><td><strong>required</strong></td><td>Path to <strong><code>tasks.parquet</code></strong> from <code>kavier-perf</code> (must keep its <code>total_tokens</code> column).</td></tr>
+        <tr><td><code>--opendc</code></td><td><code>path</code></td><td><strong>required</strong></td><td>Path to <strong><code>powerSource.parquet</code></strong> from the matching OpenDC run.</td></tr>
+        <tr><td><code>--price</code></td><td><code>float</code></td><td><em>(unset)</em></td><td>GPU-hour price. <strong>No default</strong> — financial efficiency is reported only when you set it.</td></tr>
+        <tr><td><code>--out</code></td><td><code>FILE.json</code></td><td><em>(unset)</em></td><td>If set, also writes the summary as JSON.</td></tr>
       </tbody>
     </table>
     </div>
 
-    <h4>Example: smallest</h4>
-<pre><code>kavier-energy \
-  --kavier results/run-01/tasks.parquet \
-  --opendc  opendc/run-01/powerSource.parquet</code></pre>
+    <h2 id="metrics">Metrics</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Key</th><th>Definition</th></tr></thead>
+      <tbody>
+        <tr><td><code>energy_efficiency (Wh/Mtoken)</code></td><td>Total energy (OpenDC, J→Wh) ÷ tokens, ×10<sup>6</sup>.</td></tr>
+        <tr><td><code>carbon_efficiency (gCO2/Mtoken)</code></td><td>Total CO<sub>2</sub> (OpenDC, grams) ÷ tokens, ×10<sup>6</sup>.</td></tr>
+        <tr><td><code>financial_efficiency ($/Mtoken)</code></td><td>GPU-hours × <code>--price</code> ÷ tokens, ×10<sup>6</sup>. <code>null</code> unless <code>--price</code> is given.</td></tr>
+        <tr><td><code>total_tokens</code></td><td>Summed from the trace.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h4>Example: smallest (no price → no cost metric)</h4>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-energy</span> \
+  <span class="t-flag">--kavier</span> <span class="t-str">results/run-01/tasks.parquet</span> \
+  <span class="t-flag">--opendc</span> <span class="t-str">opendc/run-01/powerSource.parquet</span></code></pre>
 
     <h4>Example: full</h4>
-<pre><code>kavier-energy \
-  --kavier results/run-01/tasks.parquet \
-  --opendc opendc/run-01/powerSource.parquet \
-  --price  12.0 \
-  --out    results/run-01/efficiency_summary.json</code></pre>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-energy</span> \
+  <span class="t-flag">--kavier</span> <span class="t-str">results/run-01/tasks.parquet</span> \
+  <span class="t-flag">--opendc</span> <span class="t-str">opendc/run-01/powerSource.parquet</span> \
+  <span class="t-flag">--price</span>  <span class="t-num">12.0</span> \
+  <span class="t-flag">--out</span>    <span class="t-str">results/run-01/efficiency_summary.json</span></code></pre>
+
+    <h4>Sample output</h4>
+<pre data-lang="text"><code>----------  Efficiency summary  ----------
+   <span class="t-key">energy_efficiency (Wh/Mtoken)</span>: <span class="t-num">84.5</span>
+ <span class="t-key">carbon_efficiency (gCO2/Mtoken)</span>: <span class="t-num">39.0</span>
+ <span class="t-key">financial_efficiency ($/Mtoken)</span>: <span class="t-num">2.36</span>
+                    <span class="t-key">total_tokens</span>: <span class="t-num">1234567</span>
+------------------------------------------</code></pre>
 
     <div class="page-foot">
       <span>Pairs Kavier's <code>tasks.parquet</code> with OpenDC's <code>powerSource.parquet</code>.</span>
-      <a class="next-link nav-noline" href="cli-training.html">
-        <span class="lbl">Next</span>Training CLI →
+      <a class="next-link nav-noline" href="cli-co2.html">
+        <span class="lbl">Next</span>CO<sub>2</sub> CLI →
       </a>
     </div>
 

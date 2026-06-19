@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CO2 CLI — Kavier</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand nav-noline" href="index.html">
+      <span class="mark">Kavier<span class="dot">.</span></span>
+      <span class="ver">docs</span>
+    </a>
+    <nav class="nav">
+      <div class="nav-group-label">Start here</div>
+      <a href="index.html"><span class="ix">00</span> Overview</a>
+      <a href="getting-started.html"><span class="ix">01</span> Getting started</a>
+      <div class="nav-group"><div class="nav-group-label">Command line</div></div>
+      <a href="cli-performance.html"><span class="ix">02</span> Inference</a>
+      <a href="cli-training.html"><span class="ix">03</span> Training</a>
+      <a href="cli-efficiency.html"><span class="ix">04</span> Efficiency</a>
+      <a class="active" href="cli-co2.html"><span class="ix">05</span> CO<sub>2</sub></a>
+      <div class="nav-group"><div class="nav-group-label">Reference</div></div>
+      <a href="formulas.html"><span class="ix">06</span> Core formulas</a>
+      <a href="contributing.html"><span class="ix">07</span> Contributing</a>
+    </nav>
+    <div class="sidebar-foot">
+      MIT licensed.<br>
+      <a href="../LICENSE.txt">LICENSE.txt</a> &middot;
+      <a href="https://opendc.org/">OpenDC</a>
+    </div>
+  </aside>
+
+  <main class="content">
+  <div class="page">
+
+    <div class="topbar">
+      <div class="crumbs"><a href="index.html">docs</a><span class="sep">/</span>cli<span class="sep">/</span><span class="here">co2</span></div>
+      <span class="pill">kavier-co2</span>
+    </div>
+
+    <header class="hero">
+      <div class="eyebrow">Command line · 05 · emissions</div>
+      <h1>kavier-co2 — emissions</h1>
+      <p class="lede">Walk a workload's power profile through a carbon-intensity trace (gCO<sub>2</sub>/kWh over time) to estimate total CO<sub>2</sub>, time window by time window.</p>
+    </header>
+
+    <p>Carbon intensity varies by hour and grid, so emissions depend on <em>when</em> and <em>where</em> a job runs. <code>kavier-co2</code> takes a power profile and a carbon-intensity trace, slices the run into the trace's time windows, and sums <code>energy × intensity</code> per window. The power profile can come from two sources:</p>
+    <ul>
+      <li><strong><code>--from-training</code></strong> — build the profile directly from a <a href="cli-training.html">kavier-train</a> config (the analytical model's predicted power × runtime).</li>
+      <li><strong><code>--powersource</code></strong> — read an OpenDC <code>powerSource.parquet</code> (e.g. from an inference run).</li>
+    </ul>
+    <p>Exactly one of the two modes is required.</p>
+
+    <h2 id="flags">Flags &amp; options</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Flag / Option</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>--carbon_trace</code></td><td><code>path</code></td><td><strong>required</strong></td><td>Carbon-intensity Parquet (gCO<sub>2</sub>/kWh).</td></tr>
+        <tr><td><code>--carbon_step_minutes</code></td><td><code>int</code></td><td><em>(inferred)</em></td><td>Override the inferred trace step.</td></tr>
+        <tr><td><code>--from-training</code></td><td><code>flag</code></td><td>—</td><td>Mode: build the profile from a training sim (mutually exclusive with <code>--powersource</code>).</td></tr>
+        <tr><td><code>--powersource</code></td><td><code>path</code></td><td>—</td><td>Mode: read an OpenDC <code>powerSource.parquet</code>.</td></tr>
+        <tr><td><code>--output_csv</code></td><td><code>path</code></td><td><em>(unset)</em></td><td>Write the per-window breakdown to CSV.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h4>With <code>--from-training</code>, these are also required</h4>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Flag</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>--model_name</code></td><td><code>str</code></td><td>LLM key (e.g. <code>mistral-7b-v0.1</code>).</td></tr>
+        <tr><td><code>--method</code></td><td><code>full | lora | gptq-lora</code></td><td>Fine-tuning method.</td></tr>
+        <tr><td><code>--gpu_model</code></td><td><code>str</code></td><td>GPU key (e.g. <code>NVIDIA-A100-SXM4-80GB</code>).</td></tr>
+        <tr><td><code>--tokens_per_sample</code></td><td><code>int</code></td><td>Sequence length.</td></tr>
+        <tr><td><code>--batch_size</code></td><td><code>int</code></td><td>Samples per GPU per step.</td></tr>
+        <tr><td><code>--number_gpus</code></td><td><code>int</code></td><td>GPUs per node.</td></tr>
+        <tr><td><code>--number_nodes</code></td><td><code>int</code></td><td>Number of nodes.</td></tr>
+        <tr><td><code>--total_tokens</code></td><td><code>int</code></td><td>Total tokens to train over (sets the runtime).</td></tr>
+        <tr><td><code>--start_time</code></td><td><code>str</code></td><td>Run start, naive timestamp, e.g. <code>'2025-06-01 00:00'</code>.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h2 id="example-training">Example: from a training config</h2>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-co2</span> <span class="t-flag">--from-training</span> \
+  <span class="t-flag">--carbon_trace</span>      <span class="t-str">ct1-2025-ie-carbon-intensity.parquet</span> \
+  <span class="t-flag">--model_name</span>        mistral-7b-v0.1 \
+  <span class="t-flag">--method</span>            lora \
+  <span class="t-flag">--gpu_model</span>         NVIDIA-A100-SXM4-80GB \
+  <span class="t-flag">--tokens_per_sample</span> <span class="t-num">1024</span> \
+  <span class="t-flag">--batch_size</span>        <span class="t-num">4</span> \
+  <span class="t-flag">--number_gpus</span>       <span class="t-num">8</span> \
+  <span class="t-flag">--number_nodes</span>      <span class="t-num">1</span> \
+  <span class="t-flag">--total_tokens</span>      <span class="t-num">100000000</span> \
+  <span class="t-flag">--start_time</span>        <span class="t-str">'2025-06-01 00:00'</span> \
+  <span class="t-flag">--output_csv</span>        <span class="t-str">emissions_breakdown.csv</span></code></pre>
+
+    <h2 id="example-power">Example: from an OpenDC power profile</h2>
+<pre data-lang="bash"><code><span class="t-cmd">kavier-co2</span> \
+  <span class="t-flag">--carbon_trace</span> <span class="t-str">carbon_trace.parquet</span> \
+  <span class="t-flag">--powersource</span> <span class="t-str">results/run-01/powerSource.parquet</span></code></pre>
+
+    <h2 id="output">Output</h2>
+<pre data-lang="text"><code>============================================================
+Kavier CO2 Emissions
+============================================================
+<span class="t-key">Total energy</span>:        <span class="t-num">312.5000</span> kWh
+<span class="t-key">Total CO2</span>:           <span class="t-num">87,500.00</span> g  (<span class="t-num">87.5000</span> kg)
+<span class="t-key">Avg intensity used</span>:  <span class="t-num">280.00</span> gCO2/kWh (energy-weighted)
+<span class="t-key">Windows touched</span>:     <span class="t-num">48</span>
+============================================================</code></pre>
+    <p>With <code>--output_csv</code>, each row is one time window: <code>window_start, carbon_intensity, energy_kwh, co2_g</code>. The energy-weighted average intensity reflects when the job actually drew power, not a flat grid average.</p>
+
+    <div class="page-foot">
+      <span>Energy and intensity → emissions, per time window.</span>
+      <a class="next-link nav-noline" href="formulas.html">
+        <span class="lbl">Next</span>Core formulas →
+      </a>
+    </div>
+
+  </div>
+  </main>
+
+</div>
+</body>
+</html>

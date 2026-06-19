@@ -29,7 +29,7 @@ model_name, method, gpu_model, number_gpus, number_nodes, batch_size,
 tokens_per_sample, is_valid, dataset_tokens_per_second.
 
 Usage:
-    python scripts/fit_invitro_calibration.py \
+    python tools/calibration/fit_invitro_calibration.py \
         --trace ../trace-archive/pd1-profiling-dataset/ado-sfttrainer-for_invitro.csv \
         --models granite-3.1-2b granite-3.1-8b-instruct --write
 
@@ -38,24 +38,18 @@ Dry-run (print, don't touch calibration.json) by omitting --write.
 
 from __future__ import annotations
 
-import argparse
 import copy
 import json
-import sys
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-_HERE = Path(__file__).resolve().parent
-_SRC = _HERE.parent / "src"
-sys.path.insert(0, str(_SRC))
+# _common bootstraps sys.path (kavier src) so the kavier_training import below resolves.
+from _common import CAL_PATH, REPO_ROOT, TRACE_ARCHIVE, base_arg_parser, calibration_override, mdape
 
-import kavier_training.core.calibration as cal  # noqa: E402
 from kavier_training.core.engine import simulate_training_step  # noqa: E402
 
-CAL_PATH = _SRC / "kavier_training" / "data" / "calibration.json"
-DEFAULT_TRACE = _HERE.parent.parent / "trace-archive" / "pd1-profiling-dataset" / "ado-sfttrainer-for_invitro.csv"
+DEFAULT_TRACE = TRACE_ARCHIVE / "ado-sfttrainer-for_invitro.csv"
 SEED = 42
 TEST_FRAC = 0.15
 MAX_GPUS = 8  # fit only the single-node calibrated regime; >8 uses global mgc
@@ -76,9 +70,7 @@ def stratified_split(df: pd.DataFrame, key_col: str, test_frac: float, seed: int
 
 
 def _predict(rows: pd.DataFrame, model: str, cal_dict: dict) -> np.ndarray:
-    saved = cal._CAL
-    cal._CAL = cal_dict
-    try:
+    with calibration_override(cal_dict):
         out = [
             simulate_training_step(
                 model_name=model,
@@ -91,13 +83,7 @@ def _predict(rows: pd.DataFrame, model: str, cal_dict: dict) -> np.ndarray:
             )["tokens_per_second"]
             for r in rows.itertuples()
         ]
-    finally:
-        cal._CAL = saved
     return np.asarray(out, dtype=float)
-
-
-def _mdape(y: np.ndarray, p: np.ndarray) -> float:
-    return float(np.median(np.abs(p - y) / y) * 100.0)
 
 
 def fit_model(model: str, trace: pd.DataFrame, base_cal: dict) -> dict:
@@ -132,7 +118,7 @@ def fit_model(model: str, trace: pd.DataFrame, base_cal: dict) -> dict:
     final = copy.deepcopy(with_ms)
     final["interaction_scale"].update(interaction)
     y_te = test["dataset_tokens_per_second"].to_numpy(float)
-    held_out_mdape = round(_mdape(y_te, _predict(test, model, final)), 2)
+    held_out_mdape = round(mdape(y_te, _predict(test, model, final)), 2)
     return {
         "model_scale": round(model_scale, 6),
         "interaction_scale": interaction,
@@ -143,19 +129,21 @@ def fit_model(model: str, trace: pd.DataFrame, base_cal: dict) -> dict:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--trace", type=Path, default=DEFAULT_TRACE, help="PD1 profiling CSV (IBM-internal; not vendored)")
+    ap = base_arg_parser(__doc__)
+    ap.set_defaults(trace=DEFAULT_TRACE)
     ap.add_argument("--models", nargs="+", default=["granite-3.1-2b", "granite-3.1-8b-instruct"])
-    ap.add_argument("--write", action="store_true", help="write the result into calibration.json")
     args = ap.parse_args()
 
     if not args.trace.exists():
         raise SystemExit(f"trace not found: {args.trace}")
     trace = pd.read_csv(args.trace, low_memory=False)
+    # The shipped calibration is both the base for each model's fit (kept pristine,
+    # fit_model deep-copies it) and the dict we accumulate results into for writing.
+    base_cal = json.loads(CAL_PATH.read_text())
     calj = json.loads(CAL_PATH.read_text())
 
     for model in args.models:
-        res = fit_model(model, trace, cal._CAL)
+        res = fit_model(model, trace, base_cal)
         calj["model_scale"][model] = res["model_scale"]
         calj["interaction_scale"].update(res["interaction_scale"])
         print(
@@ -165,7 +153,7 @@ def main() -> None:
 
     if args.write:
         CAL_PATH.write_text(json.dumps(calj, indent=2) + "\n")
-        print(f"\nwrote {CAL_PATH.relative_to(_HERE.parent)}")
+        print(f"\nwrote {CAL_PATH.relative_to(REPO_ROOT)}")
     else:
         print("\n(dry-run; pass --write to update calibration.json)")
 

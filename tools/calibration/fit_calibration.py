@@ -44,35 +44,28 @@ the 15% test rows are byte-for-byte the ones the ML models are evaluated on.
 
 USAGE
     # dry-run: fit + print the 85% in-sample and 15% held-out MdAPE, no write
-    python scripts/fit_calibration.py
+    python tools/calibration/fit_calibration.py
     # also write the fitted calibration JSON (used by the accuracy comparison)
-    python scripts/fit_calibration.py --write
+    python tools/calibration/fit_calibration.py --write
 """
 
 from __future__ import annotations
 
-import argparse
 import copy
 import json
 import os
-import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-_HERE = Path(__file__).resolve()
-_REPO = _HERE.parents[2]
-_KAVIER_SRC = _REPO / "kavier" / "src"
-_COASTLINE = _REPO / "coastline"
-for p in (str(_KAVIER_SRC), str(_COASTLINE)):
-    if p not in sys.path:
-        sys.path.insert(0, p)
+# _common bootstraps sys.path (kavier src + sibling coastline checkout) so the
+# kavier_training / trainer.common imports below resolve from tools/calibration/.
+from _common import CAL_PATH, COASTLINE, REPO_ROOT, SRC, TRACE_ARCHIVE, base_arg_parser, calibration_override, mdape
 
-DEFAULT_TRACE = _REPO / "trace-archive" / "pd1-profiling-dataset" / "ado-sfttrainer_curated_6models.csv"
-DATA6_DIR = _COASTLINE / "trainer" / ".data6model"
-CAL_PATH = _KAVIER_SRC / "kavier_training" / "data" / "calibration.json"
-DEFAULT_OUT = _KAVIER_SRC / "kavier_training" / "data" / "calibration_6models_85.json"
+DEFAULT_TRACE = TRACE_ARCHIVE / "ado-sfttrainer_curated_6models.csv"
+DATA6_DIR = COASTLINE / "trainer" / ".data6model"
+DEFAULT_OUT = SRC / "kavier_training" / "data" / "calibration_6models_85.json"
 
 MIN_INTERACTION_ROWS = 3
 
@@ -86,7 +79,6 @@ from trainer.common import (  # noqa: E402
     transform_targets,
 )
 
-import kavier_training.core.calibration as cal  # noqa: E402
 from kavier_training.core.engine import simulate_training_step  # noqa: E402
 
 
@@ -128,11 +120,6 @@ def _simulate_tps(row) -> float:
     )["tokens_per_second"]
 
 
-def _mdape(measured: np.ndarray, pred: np.ndarray) -> float:
-    m = measured > 0
-    return float(np.median(np.abs((pred[m] - measured[m]) / measured[m])) * 100.0)
-
-
 def fit(df85: pd.DataFrame, shipped: dict) -> dict:
     """Greedy median-ratio fit of mgc / method / model / interaction on the 85%."""
     df = df85.copy()
@@ -144,12 +131,8 @@ def fit(df85: pd.DataFrame, shipped: dict) -> dict:
     neutral["model_scale"] = {}
     neutral["interaction_scale"] = {}
     neutral["multi_gpu_correction"]["by_num_gpus"] = {str(n): 1.0 for n in sorted(df["tot"].unique()) if n > 1}
-    saved = cal._CAL
-    cal._CAL = neutral
-    try:
+    with calibration_override(neutral):
         df["pred_unc"] = [_simulate_tps(r) for _, r in df.iterrows()]
-    finally:
-        cal._CAL = saved
     df = df[(df["pred_unc"] > 0) & (df["dataset_tokens_per_second"] > 0)].copy()
     meas = df["dataset_tokens_per_second"].to_numpy(dtype=float)
 
@@ -211,18 +194,14 @@ def fit(df85: pd.DataFrame, shipped: dict) -> dict:
 
 
 def eval_mdape(df: pd.DataFrame, fitted: dict, label: str) -> dict:
-    saved = cal._CAL
-    cal._CAL = fitted
-    try:
+    with calibration_override(fitted):
         pred = np.array([_simulate_tps(r) for _, r in df.iterrows()], dtype=float)
-    finally:
-        cal._CAL = saved
     meas = df["dataset_tokens_per_second"].to_numpy(dtype=float)
-    overall = _mdape(meas, pred)
+    overall = mdape(meas, pred)
     per_model = {}
     for mdl, grp in df.assign(_pred=pred).groupby("model_name"):
         per_model[str(mdl)] = (
-            _mdape(grp["dataset_tokens_per_second"].to_numpy(float), grp["_pred"].to_numpy(float)),
+            mdape(grp["dataset_tokens_per_second"].to_numpy(float), grp["_pred"].to_numpy(float)),
             int(len(grp)),
         )
     print(f"\n{label}: Kavier throughput MdAPE = {overall:.2f}%  (n={len(df)})")
@@ -234,10 +213,9 @@ def eval_mdape(df: pd.DataFrame, fitted: dict, label: str) -> dict:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--trace", type=Path, default=DEFAULT_TRACE)
+    ap = base_arg_parser(__doc__)
+    ap.set_defaults(trace=DEFAULT_TRACE)
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    ap.add_argument("--write", action="store_true", help="write the fitted calibration JSON")
     args = ap.parse_args()
 
     shipped = json.loads(CAL_PATH.read_text())
@@ -271,7 +249,7 @@ def main() -> None:
 
     if args.write:
         args.out.write_text(json.dumps(fitted, indent=2) + "\n")
-        print(f"\nwrote fitted calibration -> {args.out.relative_to(_REPO)}")
+        print(f"\nwrote fitted calibration -> {args.out.relative_to(REPO_ROOT)}")
     else:
         print("\n(dry-run; pass --write to save the fitted calibration JSON)")
 

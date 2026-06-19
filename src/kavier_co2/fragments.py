@@ -8,7 +8,7 @@ from typing import List
 import pandas as pd
 
 from kavier_co2.emissions import Fragment
-from kavier_training.core.engine import simulate_full_training, simulate_training_step
+from kavier_training.core.engine import _resolve_total_tokens, simulate_full_training, simulate_training_step
 
 
 def fragments_from_training(
@@ -22,10 +22,16 @@ def fragments_from_training(
     number_nodes: int,
     total_tokens: int | None,
     start_time: pd.Timestamp,
+    epochs: float | None = None,
+    dataset_tokens: int | None = None,
 ) -> List[Fragment]:
-    """One ``Fragment`` at ``start_time``: duration = predicted ``train_runtime`` (s), power = per-GPU W x GPUs."""
-    if total_tokens is None:
-        raise ValueError("--total_tokens is required to derive a training runtime")
+    """One ``Fragment`` at ``start_time``: duration = predicted ``train_runtime`` (s), power = per-GPU W x GPUs.
+
+    Job size comes from ``total_tokens`` or ``epochs`` + ``dataset_tokens`` (the engine's own
+    ``_resolve_total_tokens`` decides, so it stays identical to ``kavier-train``).
+    """
+    if _resolve_total_tokens(total_tokens, epochs, dataset_tokens) is None:
+        raise ValueError("--total_tokens (or --epochs + --dataset_tokens) is required to derive a training runtime")
 
     total_gpus = number_gpus * number_nodes
     step = simulate_training_step(
@@ -46,6 +52,8 @@ def fragments_from_training(
         number_gpus=number_gpus,
         number_nodes=number_nodes,
         total_tokens=total_tokens,
+        epochs=epochs,
+        dataset_tokens=dataset_tokens,
     )
     per_gpu_power_w = step["gpu_power_watts"]
     aggregate_power_w = per_gpu_power_w * total_gpus

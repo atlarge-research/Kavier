@@ -10,6 +10,7 @@ import pandas as pd
 
 from kavier_co2.emissions import EmissionResult, Fragment, compute_emissions, load_carbon_trace
 from kavier_co2.fragments import fragments_from_powersource, fragments_from_training
+from kavier_io.config import apply_config_defaults
 from kavier_library.lookup import UnknownSpecError
 
 _EXAMPLE_CMD = (
@@ -30,6 +31,11 @@ class _FriendlyParser(argparse.ArgumentParser):
 
 def _build_parser() -> argparse.ArgumentParser:
     p = _FriendlyParser(description="Kavier CO2 emissions estimator", epilog=f"Example: {_EXAMPLE_CMD}")
+    p.add_argument(
+        "--config",
+        default=None,
+        help="YAML file of {arg_name: value} applied as defaults (explicit flags still override).",
+    )
     p.add_argument("--carbon_trace", required=True, help="Path to carbon-intensity parquet (gCO2/kWh)")
     p.add_argument("--carbon_step_minutes", type=int, default=None, help="Override inferred trace step")
 
@@ -45,7 +51,21 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--batch_size", type=int)
     p.add_argument("--number_gpus", type=int)
     p.add_argument("--number_nodes", type=int)
-    p.add_argument("--total_tokens", type=int, default=None)
+    p.add_argument(
+        "--total_tokens",
+        type=int,
+        default=None,
+        help="Total tokens to train over (sets runtime); or use --epochs + --dataset_tokens.",
+    )
+    p.add_argument(
+        "--epochs",
+        type=float,
+        default=None,
+        help="Passes over the dataset; with --dataset_tokens derives total_tokens.",
+    )
+    p.add_argument(
+        "--dataset_tokens", type=int, default=None, help="Tokens in one epoch of the dataset (used with --epochs)."
+    )
     p.add_argument("--start_time", help="Run start (naive timestamp, e.g. '2025-06-01 00:00')")
 
     p.add_argument("--output_csv", default=None, help="Write the per-window breakdown to this CSV")
@@ -61,10 +81,12 @@ def _fragments_from_training_args(args: argparse.Namespace, parser: argparse.Arg
         "batch_size",
         "number_gpus",
         "number_nodes",
-        "total_tokens",
         "start_time",
     )
     missing = [f"--{a}" for a in required if getattr(args, a) is None]
+    # Job size may come from --total_tokens OR --epochs + --dataset_tokens (resolved by the engine).
+    if args.total_tokens is None and not (args.epochs is not None and args.dataset_tokens is not None):
+        missing.append("--total_tokens (or --epochs + --dataset_tokens)")
     if missing:
         parser.error(f"--from-training requires: {', '.join(missing)}")
     return fragments_from_training(
@@ -76,6 +98,8 @@ def _fragments_from_training_args(args: argparse.Namespace, parser: argparse.Arg
         number_gpus=args.number_gpus,
         number_nodes=args.number_nodes,
         total_tokens=args.total_tokens,
+        epochs=args.epochs,
+        dataset_tokens=args.dataset_tokens,
         start_time=pd.Timestamp(args.start_time),
     )
 
@@ -96,8 +120,22 @@ def _write_csv(result: EmissionResult, path: str) -> None:
     print(f"Per-window breakdown written to {path}")
 
 
+def _peek_config(argv: Optional[Sequence[str]]) -> Optional[str]:
+    """Return the value of ``--config`` from ``argv`` (or ``sys.argv``), or ``None`` if absent."""
+    peek = argparse.ArgumentParser(add_help=False)
+    peek.add_argument("--config", default=None)
+    known, _ = peek.parse_known_args(argv)
+    config: Optional[str] = known.config
+    return config
+
+
 def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = _build_parser()
+    # If --config is given, fold its YAML values in as defaults *before* parsing so any
+    # explicit flag still overrides them; without it, behaviour is unchanged.
+    config_path = _peek_config(argv)
+    if config_path is not None:
+        apply_config_defaults(parser, config_path)
     args = parser.parse_args(argv)
 
     trace = load_carbon_trace(args.carbon_trace, step_minutes=args.carbon_step_minutes)

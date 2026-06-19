@@ -8,6 +8,7 @@ import json
 import sys
 from typing import NoReturn
 
+from kavier_io.config import apply_config_defaults
 from kavier_library.lookup import UnknownSpecError
 from kavier_training.core.cli_args import add_training_args
 from kavier_training.core.engine import simulate_full_training
@@ -27,6 +28,15 @@ class _FriendlyParser(argparse.ArgumentParser):
         print(f"{self.prog}: error: {message}", file=sys.stderr)
         print(f"\nYou may have mistaken the input — try this example instead:\n  {_EXAMPLE_CMD}", file=sys.stderr)
         sys.exit(2)
+
+
+def _peek_config(argv: list[str] | None = None) -> str | None:
+    """Return the value of ``--config`` from ``argv`` (or ``sys.argv``), or ``None`` if absent."""
+    peek = argparse.ArgumentParser(add_help=False)
+    peek.add_argument("--config", default=None)
+    known, _ = peek.parse_known_args(argv)
+    config: str | None = known.config
+    return config
 
 
 def _run_csv(path: str, total_tokens: int | None, epochs: float | None, dataset_tokens: int | None) -> None:
@@ -66,6 +76,11 @@ def main() -> None:
             epilog=f"Example: {_EXAMPLE_CMD}",
         ),
     )
+    # If --config is given, fold its YAML values in as defaults *before* parsing so any
+    # explicit flag still overrides them; without it, behaviour is unchanged.
+    config_path = _peek_config()
+    if config_path is not None:
+        apply_config_defaults(parser, config_path)
     args = parser.parse_args()
 
     if args.input_csv:

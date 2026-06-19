@@ -4,6 +4,11 @@ import argparse
 
 
 def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="YAML file of {arg_name: value} applied as defaults (explicit flags still override).",
+    )
     # Single-config args below are required unless --input_csv is given; enforced in cli.main.
     parser.add_argument("--input_csv", default=None, help="Simulate every row of this CSV instead of a single config")
     parser.add_argument("--model_name")

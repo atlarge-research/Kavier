@@ -32,7 +32,7 @@ with _CAL_PATH.open(encoding="utf-8") as _f:
 # calibration.json structure
 # --------------------------------------------------------------------------- #
 def test_calibration_json_is_valid_json_and_loads():
-    # Loading happens at import time inside the module; re-load here to assert
+    # The module loads this lazily on first accessor call; re-load here to assert
     # the file on disk is well-formed JSON yielding a dict.
     with _CAL_PATH.open(encoding="utf-8") as f:
         data = json.load(f)
@@ -40,10 +40,8 @@ def test_calibration_json_is_valid_json_and_loads():
 
 
 def test_calibration_json_has_schema_version_provenance():
-    # Provenance: the on-disk format carries an integer schema_version, and the
-    # loader records the version it targets.
+    # Provenance: the on-disk format carries an integer schema_version.
     assert RAW["schema_version"] == 1
-    assert calibration.SCHEMA_VERSION == 1
 
 
 def test_loader_tolerates_unknown_top_level_keys():

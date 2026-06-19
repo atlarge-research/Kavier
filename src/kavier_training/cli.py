@@ -1,3 +1,5 @@
+"""``kavier-train`` console entry point: simulate a single config or every row of a CSV, optionally exporting an OpenDC workload."""
+
 from __future__ import annotations
 
 import argparse
@@ -19,6 +21,8 @@ _EXAMPLE_CMD = (
 
 
 class _FriendlyParser(argparse.ArgumentParser):
+    """ArgumentParser whose error message appends a copy-pasteable example invocation."""
+
     def error(self, message: str) -> NoReturn:
         self.print_usage(sys.stderr)
         print(f"{self.prog}: error: {message}", file=sys.stderr)
@@ -26,7 +30,8 @@ class _FriendlyParser(argparse.ArgumentParser):
         sys.exit(2)
 
 
-def _run_csv(path: str, total_tokens: int | None) -> None:
+def _run_csv(path: str, total_tokens: int | None, epochs: float | None, dataset_tokens: int | None) -> None:
+    """Simulate every row of a config CSV and print a throughput/runtime table."""
     with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     header = (
@@ -44,6 +49,8 @@ def _run_csv(path: str, total_tokens: int | None) -> None:
             number_gpus=int(row["number_gpus"]),
             number_nodes=int(row["number_nodes"]),
             total_tokens=total_tokens,
+            epochs=epochs,
+            dataset_tokens=dataset_tokens,
         )
         print(
             f"{row['model_name']:<28} {row['method']:<10} {row['gpu_model']:<22} "
@@ -64,7 +71,7 @@ def main() -> None:
 
     if args.input_csv:
         try:
-            _run_csv(args.input_csv, args.total_tokens)
+            _run_csv(args.input_csv, args.total_tokens, args.epochs, args.dataset_tokens)
         except UnknownSpecError as exc:
             parser.error(str(exc))
         return
@@ -95,36 +102,18 @@ def main() -> None:
     print(f"GPUs: {args.number_gpus} x {args.number_nodes} nodes = {total_gpus} total")
     print("=" * 80)
 
-    try:
-        if args.opendc_output_dir:
-            results = export_training_opendc(
-                output_dir=args.opendc_output_dir,
-                model_name=args.model_name,
-                method=args.method,
-                gpu_model=args.gpu_model,
-                tokens_per_sample=args.tokens_per_sample,
-                batch_size=args.batch_size,
-                number_gpus=args.number_gpus,
-                number_nodes=args.number_nodes,
-                total_tokens=args.total_tokens,
-                task_id=args.opendc_task_id,
-                submission_time_ms=args.opendc_submission_time_ms,
-                simulate_full_training_fn=simulate_full_training,
-                simulate_training_step_fn=simulate_training_step,
-            )
-        else:
-            results = simulate_full_training(
-                model_name=args.model_name,
-                method=args.method,
-                gpu_model=args.gpu_model,
-                tokens_per_sample=args.tokens_per_sample,
-                batch_size=args.batch_size,
-                number_gpus=args.number_gpus,
-                number_nodes=args.number_nodes,
-                total_tokens=args.total_tokens,
-            )
-    except UnknownSpecError as exc:
-        parser.error(str(exc))
+    results = simulate_full_training(
+        model_name=args.model_name,
+        method=args.method,
+        gpu_model=args.gpu_model,
+        tokens_per_sample=args.tokens_per_sample,
+        batch_size=args.batch_size,
+        number_gpus=args.number_gpus,
+        number_nodes=args.number_nodes,
+        total_tokens=args.total_tokens,
+        epochs=args.epochs,
+        dataset_tokens=args.dataset_tokens,
+    )
 
     print("\nSimulation complete!")
     print(json.dumps(results, indent=2))

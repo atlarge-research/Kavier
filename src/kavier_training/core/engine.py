@@ -1,28 +1,29 @@
+"""Analytical training-step engine: FLOPs/MFU + comm/optimizer model yielding throughput, runtime, GPU utilization and power."""
+
 from __future__ import annotations
 
 import math
 from typing import Any, Dict
 
+from kavier_library.lookup import get_gpu, get_llm
+from kavier_library.specs.GPUSpec import GPUSpec
 from kavier_training.core.calibration import (
     get_comm_scale,
     get_interaction_scale,
     get_method_scale,
+    get_mfu_batch_scale,
     get_mfu_multiplier,
     get_model_scale,
     get_multi_gpu_correction,
     get_training_overhead_s,
 )
-from kavier_library.lookup import get_gpu, get_llm
-from kavier_library.specs.GPUSpec import GPUSpec
-
-INFINIBAND_GBPS = 200.0
-MFU_BATCH_ALPHA = 0.0341
-MFU_BATCH_BETA = 0.8147
+from kavier_training.core.config import INFINIBAND_GBPS
 
 
 def _compute_mfu(batch_size: int, gpu: GPUSpec, calibrated: bool = True) -> float:
     base = gpu.mfu_factor * (get_mfu_multiplier(gpu.name) if calibrated else 1.0)
-    batch_scale = min(1.0, MFU_BATCH_ALPHA * math.log2(batch_size) + MFU_BATCH_BETA)
+    alpha, beta = get_mfu_batch_scale()
+    batch_scale = min(1.0, alpha * math.log2(batch_size) + beta)
     return float(base * batch_scale)
 
 
@@ -53,13 +54,15 @@ def _estimate_memory_bandwidth_usage(
     step_time_s: float,
     hidden_dim: int = 4096,
 ) -> float:
+    """Estimate per-step memory-bandwidth use (GB/s).
+
+    Bytes use 1e9 (GB, not GiB) to match the GB-denominated capacity in
+    simulate_training_step (gpu.bandwidth_bps / 1e9); GiB understated the
+    reported gpu_memory_utilization by ~7%.
+    """
     bytes_per_param = 2
     param_traffic = model_params * bytes_per_param * 5
     activation_traffic = batch_size * seq_length * hidden_dim * bytes_per_param
-    # Bytes -> GB (1e9), matching the GB-denominated capacity this is compared
-    # against in simulate_training_step (gpu.bandwidth_bps / 1e9). Using GiB
-    # (1024**3) here while the capacity is GB systematically underestimated the
-    # exposed gpu_memory_utilization field by ~7%.
     return (param_traffic + activation_traffic) / 1e9 / step_time_s
 
 
@@ -117,6 +120,20 @@ def simulate_training_step(
     backward_factor: float = 2.0,
     calibrated: bool = True,
 ) -> Dict[str, float]:
+    """Simulate one optimizer step for a training config and return per-step metrics.
+
+    Args:
+        model_name, gpu_model: keys into the LLM / GPU spec libraries.
+        tokens_per_sample, batch_size: sequence length and per-device micro-batch.
+        method: "full", "lora" or "gptq-lora" (selects trainable-param count).
+        num_gpus, num_nodes: total data-parallel width and node count.
+        grad_accum_steps, backward_factor: micro-steps per update; bwd/fwd cost ratio.
+        calibrated: apply fitted scales/corrections when True, else raw physics.
+
+    Returns:
+        dict with step_time_ms, tokens_per_second, tokens_per_step,
+        gpu_compute_utilization (%), gpu_memory_utilization (%), gpu_power_watts.
+    """
     llm = get_llm(model_name)
     gpu = get_gpu(gpu_model)
 
@@ -159,11 +176,7 @@ def simulate_training_step(
         if calibrated
         else 1.0
     )
-    # Data-parallel width = num_gpus: every GPU is a DP replica running its own
-    # batch_size micro-batch, so per-step tokens scale with the TOTAL GPU count.
-    # (Previously used gpus_per_node = num_gpus // num_nodes, which capped this at one
-    # node's 8 GPUs — multi-node configs gained zero throughput, only comm cost. No-op
-    # for single-node <=8-GPU configs where num_gpus == gpus_per_node.)
+    # Data-parallel: each GPU runs its own batch, so per-step tokens scale with TOTAL num_gpus.
     tokens_per_step = grad_accum_steps * (batch_size * tokens_per_sample * num_gpus / mgc)
     tokens_per_second = tokens_per_step / step_time_s * throughput_scale
 
@@ -187,6 +200,26 @@ def simulate_training_step(
     }
 
 
+def _resolve_total_tokens(
+    total_tokens: int | None,
+    epochs: float | None,
+    dataset_tokens: int | None,
+) -> int | None:
+    """Resolve a training job's token count from either ``total_tokens`` directly,
+    or ``epochs`` + ``dataset_tokens`` (total = round(epochs * dataset_tokens); one
+    epoch = one pass over the dataset). ``total_tokens`` wins if both are given;
+    returns ``None`` when nothing is supplied (runtime then reported as 0)."""
+    if total_tokens is not None:
+        return total_tokens
+    if epochs is None and dataset_tokens is None:
+        return None
+    if epochs is None or dataset_tokens is None:
+        raise ValueError("pass epochs and dataset_tokens together (or use total_tokens)")
+    if epochs < 0 or dataset_tokens < 0:
+        raise ValueError("epochs and dataset_tokens must be non-negative")
+    return int(round(epochs * dataset_tokens))
+
+
 def simulate_full_training(
     model_name: str,
     method: str,
@@ -196,9 +229,24 @@ def simulate_full_training(
     number_gpus: int,
     number_nodes: int,
     total_tokens: int | None = None,
+    epochs: float | None = None,
+    dataset_tokens: int | None = None,
     grad_accum_steps: int = 1,
     backward_factor: float = 2.0,
 ) -> Dict[str, Any]:
+    """Run a full training simulation (one step extrapolated over the whole job).
+
+    Wraps ``simulate_training_step`` with total_gpus = number_gpus * number_nodes
+    and derives job-level aggregates. Job size sets train_runtime (s): give
+    ``total_tokens`` directly, or ``epochs`` + ``dataset_tokens``; otherwise 0.0.
+
+    Returns:
+        dict with train_tokens_per_second, train_tokens_per_gpu_per_second,
+        train_samples_per_second, train_steps_per_second, train_runtime (s), plus
+        the echoed config (model_name, gpu_name, method, batch_size,
+        tokens_per_sample, number_gpus=total_gpus).
+    """
+    total_tokens = _resolve_total_tokens(total_tokens, epochs, dataset_tokens)
     total_gpus = number_gpus * number_nodes
     step = simulate_training_step(
         model_name,
@@ -212,12 +260,7 @@ def simulate_full_training(
         backward_factor=backward_factor,
     )
     tps = step["tokens_per_second"]
-    # Use the engine's own per-(optimizer-)step token count so steps/s is the
-    # exact inverse of how tps was produced (it already folds in num_gpus,
-    # the multi-gpu correction and the calibrated throughput scale). The previous
-    # local formula (tokens_per_sample*batch_size*grad_accum) omitted those and
-    # inflated train_steps_per_second on multi-node configs. Single-node results
-    # are identical (PD1 is all single-node).
+    # Reuse the engine's own per-step token count so steps/s is the exact inverse of tps.
     tokens_per_step = step["tokens_per_step"]
     return {
         "train_tokens_per_second": tps,

@@ -3,6 +3,10 @@
   "version": 3,
   "comm_scale": 0.8221945101144519,
   "training_overhead_s": 0.0,
+  "mfu_batch_scale": {
+    "alpha": 0.0341,
+    "beta": 0.8147
+  },
   "mfu_multiplier": {
     "NVIDIA-A100-SXM4-80GB": 1.2599397838790285,
     "NVIDIA-A100-80GB-PCIe": 1.1413509027508864,

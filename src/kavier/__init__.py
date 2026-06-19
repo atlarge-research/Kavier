@@ -1,7 +1,11 @@
+"""Kavier umbrella facade: re-exports the engine entry points plus GPU/LLM spec libraries, and aliases ``kavier.<sub>`` to the legacy top-level ``kavier_<sub>`` packages."""
+
 from __future__ import annotations
 
 import importlib as _importlib
 import sys as _sys
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from importlib.abc import Loader as _Loader
 from importlib.abc import MetaPathFinder as _MetaPathFinder
 from importlib.machinery import ModuleSpec as _ModuleSpec
@@ -22,6 +26,8 @@ _ALIAS_TO_LEGACY = {
 
 
 class _LegacyAliasFinder(_MetaPathFinder):
+    """Import-system finder that resolves ``kavier.<alias>[...]`` to the legacy ``kavier_<alias>`` package tree."""
+
     _prefix = f"{__name__}."
 
     def find_spec(
@@ -43,6 +49,8 @@ class _LegacyAliasFinder(_MetaPathFinder):
 
 
 class _LegacyAliasLoader(_Loader):
+    """Loader that returns the already-imported legacy module for a ``kavier.<alias>`` request."""
+
     def __init__(self, legacy_name: str) -> None:
         self._legacy_name = legacy_name
 
@@ -88,4 +96,9 @@ __all__ = [
     "opendc",
 ]
 
-__version__ = "0.3.0"
+# Derive the version from installed distribution metadata so pyproject's static
+# ``version`` is the single source of truth (no hardcoded duplicate here).
+try:
+    __version__ = _pkg_version("kavier")
+except _PackageNotFoundError:  # editable/source tree without dist metadata
+    __version__ = "0.0.0+unknown"

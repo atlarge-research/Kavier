@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -24,6 +24,32 @@ dependencies = [
     "cachetools>=6.1",
     "rich>=13",
 ]
+keywords = [
+    "LLM",
+    "simulation",
+    "performance",
+    "sustainability",
+    "energy",
+    "carbon",
+    "GPU",
+    "training",
+    "inference",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.urls]
+Homepage = "https://github.com/atlarge-research/kavier"
+Repository = "https://github.com/atlarge-research/kavier"
+Documentation = "https://github.com/atlarge-research/kavier"
+"Bug Tracker" = "https://github.com/atlarge-research/kavier/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -37,6 +63,7 @@ dev = [
 ]
 
 [project.scripts]
+kavier        = "kavier_ui:main"
 kavier-perf   = "kavier_inference.cli:main"
 kavier-train  = "kavier_training.cli:main"
 kavier-energy = "kavier_energy.calculator:main"
@@ -71,8 +98,16 @@ include = ["kavier*"]
 # inference data/output dir (simulation outputs) is never shipped; the original
 # large (~74 MB) inference trace is kept out of the package (see examples-local/).
 [tool.setuptools.package-data]
-kavier_training = ["data/calibration.json", "data/input/input_example.csv"]
-kavier_inference = ["data/input/input_example.csv"]
+# PEP 561: ship the py.typed marker for every first-party package so installed
+# consumers get our inline type hints.
+kavier = ["py.typed"]
+kavier_training = ["py.typed", "data/calibration.json", "data/input/input_example.csv"]
+kavier_inference = ["py.typed", "data/input/input_example.csv"]
+kavier_io = ["py.typed"]
+kavier_energy = ["py.typed"]
+kavier_co2 = ["py.typed"]
+kavier_library = ["py.typed"]
+kavier_opendc = ["py.typed"]
 
 [tool.setuptools.exclude-package-data]
 kavier_inference = ["data/output/*", "data/output/**/*"]

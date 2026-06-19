@@ -20,7 +20,7 @@ Kavier helps operators, researchers, and engineers predict:
 ## Quick start
 
 ```bash
-git clone https://github.com/<you>/kavier.git
+git clone https://github.com/atlarge-research/kavier.git
 cd kavier
 
 python -m venv .venv
@@ -29,7 +29,7 @@ python -m pip install -U pip
 pip install -e ".[dev]"
 ```
 
-Run your first simulation:
+Run your first simulation against the tiny bundled synthetic example trace:
 
 ```bash
 kavier-perf --trace src/kavier_inference/data/input/input_example.csv
@@ -37,14 +37,26 @@ kavier-perf --trace src/kavier_inference/data/input/input_example.csv
 
 Congrats! You have just run your first simulation with Kavier! 🎉
 
+If you installed Kavier from PyPI (`pip install kavier`) you have no `src/`
+directory; the same synthetic example trace ships inside the package, so resolve
+its path via `importlib.resources`:
+
+```bash
+TRACE=$(python -c "from importlib.resources import files; print(files('kavier_inference')/'data/input/input_example.csv')")
+kavier-perf --trace "$TRACE"
+```
+
 ## Structure
 
-Kavier is organized into 5 main components:
+Kavier is organized into the following first-party packages:
 
 ```
 src/
-├── kavier_inference/    # Inference simulation (kavier-perf, kavier-eff)
+├── kavier/              # Umbrella facade (re-exports the sub-packages)
+├── kavier_inference/    # Inference simulation (kavier-perf)
 ├── kavier_training/     # Training simulation (kavier-train)
+├── kavier_energy/       # Energy calculator (kavier-energy)
+├── kavier_co2/          # Carbon emissions (kavier-co2)
 ├── kavier_library/      # Shared GPU & LLM specifications
 ├── kavier_opendc/       # OpenDC workload export (tasks/fragments)
 ├── kavier_io/           # Shared I/O utilities
@@ -54,8 +66,8 @@ src/
 ## Documentation
 
 See [docs/index.html](docs/index.html) for the main documentation: getting started,
-the Kavier CLI (`kavier-perf`, `kavier-eff`, `kavier-train`), structure, and the
-contributing guide.
+the Kavier CLI (`kavier-perf`, `kavier-train`, `kavier-energy`, `kavier-co2`),
+structure, and the contributing guide.
 
 ## Contributing
 

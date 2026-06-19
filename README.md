@@ -14,7 +14,7 @@ inference and training, through discrete-event, cache-aware simulation.
 
 Kavier helps operators, researchers, and engineers predict:
 * **Performance** — inference latencies, training throughput, GPU utilization
-* **Sustainability** — energy consumption, carbon emissions (kgCO2/Mtoken/s)
+* **Sustainability** — energy consumption, carbon emissions (gCO2/Mtoken)
 * **Financial efficiency** — cost per token/sample given GPU-hour prices
 
 ## Quick start
@@ -36,6 +36,13 @@ kavier-perf --trace src/kavier_inference/data/input/input_example.csv
 ```
 
 Congrats! You have just run your first simulation with Kavier! 🎉
+
+Or skip the flags — launch the **interactive UI** and pick a simulator, model and
+GPU from guided menus, then chain into energy/carbon or export OpenDC:
+
+```bash
+kavier
+```
 
 If you installed Kavier from PyPI (`pip install kavier`) you have no `src/`
 directory; the same synthetic example trace ships inside the package, so resolve
@@ -60,13 +67,15 @@ src/
 ├── kavier_library/      # Shared GPU & LLM specifications
 ├── kavier_opendc/       # OpenDC workload export (tasks/fragments)
 ├── kavier_io/           # Shared I/O utilities
+├── kavier_ui/           # Interactive REPL (the `kavier` command)
 └── tests/               # Test suites
 ```
 
 ## Documentation
 
 See [docs/index.html](docs/index.html) for the main documentation: getting started,
-the Kavier CLI (`kavier-perf`, `kavier-train`, `kavier-energy`, `kavier-co2`),
+the Kavier CLIs (`kavier` interactive UI, `kavier-perf`, `kavier-train`,
+`kavier-energy`, `kavier-co2`), the YAML `--config` input,
 structure, and the contributing guide.
 
 ## Contributing

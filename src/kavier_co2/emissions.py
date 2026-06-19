@@ -14,8 +14,7 @@ WS_PER_KWH = 3.6e6  # watt-seconds in one kilowatt-hour
 
 @dataclass(frozen=True)
 class Fragment:
-    """A constant-power interval: starts at ``start_time`` (naive), runs ``duration_s``
-    seconds drawing ``power_w`` watts."""
+    """A constant-power interval (naive ``start_time``, ``duration_s`` seconds at ``power_w`` watts)."""
 
     start_time: pd.Timestamp
     duration_s: float
@@ -24,8 +23,7 @@ class Fragment:
 
 @dataclass(frozen=True)
 class CarbonTrace:
-    """A piecewise-constant carbon-intensity timeline: ``intensities[i]`` (gCO2/kWh)
-    applies over ``[timestamps[i], timestamps[i] + step)``."""
+    """Piecewise-constant timeline: ``intensities[i]`` (gCO2/kWh) applies over half-open ``[timestamps[i], +step)``."""
 
     timestamps: pd.DatetimeIndex
     intensities: "pd.Series"
@@ -37,8 +35,7 @@ class CarbonTrace:
         df: pd.DataFrame,
         step: dt.timedelta | None = None,
     ) -> "CarbonTrace":
-        """Build a trace from a ``[timestamp, carbon_intensity]`` frame (sorted, naive
-        timestamps); ``step`` is inferred from the first interval if not given."""
+        """Build from a ``[timestamp, carbon_intensity]`` frame; ``step`` inferred from the first interval if unset."""
         if "timestamp" not in df.columns or "carbon_intensity" not in df.columns:
             raise ValueError(
                 f"carbon trace must have columns ['timestamp', 'carbon_intensity']; got {list(df.columns)}"
@@ -69,8 +66,7 @@ class CarbonTrace:
 
 @dataclass(frozen=True)
 class EmissionResult:
-    """Result of an emissions run: total energy (kWh), total CO2 (grams), and a
-    per-window ``breakdown`` (window_start, carbon_intensity, energy_kwh, co2_g)."""
+    """Totals (energy kWh, CO2 g) plus per-window ``breakdown`` (window_start, carbon_intensity, energy_kwh, co2_g)."""
 
     total_energy_kwh: float
     total_co2_g: float
@@ -78,7 +74,6 @@ class EmissionResult:
 
     @property
     def total_co2_kg(self) -> float:
-        """Total CO2 in kilograms."""
         return self.total_co2_g / 1000.0
 
     @property
@@ -90,8 +85,6 @@ class EmissionResult:
 
 
 def load_carbon_trace(path: str, step_minutes: int | None = None) -> CarbonTrace:
-    """Load a carbon-intensity parquet into a ``CarbonTrace``; ``step_minutes`` overrides
-    the inferred sampling step."""
     df = pd.read_parquet(path)
     step = dt.timedelta(minutes=step_minutes) if step_minutes else None
     return CarbonTrace.from_dataframe(df, step=step)
@@ -102,9 +95,10 @@ def _window_index_for(ts: pd.Timestamp, trace: CarbonTrace) -> int:
 
 
 def compute_emissions(fragments: Iterable[Fragment], trace: CarbonTrace) -> EmissionResult:
-    """Integrate each fragment's energy across the carbon trace, billing every slice at the
-    down-estimated intensity (min of its window and the next), and return the totals plus a
-    per-window breakdown. Raises if a fragment falls outside the trace coverage."""
+    """Integrate each fragment's energy across the trace, billing every slice at the down-estimated intensity.
+
+    Raises if a fragment falls outside the trace coverage. See the DOWN-ESTIMATION note below.
+    """
     # window_start (Timestamp) -> {"carbon_intensity", "energy_kwh", "co2_g"}
     acc: dict[pd.Timestamp, dict] = {}
     total_energy_kwh = 0.0
@@ -132,7 +126,6 @@ def compute_emissions(fragments: Iterable[Fragment], trace: CarbonTrace) -> Emis
         if frag.duration_s == 0:
             continue
 
-        # Walk the fragment window by window, slicing at each boundary.
         cursor = start
         last_wi = len(trace.timestamps) - 1
         while cursor < end:
@@ -142,9 +135,7 @@ def compute_emissions(fragments: Iterable[Fragment], trace: CarbonTrace) -> Emis
             seg_end = min(end, window_end)
             seg_seconds = (seg_end - cursor).total_seconds()
             energy_kwh = frag.power_w * seg_seconds / WS_PER_KWH
-            # DOWN-ESTIMATION: bill this piece at the lower of its own window's
-            # intensity and the next window's intensity. The final trace window
-            # has no successor, so it uses its own value.
+            # DOWN-ESTIMATION: bill at min(own window, next window) intensity; the final window has no successor.
             own = float(trace.intensities.iloc[wi])
             if wi < last_wi:
                 intensity = min(own, float(trace.intensities.iloc[wi + 1]))

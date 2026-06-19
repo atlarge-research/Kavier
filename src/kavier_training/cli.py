@@ -1,5 +1,4 @@
-"""``kavier-train`` console entry point: simulate a single config or every row of a CSV, optionally
-exporting an OpenDC workload."""
+"""``kavier-train`` console entry point: simulate a single config or every row of a CSV."""
 
 from __future__ import annotations
 

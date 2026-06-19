@@ -4,8 +4,7 @@ from kavier_io.constants import MAX_GPU_UTILIZATION
 
 
 def get_gpu_utilization(t: float, t_prefill, t_decode, warm: float = 0.2, cool: float = 0.2) -> float:
-    """Return fractional GPU utilization at elapsed time ``t`` (s): 0.5 during the warm/cool windows,
-    ``MAX_GPU_UTILIZATION`` in between."""
+    """Fractional GPU use at elapsed ``t`` (s): 0.5 in the warm/cool windows, ``MAX_GPU_UTILIZATION`` between."""
     if t < warm:
         return 0.5
 

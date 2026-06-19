@@ -1,9 +1,7 @@
-"""Kavier interactive CLI — guided, colourful REPL over the inference & training simulators.
+"""Kavier interactive CLI — guided REPL over the inference & training simulators.
 
-Launch with the ``kavier`` console script (or ``python -m kavier_ui``). Pick a
-simulator, answer guided prompts (model + GPU chosen from the spec libraries with
-type-to-filter), watch a spinner, read rich result panels, then chain into
-energy/carbon, export OpenDC, or tweak and re-run.
+Launch via the ``kavier`` console script (or ``python -m kavier_ui``): pick a simulator, answer
+guided prompts, then chain into energy/carbon, export OpenDC, or tweak and re-run.
 """
 
 from __future__ import annotations
@@ -241,7 +239,6 @@ def main() -> None:
         return
     console.print(banner())
     while True:
-        # Top-level menu = run-producing simulators only; energy/carbon are post-run follow-ups.
         choices = [Choice(k, label, blurb) for k, label, _accent, blurb in DOMAINS if k in _MAIN_MENU]
         choices.append(Choice("quit", "Quit", ""))
         try:

@@ -1,14 +1,5 @@
-"""Hardware spec for a single GPU model."""
-
-
 class GPUSpec:
-    """Static GPU characteristics used by the simulator.
-
-    Carries name, FP16 tensor-core peak (TFLOPs), memory size (GB) and
-    bandwidth (GB/s, stored internally as bytes/s), core count and max clock
-    (MHz), the MFU factor, network bandwidth (GB/s), and the idle/max/base
-    power (W) plus calibration exponent for the power model.
-    """
+    """Static GPU spec for the simulator. Bandwidth is taken in GB/s but stored as bytes/s (``bandwidth_bps``)."""
 
     def __init__(
         self,
@@ -35,9 +26,8 @@ class GPUSpec:
         self.mfu_factor = mfu_factor
         self.network_bandwidth_gbps = network_bandwidth_gbps
 
-        # MSE power model parameters
-        # P(u) = idle_power + (max_power - idle_power) * (2*u - u^calibration_factor)
-        # Defaults: idle = 25% of base, max = base (TDP)
+        # MSE power model: P(u) = idle + (max - idle) * (2*u - u^calibration_factor).
+        # Defaults: idle = 25% of base, max = base (TDP).
         self.idle_power_w = idle_power_w if idle_power_w is not None else base_power_w * 0.25
         self.max_power_w = max_power_w if max_power_w is not None else base_power_w
         self.calibration_factor = calibration_factor

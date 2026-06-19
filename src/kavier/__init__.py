@@ -1,5 +1,4 @@
-"""Kavier umbrella facade: re-exports the engine entry points plus GPU/LLM spec libraries, and aliases
-``kavier.<sub>`` to the legacy top-level ``kavier_<sub>`` packages."""
+"""Umbrella facade: re-exports the public API and aliases ``kavier.<sub>`` to the legacy ``kavier_<sub>`` packages."""
 
 from __future__ import annotations
 

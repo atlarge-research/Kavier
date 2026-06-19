@@ -81,7 +81,7 @@ def fit_count(trace: pd.DataFrame, n: int, base_cal: dict) -> list[float]:
     try:
         for r in rows.itertuples():
             if r.model_name not in LLM_SPEC_LIBRARY or str(r.gpu_model) not in GPU_SPEC_LIBRARY:
-                continue  # engine can't resolve this spec; skip
+                continue
             try:
                 pred1 = simulate_training_step(
                     model_name=r.model_name,

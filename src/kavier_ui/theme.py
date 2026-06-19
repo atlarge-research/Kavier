@@ -9,8 +9,7 @@ from rich.text import Text
 
 console = Console()
 
-# Per-domain accent colours, reused across menus, prompts, spinners and result panels
-# so each simulator reads as a consistent "channel".
+# Per-domain accent colours, reused across the UI so each simulator reads as a consistent "channel".
 ACCENTS: dict[str, str] = {
     "inference": "cyan",
     "training": "magenta",

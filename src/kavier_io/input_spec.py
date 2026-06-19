@@ -1,5 +1,3 @@
-"""Load an inference trace (.csv/.parquet) into token counts and token lists."""
-
 import json
 import os
 
@@ -25,12 +23,11 @@ def _string_array_to_tokens(strings, tqdm_message=""):
 
 
 class InputSpec:
-    """Parsed inference trace loaded from a .csv or .parquet ``path``.
+    """Inference trace from .csv/.parquet ``path``.
 
-    Requires columns ``num_input_tokens`` and ``num_output_tokens`` (exposed
-    as ``num_in_t``/``num_out_t``/``num_tot_t``). Optional ``input_tokens``/
-    ``output_tokens`` (JSON int arrays) populate ``in_t``/``out_t`` and
-    ``session_id`` populates ``sessions``. Raises ValueError on bad/empty input.
+    Requires ``num_input_tokens``/``num_output_tokens`` (-> ``num_in_t``/``num_out_t``/``num_tot_t``).
+    Optional ``input_tokens``/``output_tokens`` (JSON int arrays) -> ``in_t``/``out_t``;
+    ``session_id`` -> ``sessions``. Raises ValueError on bad/empty input.
     """
 
     def __init__(self, path: str):

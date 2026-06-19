@@ -1,5 +1,4 @@
-"""Console-script entry points for the inference simulator (``kavier-perf`` and the deprecated
-``kavier-eff``/``kavier-energy``)."""
+"""Console-script entry points for the inference simulator (``kavier-perf`` and the deprecated ``kavier-eff``)."""
 
 from __future__ import annotations
 
@@ -11,8 +10,7 @@ from kavier_library.lookup import UnknownSpecError
 
 
 def main() -> None:
-    """``kavier-perf`` entry point: parse CLI args and run the performance simulation; exits 2 on an
-    unknown LLM/GPU spec."""
+    """``kavier-perf`` entry point; exits 2 on an unknown LLM/GPU spec."""
     args = parse_args()
     try:
         run_performance(args)
@@ -22,9 +20,7 @@ def main() -> None:
 
 
 def main_efficiency() -> None:
-    """``kavier-eff``: the efficiency entry point. Currently delegates to the energy
-    calculator (the same engine as ``kavier-energy``); kept as a first-class command
-    for the efficiency workflow."""
+    """``kavier-eff``: delegates to the energy calculator (same engine as ``kavier-energy``)."""
     from kavier_energy.calculator import main as energy_main
 
     energy_main()

@@ -32,12 +32,7 @@ def build_training_opendc_frames(
     simulate_full_training_fn: Callable[..., dict[str, Any]],
     simulate_training_step_fn: Callable[..., dict[str, float]],
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
-    """Build OpenDC ``tasks`` and ``fragments`` DataFrames for one training job.
-
-    Runs the supplied full-training and per-step simulators to derive task
-    duration, step count, and resource capacities (cpu/mem/gpu), emitting one
-    fragment per step. Returns (tasks_df, fragments_df, full-training summary).
-    """
+    """Build OpenDC (tasks_df, fragments_df, summary) for one training job: one fragment per simulated step."""
     llm = get_llm(model_name)
     gpu = get_gpu(gpu_model)
     summary = simulate_full_training_fn(
@@ -121,11 +116,7 @@ def export_training_opendc(
     simulate_full_training_fn: Callable[..., dict[str, Any]],
     simulate_training_step_fn: Callable[..., dict[str, float]],
 ) -> dict[str, Any]:
-    """Build and write the OpenDC task/fragment parquet files to ``output_dir``.
-
-    Thin wrapper over ``build_training_opendc_frames`` +
-    ``prepare_opendc_input``; returns the full-training summary dict.
-    """
+    """Build the OpenDC frames, write them to ``output_dir``, and return the full-training summary."""
     tasks, fragments, summary = build_training_opendc_frames(
         model_name=model_name,
         method=method,

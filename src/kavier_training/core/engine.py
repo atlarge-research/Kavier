@@ -1,5 +1,4 @@
-"""Analytical training-step engine: FLOPs/MFU + comm/optimizer model yielding throughput, runtime, GPU
-utilization and power."""
+"""Analytical training-step engine: FLOPs/MFU + comm/optimizer model -> throughput, runtime, GPU util and power."""
 
 from __future__ import annotations
 
@@ -55,12 +54,8 @@ def _estimate_memory_bandwidth_usage(
     step_time_s: float,
     hidden_dim: int = 4096,
 ) -> float:
-    """Estimate per-step memory-bandwidth use (GB/s).
-
-    Bytes use 1e9 (GB, not GiB) to match the GB-denominated capacity in
-    simulate_training_step (gpu.bandwidth_bps / 1e9); GiB understated the
-    reported gpu_memory_utilization by ~7%.
-    """
+    # Per-step memory-bandwidth use (GB/s). Bytes use 1e9 (GB, not GiB) to match the GB-denominated
+    # capacity in simulate_training_step (bandwidth_bps / 1e9); GiB understated memory util by ~7%.
     bytes_per_param = 2
     param_traffic = model_params * bytes_per_param * 5
     activation_traffic = batch_size * seq_length * hidden_dim * bytes_per_param
@@ -121,19 +116,11 @@ def simulate_training_step(
     backward_factor: float = 2.0,
     calibrated: bool = True,
 ) -> Dict[str, float]:
-    """Simulate one optimizer step for a training config and return per-step metrics.
+    """Simulate one optimizer step and return per-step metrics.
 
-    Args:
-        model_name, gpu_model: keys into the LLM / GPU spec libraries.
-        tokens_per_sample, batch_size: sequence length and per-device micro-batch.
-        method: "full", "lora" or "gptq-lora" (selects trainable-param count).
-        num_gpus, num_nodes: total data-parallel width and node count.
-        grad_accum_steps, backward_factor: micro-steps per update; bwd/fwd cost ratio.
-        calibrated: apply fitted scales/corrections when True, else raw physics.
-
-    Returns:
-        dict with step_time_ms, tokens_per_second, tokens_per_step,
-        gpu_compute_utilization (%), gpu_memory_utilization (%), gpu_power_watts.
+    ``method`` ("full"/"lora"/"gptq-lora") selects the trainable-param count; ``calibrated`` applies
+    fitted scales/corrections when True, else raw physics. Returns a dict with step_time_ms,
+    tokens_per_second, tokens_per_step, gpu_compute_utilization (%), gpu_memory_utilization (%), gpu_power_watts.
     """
     llm = get_llm(model_name)
     gpu = get_gpu(gpu_model)
@@ -163,8 +150,7 @@ def simulate_training_step(
 
     comm_time = _comm_time(trainable, num_gpus, gpu.network_bandwidth_gbps, num_nodes, calibrated)
 
-    # One optimizer step accumulates `grad_accum_steps` micro-steps (fwd+bwd each),
-    # then ONE optimizer update + all-reduce. Comm/optimizer are amortized over G.
+    # One step = grad_accum_steps micro-steps (fwd+bwd) + ONE optimizer update + all-reduce (amortized over G).
     step_time_s = grad_accum_steps * micro_step_time + optimizer_time + comm_time
 
     mgc = get_multi_gpu_correction(num_gpus) if calibrated else 1.0
@@ -206,10 +192,7 @@ def _resolve_total_tokens(
     epochs: float | None,
     dataset_tokens: int | None,
 ) -> int | None:
-    """Resolve a training job's token count from either ``total_tokens`` directly,
-    or ``epochs`` + ``dataset_tokens`` (total = round(epochs * dataset_tokens); one
-    epoch = one pass over the dataset). ``total_tokens`` wins if both are given;
-    returns ``None`` when nothing is supplied (runtime then reported as 0)."""
+    """Token count from ``total_tokens`` or round(epochs * dataset_tokens); the former wins, ``None`` if neither."""
     if total_tokens is not None:
         return total_tokens
     if epochs is None and dataset_tokens is None:
@@ -235,17 +218,11 @@ def simulate_full_training(
     grad_accum_steps: int = 1,
     backward_factor: float = 2.0,
 ) -> Dict[str, Any]:
-    """Run a full training simulation (one step extrapolated over the whole job).
+    """Full training simulation: one step extrapolated over the whole job (total_gpus = number_gpus * number_nodes).
 
-    Wraps ``simulate_training_step`` with total_gpus = number_gpus * number_nodes
-    and derives job-level aggregates. Job size sets train_runtime (s): give
-    ``total_tokens`` directly, or ``epochs`` + ``dataset_tokens``; otherwise 0.0.
-
-    Returns:
-        dict with train_tokens_per_second, train_tokens_per_gpu_per_second,
-        train_samples_per_second, train_steps_per_second, train_runtime (s), plus
-        the echoed config (model_name, gpu_name, method, batch_size,
-        tokens_per_sample, number_gpus=total_gpus).
+    Job size sets train_runtime (s): give ``total_tokens`` directly, or ``epochs`` + ``dataset_tokens``; else 0.0.
+    Returns job-level aggregates (train_tokens_per_second, *_per_gpu_per_second, *_samples/steps_per_second,
+    train_runtime) plus the echoed config.
     """
     total_tokens = _resolve_total_tokens(total_tokens, epochs, dataset_tokens)
     total_gpus = number_gpus * number_nodes

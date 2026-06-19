@@ -1,7 +1,5 @@
-"""Inference simulation engine: iterate over a trace, simulate each request, stream tasks/fragments to
-Parquet, and aggregate metrics."""
+"""Inference simulation engine: iterate a trace, simulate each request, stream tasks/fragments, aggregate metrics."""
 
-# simulator/performance/simulate.py
 from __future__ import annotations
 
 import time
@@ -29,11 +27,9 @@ def simulate(
     tasks_writer: StreamingParquetWriter,
     frags_writer: StreamingParquetWriter,
 ) -> str:
-    """Simulate every request in ``trace`` for the given LLM/GPU, streaming OpenDC tasks/fragments to
-    the writers; returns the formatted summary string.
+    """Simulate every request in ``trace``, stream OpenDC tasks/fragments to the writers, and return the summary.
 
-    Accumulates per-request prefill/decode times (seconds) and end-to-end latency (ms);
-    flushes batched rows every ``flush_size`` requests.
+    Flushes batched rows every ``flush_size`` requests.
     """
     cache = PrefixCache(cfg.cache)
     metrics = Metrics()

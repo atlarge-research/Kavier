@@ -22,14 +22,12 @@ class UnknownSpecError(KeyError):
 
 
 def get_gpu(name: str) -> GPUSpec:
-    """Return the GPUSpec for ``name``; raise UnknownSpecError if unknown."""
     if name not in GPU_SPEC_LIBRARY:
         raise UnknownSpecError("GPU", name, sorted(GPU_SPEC_LIBRARY))
     return GPU_SPEC_LIBRARY[name]
 
 
 def get_llm(name: str) -> LLMSpec:
-    """Return the LLMSpec for ``name``; raise UnknownSpecError if unknown."""
     if name not in LLM_SPEC_LIBRARY:
         raise UnknownSpecError("model", name, sorted(LLM_SPEC_LIBRARY))
     return LLM_SPEC_LIBRARY[name]

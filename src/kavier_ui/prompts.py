@@ -1,8 +1,7 @@
 """Keyboard-driven interactive widgets built on Rich alone (no extra deps).
 
-Raw-key navigation in the style of the reproducibility-capsule `make ui`: arrow
-keys + enter, plus a type-to-filter fuzzy selector for the (long) model/GPU lists.
-Every widget is cancellable with Ctrl-C / Esc, which raises ``Abort``.
+Raw-key navigation (arrows + enter) plus a type-to-filter fuzzy selector for the long
+model/GPU lists. Every widget is cancellable with Ctrl-C / Esc, which raises ``Abort``.
 """
 
 from __future__ import annotations
@@ -29,8 +28,7 @@ class Abort(Exception):
 
 
 def read_key() -> str:
-    """Return a single logical keypress: a char, or 'up'/'down'/'left'/'right'/
-    'enter'/'backspace'/'esc'. Mirrors the capsule UI raw-tty reader."""
+    """Return one logical keypress: a char, or 'up'/'down'/'left'/'right'/'enter'/'backspace'/'esc'."""
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     try:
@@ -116,8 +114,7 @@ def fuzzy_select(
     default: object | None = None,
     max_rows: int = 9,
 ) -> object:
-    """Type-to-filter selector for long lists (models/GPUs). Substring match,
-    arrow keys to move within the filtered set, enter to pick. Esc cancels."""
+    """Type-to-filter selector for long lists: substring match, arrows to move, enter to pick, Esc cancels."""
     items = _coerce(choices)
     query = ""
     idx = 0

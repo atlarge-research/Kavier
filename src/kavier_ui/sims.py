@@ -1,10 +1,7 @@
-"""Thin adapters over Kavier's real engines.
+"""Thin adapters over Kavier's real engines: dict in, dict out, no simulation maths here.
 
-Each function takes a plain dict of user inputs and returns a plain dict of
-structured results for rendering. No simulation maths lives here — we call
-``simulate_one`` (inference), ``simulate_full_training`` / ``simulate_training_step``
-(training) and ``compute_emissions`` (carbon) directly, so results match the
-one-shot CLIs exactly.
+Each function calls an engine entry point directly (simulate_one / simulate_full_training /
+simulate_training_step / compute_emissions), so results match the one-shot CLIs exactly.
 """
 
 from __future__ import annotations
@@ -38,8 +35,7 @@ def gpu_names() -> list[str]:
 # Inference
 # --------------------------------------------------------------------------- #
 def run_inference(p: dict[str, Any]) -> dict[str, Any]:
-    """Loop ``simulate_one`` over a homogeneous workload built from the prompts —
-    same engine the trace-driven CLI uses, no disk side effects."""
+    """Loop ``simulate_one`` over a homogeneous workload from the prompts (same engine as the CLI, no disk I/O)."""
     llm = get_llm(p["model"])
     gpu = get_gpu(p["gpu"])
     cfg = SimConfig(
@@ -106,9 +102,7 @@ def run_inference(p: dict[str, Any]) -> dict[str, Any]:
 # Training
 # --------------------------------------------------------------------------- #
 def run_training(p: dict[str, Any]) -> dict[str, Any]:
-    """Call both training engine entry points: aggregate throughput/runtime
-    (``simulate_full_training``) plus per-step physical metrics
-    (``simulate_training_step``)."""
+    """Aggregate throughput/runtime (``simulate_full_training``) + per-step metrics (``simulate_training_step``)."""
     total_tokens = int(p["total_tokens"]) if p.get("total_tokens") else None
     full = simulate_full_training(
         model_name=p["model"],
@@ -139,8 +133,7 @@ def run_training(p: dict[str, Any]) -> dict[str, Any]:
 # Carbon — analytical chain (no external OpenDC needed)
 # --------------------------------------------------------------------------- #
 def _flat_trace(start: pd.Timestamp, hours: float, intensity_g_kwh: float) -> CarbonTrace:
-    """A constant-intensity carbon trace covering the run; lets us reuse the real
-    ``compute_emissions`` without an external OpenDC grid trace."""
+    """Constant-intensity trace covering the run, so ``compute_emissions`` runs without an external grid trace."""
     rows = max(2, int(hours) + 2)
     df = pd.DataFrame(
         {
@@ -152,8 +145,7 @@ def _flat_trace(start: pd.Timestamp, hours: float, intensity_g_kwh: float) -> Ca
 
 
 def run_carbon_from_training(p: dict[str, Any]) -> dict[str, Any]:
-    """Carbon for a training run via the real ``compute_emissions``: build one power
-    fragment from the training engine, bill it against a flat carbon intensity."""
+    """Bill one training-engine power fragment against a flat carbon intensity via ``compute_emissions``."""
     tr = run_training(p)
     runtime_s = float(tr["train_runtime"])
     if runtime_s <= 0:
@@ -178,8 +170,7 @@ def run_carbon_from_training(p: dict[str, Any]) -> dict[str, Any]:
 
 
 def run_carbon_from_inference(infer: dict[str, Any], intensity_g_kwh: float) -> dict[str, Any]:
-    """Carbon for an inference run: bill the GPU's max power over the summed busy
-    time against a flat intensity, via the real ``compute_emissions``."""
+    """Bill the GPU's max power over the summed busy time against a flat intensity via ``compute_emissions``."""
     gpu = get_gpu(infer["gpu"])
     runtime_s = float(infer["total_s"])
     power_w = float(gpu.max_power_w)
@@ -205,10 +196,10 @@ def run_carbon_from_inference(infer: dict[str, Any], intensity_g_kwh: float) -> 
 # Energy / efficiency
 # --------------------------------------------------------------------------- #
 def energy_from_inference(infer: dict[str, Any], gpu_hour_price: float | None) -> dict[str, Any]:
-    """Energy / carbon / $ efficiency for an inference run, per million tokens.
+    """Energy/carbon/$ efficiency per Mtoken for an inference run.
 
-    Reuses the carbon chain for energy + emissions, then computes $/Mtoken from
-    GPU-hours (matching ``kavier_energy.metrics.financial_efficiency``)."""
+    $/Mtoken is from GPU-hours, matching ``kavier_energy.metrics.financial_efficiency``.
+    """
     carbon = run_carbon_from_inference(infer, intensity_g_kwh=400.0)
     total_tokens = infer["total_tokens"]
     energy_wh = carbon["total_energy_kwh"] * 1000.0

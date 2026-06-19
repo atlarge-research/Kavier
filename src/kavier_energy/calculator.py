@@ -1,5 +1,4 @@
-"""``kavier-energy`` CLI: compute per-million-token efficiency from a Kavier
-performance file and an OpenDC power output, printing/saving the summary."""
+"""``kavier-energy`` CLI: per-Mtoken efficiency from a Kavier performance file and OpenDC power output."""
 
 from __future__ import annotations
 
@@ -14,9 +13,6 @@ from kavier_energy.metrics import efficiency_summary
 
 
 def main() -> None:
-    """``kavier-energy`` entry point: read the Kavier tasks parquet and OpenDC
-    powerSource parquet, sum ``total_tokens``, print the energy/carbon/financial
-    efficiency summary, and optionally dump it as JSON via ``--out``."""
     args = add_efficiency_args(argparse.ArgumentParser()).parse_args()
 
     kavier_performance_path = Path(args.kavier).expanduser()

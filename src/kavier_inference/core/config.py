@@ -6,8 +6,7 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class CacheCfg:
-    """Prefix-cache settings: min prefix length (tokens), skip policy (none/prefill/full), session vs
-    global scope, and LRU capacity."""
+    """Prefix-cache settings: min prefix length, skip policy, scope, LRU capacity."""
 
     min_len: int = 1024
     action: Literal["none", "prefill", "full"] = "prefill"
@@ -17,7 +16,7 @@ class CacheCfg:
 
 @dataclass(frozen=True)
 class SimConfig:
-    """Top-level sim config: snapshot export rate (seconds), KV-cache toggle, and the nested prefix-cache config."""
+    """Top-level sim config: export rate (s), KV-cache toggle, nested prefix-cache config."""
 
     export_rate: float = 0.1
     kv_cache: bool = True
@@ -25,7 +24,6 @@ class SimConfig:
 
     @staticmethod
     def from_cli(args) -> "SimConfig":
-        """Build a ``SimConfig`` from parsed CLI args (``PerfArgs``)."""
         return SimConfig(
             export_rate=args.export_rate,
             kv_cache=(args.kv_cache == "on"),

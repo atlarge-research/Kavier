@@ -4,9 +4,7 @@ import argparse
 
 
 def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Register the training-simulator CLI arguments on ``parser`` and return it."""
-    # Required for single-config runs; alternatively pass --input_csv to simulate
-    # every row of a CSV (e.g. data/input/input_example.csv). Enforced in cli.main.
+    # Single-config args below are required unless --input_csv is given; enforced in cli.main.
     parser.add_argument("--input_csv", default=None, help="Simulate every row of this CSV instead of a single config")
     parser.add_argument("--model_name")
     parser.add_argument("--method", choices=["full", "lora", "gptq-lora"])

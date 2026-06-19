@@ -1,8 +1,7 @@
-"""Built-in catalogue of LLMSpec entries keyed by model name."""
+"""Built-in catalogue of LLMSpec entries keyed by model name (look up via ``get_llm``)."""
 
 from kavier_library.specs.LLMSpec import LLMSpec
 
-#: Mapping of model name -> LLMSpec; look up via ``get_llm``.
 LLM_SPEC_LIBRARY = {
     "Llama-3-8B": LLMSpec(
         llm_name="Llama-3-8B",
@@ -133,9 +132,8 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=8.1e9,
     ),
-    # --- in-vitro (rwt3-llmbuild) models added for the real-trace cluster run ---
-    # granite-3.1-8b shares the granite-3.0-8b architecture (HF config: 4096 d_model,
-    # 40 layers, 32 heads, head_dim 128, ~8.1B params); calibrated on its own PD1 rows.
+    # --- in-vitro (rwt3-llmbuild) models for the real-trace cluster run; calibrated on their own PD1 rows ---
+    # granite-3.1-8b shares the granite-3.0-8b architecture (HF config).
     "granite-3.1-8b-instruct": LLMSpec(
         llm_name="granite-3.1-8b-instruct",
         n_layers=40,
@@ -145,8 +143,7 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=8.1e9,
     ),
-    # granite-3.1-2b HF config: 2048 d_model, 40 layers, 32 heads, 8 KV heads (GQA),
-    # head_dim 64, ffn 8192, vocab 49152 -> ~2.53B params (tied embeddings).
+    # granite-3.1-2b: ~2.53B params with GQA + tied embeddings (HF config).
     "granite-3.1-2b": LLMSpec(
         llm_name="granite-3.1-2b",
         n_layers=40,

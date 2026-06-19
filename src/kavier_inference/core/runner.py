@@ -1,5 +1,4 @@
-"""Per-request simulation: compute prefill/decode latency, apply prefix-cache hits, and emit one OpenDC
-task plus its time-sliced GPU-usage fragments."""
+"""Per-request simulation: prefill/decode latency + prefix-cache hits -> one OpenDC task and its GPU-usage fragments."""
 
 from __future__ import annotations
 
@@ -27,13 +26,10 @@ def simulate_one(
     export_rate_s: float,
     t0_ms: int,
 ) -> tuple[dict, list[dict], float, float]:
-    """Simulate one request and return ``(task, fragments, t_prefill_s, t_decode_s)``.
+    """Simulate one request -> ``(task, fragments, t_prefill_s, t_decode_s)``.
 
-    Computes prefill/decode latency in seconds (zeroed on a prefix-cache hit per the
-    cache policy); the emitted task ``duration`` and fragment durations are stored in
-    milliseconds (s*1000, rounded, floored at 1), and fragments tile the task at
-    ``export_rate_s`` with the last fragment absorbing the residual. Also carries
-    ``total_tokens`` for the downstream efficiency step.
+    Prefill/decode latency is in seconds (zeroed on a prefix-cache hit per the cache policy);
+    emitted task/fragment durations are in milliseconds (see the unit note below).
     """
     t_prefill = get_prefill_time_s(n_in_tokens, llm, gpu)
     t_decode = get_decode_time_s(n_out_tokens, llm, gpu, cfg.kv_cache)
@@ -46,9 +42,8 @@ def simulate_one(
             t_decode = 0.0
 
     total_s = t_prefill + t_decode
-    # Durations are stored in MILLISECONDS (the downstream fragments + kavier_energy
-    # treat `duration` as ms). Previously this stored raw seconds -> a 1000x under-count,
-    # and `int()` truncated any sub-second request to 0. Convert s->ms, round, floor at 1.
+    # Durations are MILLISECONDS (downstream fragments + kavier_energy treat them as ms).
+    # s*1000, rounded, floored at 1: raw seconds under-counted 1000x and int() truncated sub-second requests to 0.
     total_ms = max(1, int(round(total_s * 1000)))
     gpu_capacity = float(gpu.core_max_mhz * gpu.cores)
     task = {
@@ -60,8 +55,7 @@ def simulate_one(
         "mem_capacity": int(gpu.memory_gb * 1024),
         "gpu_count": 1,
         "gpu_capacity": gpu_capacity,
-        # carried so the efficiency step (kavier-energy) can normalise per token
-        "total_tokens": int(n_in_tokens + n_out_tokens),
+        "total_tokens": int(n_in_tokens + n_out_tokens),  # for the kavier-energy per-token step
     }
 
     fragments: List[dict] = []
@@ -70,8 +64,7 @@ def simulate_one(
     t_sec = 0.0
     for i in range(num_snaps):
         gpu_use = get_gpu_utilization(t_sec, t_prefill, t_decode)
-        # The final fragment absorbs the residual so the fragments sum EXACTLY to the
-        # task duration (integer truncation of num_snaps would otherwise under-cover it).
+        # Final fragment absorbs the residual so fragments sum EXACTLY to the task duration.
         if i == num_snaps - 1:
             duration_ms = max(1, total_ms - i * fragment_duration_ms)
         else:

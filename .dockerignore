@@ -41,3 +41,6 @@ finetuning-data/
 # Test artifacts
 .pytest_cache/
 .mypy_cache/
+
+# Claude Code worktrees / session artifacts (not part of the image)
+.claude/

@@ -1,4 +1,4 @@
-.PHONY: setup up down shell test clean help
+.PHONY: setup up down shell ui test clean help
 
 # Default target
 .DEFAULT_GOAL := help
@@ -27,6 +27,10 @@ shell:
 	@echo "Entering Kavier container..."
 	docker-compose exec kavier /bin/bash
 
+# UI: Launch the interactive Kavier UI in a throwaway container (interactive TTY)
+ui:
+	docker-compose run --rm kavier python -m kavier_ui
+
 # Test: Run tests inside container
 test:
 	@echo "Running tests..."
@@ -45,6 +49,7 @@ help:
 	@echo "  make up       - Start container"
 	@echo "  make down     - Stop container"
 	@echo "  make shell    - Enter container shell"
+	@echo "  make ui       - Launch the interactive UI"
 	@echo "  make test     - Run tests"
 	@echo "  make clean    - Remove all Docker resources"
 	@echo "  make help     - Show this help message"

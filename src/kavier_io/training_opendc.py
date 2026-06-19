@@ -1,3 +1,5 @@
+"""Export a simulated training job to OpenDC task/fragment parquet input."""
+
 from __future__ import annotations
 
 import math
@@ -10,6 +12,7 @@ from kavier_opendc.adapter import prepare_opendc_input
 
 
 def estimate_task_memory_mb(llm_params: float, gpu_memory_gb: float, total_gpus: int) -> int:
+    """Estimate per-task memory (MB): sharded FP16 params + 25% activation, min 1024."""
     parameter_memory_mb = (llm_params * 16.0) / (8.0 * 1024.0 * 1024.0 * max(1, total_gpus))
     activation_memory_mb = gpu_memory_gb * 1024.0 * 0.25
     return int(max(1024.0, parameter_memory_mb + activation_memory_mb))
@@ -29,6 +32,12 @@ def build_training_opendc_frames(
     simulate_full_training_fn: Callable[..., dict[str, Any]],
     simulate_training_step_fn: Callable[..., dict[str, float]],
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    """Build OpenDC ``tasks`` and ``fragments`` DataFrames for one training job.
+
+    Runs the supplied full-training and per-step simulators to derive task
+    duration, step count, and resource capacities (cpu/mem/gpu), emitting one
+    fragment per step. Returns (tasks_df, fragments_df, full-training summary).
+    """
     llm = get_llm(model_name)
     gpu = get_gpu(gpu_model)
     summary = simulate_full_training_fn(
@@ -112,6 +121,11 @@ def export_training_opendc(
     simulate_full_training_fn: Callable[..., dict[str, Any]],
     simulate_training_step_fn: Callable[..., dict[str, float]],
 ) -> dict[str, Any]:
+    """Build and write the OpenDC task/fragment parquet files to ``output_dir``.
+
+    Thin wrapper over ``build_training_opendc_frames`` +
+    ``prepare_opendc_input``; returns the full-training summary dict.
+    """
     tasks, fragments, summary = build_training_opendc_frames(
         model_name=model_name,
         method=method,

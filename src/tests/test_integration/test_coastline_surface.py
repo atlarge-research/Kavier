@@ -38,6 +38,9 @@ def test_calibration_cal_swap_contract():
     must dereference the module global live (not cache values at import)."""
     import kavier_training.core.calibration as cal
 
+    # Materialise the lazily-loaded tables before snapshotting (the loader is
+    # lazy: `_CAL` is None until the first accessor call).
+    cal.get_comm_scale()
     saved = cal._CAL
     try:
         cal._CAL = {**saved, "comm_scale": 0.123456}
@@ -50,5 +53,7 @@ def test_calibration_cal_swap_contract():
 def test_calibration_data_file_present():
     import kavier_training.core.calibration as cal
 
-    assert cal._CALIBRATION_PATH.exists()
-    assert cal._CALIBRATION_PATH.name == "calibration.json"
+    # Located via the importlib.resources API (no `__file__`-relative path).
+    resource = cal.files(cal._CALIBRATION_PACKAGE).joinpath(*cal._CALIBRATION_RESOURCE)
+    assert resource.is_file()
+    assert resource.name == "calibration.json"

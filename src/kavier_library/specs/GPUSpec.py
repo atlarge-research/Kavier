@@ -1,4 +1,15 @@
+"""Hardware spec for a single GPU model."""
+
+
 class GPUSpec:
+    """Static GPU characteristics used by the simulator.
+
+    Carries name, FP16 tensor-core peak (TFLOPs), memory size (GB) and
+    bandwidth (GB/s, stored internally as bytes/s), core count and max clock
+    (MHz), the MFU factor, network bandwidth (GB/s), and the idle/max/base
+    power (W) plus calibration exponent for the power model.
+    """
+
     def __init__(
         self,
         gpu_name: str,

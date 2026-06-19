@@ -1,3 +1,5 @@
+"""``kavier-perf`` command-line interface: argument parsing and the validated ``PerfArgs`` model."""
+
 import argparse
 import sys
 from pathlib import Path
@@ -6,6 +8,8 @@ from pydantic import BaseModel, Field, ValidationError
 
 
 class PerfArgs(BaseModel):
+    """Validated CLI arguments for a performance run: LLM/GPU names, trace path, output folder, and KV/prefix-cache settings."""
+
     llm: str = Field(pattern=r"^[A-Za-z0-9._-]+$")
     gpu: str = Field(pattern=r"^[A-Za-z0-9._-]+$")
     trace: Path
@@ -63,6 +67,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def parse_args() -> PerfArgs:
+    """Parse ``sys.argv`` and return a validated ``PerfArgs``; prints validation errors and exits 1 on failure."""
     raw = _build_parser().parse_args()
     try:
         return PerfArgs.model_validate(vars(raw))

@@ -1,3 +1,5 @@
+"""Inference simulation tuning constants (efficiencies, overheads, util cap)."""
+
 COMPUTE_EFFICIENCY = 0.30
 MEMORY_EFFICIENCY = 0.60
 PREFILL_OVERHEAD_S = 0.025

@@ -1,3 +1,6 @@
+"""``kavier-co2`` CLI: estimate training/run CO2 by billing fragments (from a Kavier
+training sim or an OpenDC powerSource parquet) against a carbon-intensity trace."""
+
 from __future__ import annotations
 
 import argparse
@@ -95,6 +98,9 @@ def _write_csv(result: EmissionResult, path: str) -> None:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
+    """``kavier-co2`` entry point: load the carbon trace, build fragments from either
+    ``--from-training`` or ``--powersource``, compute emissions, and print (and
+    optionally CSV-dump) the energy/CO2 breakdown."""
     parser = _build_parser()
     args = parser.parse_args(argv)
 

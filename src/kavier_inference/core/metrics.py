@@ -1,3 +1,5 @@
+"""Aggregate inference metrics: total prefill/decode time and per-request latencies, plus a formatted run summary."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -13,11 +15,14 @@ from kavier_library.specs.LLMSpec import LLMSpec
 
 @dataclass
 class Metrics:
+    """Running totals of prefill/decode time (seconds) and per-request latencies (ms) across a simulation."""
+
     sum_prefill: float = 0.0
     sum_decode: float = 0.0
     latencies: list[float] = field(default_factory=list)
 
     def add(self, prefill_s: float, decode_s: float, latency_ms: float) -> None:
+        """Accumulate one request's prefill/decode time (seconds) and its end-to-end latency (ms)."""
         self.sum_prefill += prefill_s
         self.sum_decode += decode_s
         self.latencies.append(latency_ms)
@@ -31,6 +36,7 @@ class Metrics:
         llm: LLMSpec,
         cfg: SimConfig,
     ) -> str:
+        """Return a human-readable summary block (GPU/model, config, total prefill/decode/total time in s and h, p95 latency in ms, cache hit ratio, evictions)."""
         p95_lat = np.percentile(self.latencies, 95)
         total_s = self.sum_prefill + self.sum_decode
 

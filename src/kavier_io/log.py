@@ -1,3 +1,5 @@
+"""Shared Rich console logger; exports the timestamped ``log`` callable."""
+
 from rich.console import Console
 
 _log = Console()

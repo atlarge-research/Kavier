@@ -1,7 +1,16 @@
+"""Architecture spec for a single LLM."""
+
 from __future__ import annotations
 
 
 class LLMSpec:
+    """Static model architecture used by the simulator.
+
+    Carries name, layer count, hidden size (d_model), attention heads and
+    per-head dim, bytes per parameter, total params (m_params), and the
+    active params (defaults to m_params for dense models; lower for MoE).
+    """
+
     def __init__(
         self,
         llm_name: str,

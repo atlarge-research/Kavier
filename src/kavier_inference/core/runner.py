@@ -1,3 +1,5 @@
+"""Per-request simulation: compute prefill/decode latency, apply prefix-cache hits, and emit one OpenDC task plus its time-sliced GPU-usage fragments."""
+
 from __future__ import annotations
 
 from typing import Any, List
@@ -24,6 +26,14 @@ def simulate_one(
     export_rate_s: float,
     t0_ms: int,
 ) -> tuple[dict, list[dict], float, float]:
+    """Simulate one request and return ``(task, fragments, t_prefill_s, t_decode_s)``.
+
+    Computes prefill/decode latency in seconds (zeroed on a prefix-cache hit per the
+    cache policy); the emitted task ``duration`` and fragment durations are stored in
+    milliseconds (s*1000, rounded, floored at 1), and fragments tile the task at
+    ``export_rate_s`` with the last fragment absorbing the residual. Also carries
+    ``total_tokens`` for the downstream efficiency step.
+    """
     t_prefill = get_prefill_time_s(n_in_tokens, llm, gpu)
     t_decode = get_decode_time_s(n_out_tokens, llm, gpu, cfg.kv_cache)
 

@@ -1,9 +1,12 @@
+"""Analytical decode-stage latency model (roofline: max of compute- and memory-bound per-token time)."""
+
 from kavier_io.constants import COMPUTE_EFFICIENCY, MEMORY_EFFICIENCY
 from kavier_library.specs.GPUSpec import GPUSpec
 from kavier_library.specs.LLMSpec import LLMSpec
 
 
 def get_decode_time_s(n_out: int, llm: LLMSpec, gpu: GPUSpec, kv_cache: bool) -> float:
+    """Return decode time (seconds) for ``n_out`` output tokens; linear with KV cache, quadratic (n(n+1)/2) without it."""
     f_tok = 2.0 * llm.m_params
     b = llm.p_bytes
 

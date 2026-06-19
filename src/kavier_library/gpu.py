@@ -1,5 +1,8 @@
+"""Built-in catalogue of GPUSpec entries keyed by GPU model name."""
+
 from kavier_library.specs.GPUSpec import GPUSpec
 
+#: Mapping of GPU model name -> GPUSpec; look up via ``get_gpu``.
 GPU_SPEC_LIBRARY = {
     "A10": GPUSpec(
         gpu_name="A10",

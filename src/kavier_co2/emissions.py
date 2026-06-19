@@ -1,3 +1,6 @@
+"""Core carbon model: a ``CarbonTrace`` (time-varying gCO2/kWh) plus power ``Fragment``s,
+integrated window-by-window into an ``EmissionResult`` (energy kWh, CO2 grams)."""
+
 from __future__ import annotations
 
 import datetime as dt
@@ -11,6 +14,9 @@ WS_PER_KWH = 3.6e6  # watt-seconds in one kilowatt-hour
 
 @dataclass(frozen=True)
 class Fragment:
+    """A constant-power interval: starts at ``start_time`` (naive), runs ``duration_s``
+    seconds drawing ``power_w`` watts."""
+
     start_time: pd.Timestamp
     duration_s: float
     power_w: float
@@ -18,6 +24,9 @@ class Fragment:
 
 @dataclass(frozen=True)
 class CarbonTrace:
+    """A piecewise-constant carbon-intensity timeline: ``intensities[i]`` (gCO2/kWh)
+    applies over ``[timestamps[i], timestamps[i] + step)``."""
+
     timestamps: pd.DatetimeIndex
     intensities: "pd.Series"
     step: dt.timedelta
@@ -28,6 +37,8 @@ class CarbonTrace:
         df: pd.DataFrame,
         step: dt.timedelta | None = None,
     ) -> "CarbonTrace":
+        """Build a trace from a ``[timestamp, carbon_intensity]`` frame (sorted, naive
+        timestamps); ``step`` is inferred from the first interval if not given."""
         if "timestamp" not in df.columns or "carbon_intensity" not in df.columns:
             raise ValueError(
                 f"carbon trace must have columns ['timestamp', 'carbon_intensity']; got {list(df.columns)}"
@@ -58,22 +69,29 @@ class CarbonTrace:
 
 @dataclass(frozen=True)
 class EmissionResult:
+    """Result of an emissions run: total energy (kWh), total CO2 (grams), and a
+    per-window ``breakdown`` (window_start, carbon_intensity, energy_kwh, co2_g)."""
+
     total_energy_kwh: float
     total_co2_g: float
     breakdown: List[dict]
 
     @property
     def total_co2_kg(self) -> float:
+        """Total CO2 in kilograms."""
         return self.total_co2_g / 1000.0
 
     @property
     def average_intensity(self) -> float:
+        """Energy-weighted mean intensity (gCO2/kWh); 0 when no energy was used."""
         if self.total_energy_kwh == 0:
             return 0.0
         return self.total_co2_g / self.total_energy_kwh
 
 
 def load_carbon_trace(path: str, step_minutes: int | None = None) -> CarbonTrace:
+    """Load a carbon-intensity parquet into a ``CarbonTrace``; ``step_minutes`` overrides
+    the inferred sampling step."""
     df = pd.read_parquet(path)
     step = dt.timedelta(minutes=step_minutes) if step_minutes else None
     return CarbonTrace.from_dataframe(df, step=step)
@@ -84,6 +102,9 @@ def _window_index_for(ts: pd.Timestamp, trace: CarbonTrace) -> int:
 
 
 def compute_emissions(fragments: Iterable[Fragment], trace: CarbonTrace) -> EmissionResult:
+    """Integrate each fragment's energy across the carbon trace, billing every slice at the
+    down-estimated intensity (min of its window and the next), and return the totals plus a
+    per-window breakdown. Raises if a fragment falls outside the trace coverage."""
     # window_start (Timestamp) -> {"carbon_intensity", "energy_kwh", "co2_g"}
     acc: dict[pd.Timestamp, dict] = {}
     total_energy_kwh = 0.0

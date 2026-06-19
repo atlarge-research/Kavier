@@ -1,3 +1,5 @@
+"""Validate engine predictions against measured throughput, writing per-row results and returning summary error metrics."""
+
 from pathlib import Path
 from typing import Any, Dict
 
@@ -18,6 +20,7 @@ def validate_predictions(
     num_gpus: int = None,
     max_samples: int = None,
 ) -> Dict[str, Any]:
+    """Simulate each validation-CSV row, write predictions to ``output_csv``, and return error metrics (count + mean/median/min/max/std absolute percent error vs measured_throughput). Optional method/num_gpus/max_samples filters."""
     validation_path = Path(validation_csv) if validation_csv else _DEFAULT_VALIDATION_CSV
     output_path = Path(output_csv) if output_csv else _DEFAULT_OUTPUT_CSV
     df = pd.read_csv(validation_path)

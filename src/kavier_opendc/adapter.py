@@ -1,3 +1,6 @@
+"""Export Kavier task/fragment frames to OpenDC workload parquet (coerce dtypes to the
+OpenDC schema, then write tasks.parquet + fragments.parquet)."""
+
 from __future__ import annotations
 
 import os
@@ -43,6 +46,8 @@ def _coerce_fragments_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def write_tasks_opendc(df: pd.DataFrame, path: str) -> None:
+    """Write ``df`` as an OpenDC tasks.parquet (TASKS_SCHEMA, zstd). The inference-only
+    ``total_tokens`` column is appended to the schema and carried through when present."""
     coerced = _coerce_tasks_df(df)
     schema = TASKS_SCHEMA
     if "total_tokens" in coerced.columns:  # inference path: carry it for the efficiency step
@@ -56,6 +61,7 @@ def write_tasks_opendc(df: pd.DataFrame, path: str) -> None:
 
 
 def write_fragments_opendc(df: pd.DataFrame, path: str) -> None:
+    """Write ``df`` as an OpenDC fragments.parquet (FRAGMENTS_SCHEMA, zstd)."""
     pq.write_table(
         pa.Table.from_pandas(_coerce_fragments_df(df), schema=FRAGMENTS_SCHEMA, preserve_index=False),
         path,
@@ -65,12 +71,15 @@ def write_fragments_opendc(df: pd.DataFrame, path: str) -> None:
 
 
 def prepare_opendc_input(tasks: pd.DataFrame, fragments: pd.DataFrame, dst_dir: str) -> None:
+    """Write both tasks.parquet and fragments.parquet into ``dst_dir`` (created if needed),
+    forming a complete OpenDC workload directory."""
     os.makedirs(dst_dir, exist_ok=True)
     write_tasks_opendc(tasks, f"{dst_dir}/tasks.parquet")
     write_fragments_opendc(fragments, f"{dst_dir}/fragments.parquet")
 
 
 def output_kavier_specs(dst_dir: str, results: str) -> None:
+    """Dump the Kavier sim ``results`` text alongside the workload as ``_sim_results.txt``."""
     os.makedirs(dst_dir, exist_ok=True)
     with open(f"{dst_dir}/_sim_results.txt", "w") as f:
         f.write(results)

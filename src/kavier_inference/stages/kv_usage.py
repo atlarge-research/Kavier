@@ -1,3 +1,5 @@
+"""Analytical KV-cache memory-utilization model over a request's prefill/decode timeline."""
+
 from kavier_library.specs.GPUSpec import GPUSpec
 from kavier_library.specs.LLMSpec import LLMSpec
 
@@ -5,6 +7,7 @@ from kavier_library.specs.LLMSpec import LLMSpec
 def get_kv_cache_utilization(
     llm: LLMSpec, gpu: GPUSpec, t_prefill, t_decode, t, prompt_len, response_len, kv_cache
 ) -> float:
+    """Return the fraction of GPU memory occupied by the KV cache at elapsed time ``t`` (s); 0 when KV cache is off."""
     if not kv_cache:
         return 0
 

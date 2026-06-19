@@ -1,3 +1,6 @@
+"""Per-million-token efficiency metrics: energy (Wh), carbon (gCO2) and cost ($)
+per Mtoken, derived from an OpenDC powerSource parquet and Kavier tasks."""
+
 from __future__ import annotations
 
 import pandas as pd

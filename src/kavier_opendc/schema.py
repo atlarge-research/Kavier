@@ -1,3 +1,6 @@
+"""PyArrow schemas for the OpenDC workload parquet files (tasks.parquet and
+fragments.parquet) that Kavier exports."""
+
 import pyarrow as pa
 
 TASKS_SCHEMA = pa.schema(

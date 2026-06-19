@@ -1,3 +1,5 @@
+"""Load an inference trace (.csv/.parquet) into token counts and token lists."""
+
 import json
 import os
 
@@ -9,6 +11,7 @@ from kavier_io.log import log
 
 
 def _string_array_to_tokens(strings, tqdm_message=""):
+    """Parse JSON-array token strings into lists of ints; empty/NA -> []."""
     tokens = []
     for s in tqdm(strings, desc=tqdm_message, unit="row"):
         if s in (None, "") or (isinstance(s, float) and pd.isna(s)):
@@ -22,6 +25,14 @@ def _string_array_to_tokens(strings, tqdm_message=""):
 
 
 class InputSpec:
+    """Parsed inference trace loaded from a .csv or .parquet ``path``.
+
+    Requires columns ``num_input_tokens`` and ``num_output_tokens`` (exposed
+    as ``num_in_t``/``num_out_t``/``num_tot_t``). Optional ``input_tokens``/
+    ``output_tokens`` (JSON int arrays) populate ``in_t``/``out_t`` and
+    ``session_id`` populates ``sessions``. Raises ValueError on bad/empty input.
+    """
+
     def __init__(self, path: str):
         self.path = path
         self.num_in_t = self.num_out_t = self.num_tot_t = None

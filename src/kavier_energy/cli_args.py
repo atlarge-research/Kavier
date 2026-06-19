@@ -1,4 +1,9 @@
+"""Argparse wiring for the ``kavier-energy`` efficiency CLI."""
+
+
 def add_efficiency_args(parser):
+    """Register the ``kavier-energy`` arguments (--kavier, --opendc, --price, --out)
+    on ``parser`` and return it."""
     parser.add_argument(
         "--kavier",
         required=True,

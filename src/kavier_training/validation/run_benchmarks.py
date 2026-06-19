@@ -1,3 +1,5 @@
+"""Benchmark engine throughput accuracy across method/GPU-count/GPU-model slices and print a MAPE summary table."""
+
 from pathlib import Path
 from typing import Dict
 
@@ -8,6 +10,7 @@ from kavier_training.core.engine import simulate_training_step
 
 
 def run_benchmark(df: pd.DataFrame, name: str, filter_fn=None) -> Dict:
+    """Run the engine over an (optionally filtered) slice of ``df`` and return name/sample-count/MAPE/median/min/max/std percent-error stats, or None if empty."""
     if filter_fn:
         subset = df[filter_fn(df)].copy()
     else:
@@ -56,6 +59,7 @@ def run_benchmark(df: pd.DataFrame, name: str, filter_fn=None) -> Dict:
 
 
 def main():
+    """Load the bundled validation CSV, run all benchmark slices, and print the MAPE table plus best/worst."""
     csv_path = Path(__file__).parent.parent / "data" / "input" / "validation_clean.csv"
     df = pd.read_csv(csv_path)
 

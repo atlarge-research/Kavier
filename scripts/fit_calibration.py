@@ -48,6 +48,7 @@ USAGE
     # also write the fitted calibration JSON (used by the accuracy comparison)
     python scripts/fit_calibration.py --write
 """
+
 from __future__ import annotations
 
 import argparse
@@ -79,13 +80,14 @@ MIN_INTERACTION_ROWS = 3
 # (DATA_PATH is resolved at import time from DATA_DIR).
 os.environ.setdefault("DATA_DIR", str(DATA6_DIR))
 
-import kavier_training.core.calibration as cal  # noqa: E402
-from kavier_training.core.engine import simulate_training_step  # noqa: E402
 from trainer.common import (  # noqa: E402
     load_and_preprocess_data,
     split_data,
     transform_targets,
 )
+
+import kavier_training.core.calibration as cal  # noqa: E402
+from kavier_training.core.engine import simulate_training_step  # noqa: E402
 
 
 def _filter_like_loader(df: pd.DataFrame) -> pd.DataFrame:
@@ -141,9 +143,7 @@ def fit(df85: pd.DataFrame, shipped: dict) -> dict:
     neutral["method_scale"] = {}
     neutral["model_scale"] = {}
     neutral["interaction_scale"] = {}
-    neutral["multi_gpu_correction"]["by_num_gpus"] = {
-        str(n): 1.0 for n in sorted(df["tot"].unique()) if n > 1
-    }
+    neutral["multi_gpu_correction"]["by_num_gpus"] = {str(n): 1.0 for n in sorted(df["tot"].unique()) if n > 1}
     saved = cal._CAL
     cal._CAL = neutral
     try:
@@ -180,8 +180,15 @@ def fit(df85: pd.DataFrame, shipped: dict) -> dict:
     # 5. interaction_scale (multiplies): per (model|method|gpu|N), guarded by row count.
     interaction_scale: dict[str, float] = {}
     df = df.assign(_pred=pred)
-    keys = df["model_name"].astype(str) + "|" + df["method"].astype(str) + "|" + \
-        df["gpu_model"].astype(str) + "|" + df["tot"].astype(str)
+    keys = (
+        df["model_name"].astype(str)
+        + "|"
+        + df["method"].astype(str)
+        + "|"
+        + df["gpu_model"].astype(str)
+        + "|"
+        + df["tot"].astype(str)
+    )
     df = df.assign(_key=keys)
     for key, grp in df.groupby("_key"):
         if len(grp) < MIN_INTERACTION_ROWS:
@@ -247,8 +254,14 @@ def main() -> None:
     print(f"split: 85% train+val = {len(df85)} rows | 15% test = {len(df15)} rows (SEED=42)")
 
     fitted = fit(df85, shipped)
-    print("\nfitted multi_gpu_correction (<=8):",
-          {k: round(v, 3) for k, v in sorted(fitted["multi_gpu_correction"]["by_num_gpus"].items(), key=lambda x: int(x[0])) if int(k) <= 8})
+    print(
+        "\nfitted multi_gpu_correction (<=8):",
+        {
+            k: round(v, 3)
+            for k, v in sorted(fitted["multi_gpu_correction"]["by_num_gpus"].items(), key=lambda x: int(x[0]))
+            if int(k) <= 8
+        },
+    )
     print("fitted method_scale:", {k: round(v, 3) for k, v in fitted["method_scale"].items()})
     print("fitted model_scale :", {k: round(v, 3) for k, v in fitted["model_scale"].items()})
     print(f"fitted interaction_scale: {len(fitted['interaction_scale'])} keys (>= {MIN_INTERACTION_ROWS} rows)")

@@ -6,7 +6,8 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class CacheCfg:
-    """Prefix-cache settings: min prefix length (tokens), skip policy (none/prefill/full), session vs global scope, and LRU capacity."""
+    """Prefix-cache settings: min prefix length (tokens), skip policy (none/prefill/full), session vs
+    global scope, and LRU capacity."""
 
     min_len: int = 1024
     action: Literal["none", "prefill", "full"] = "prefill"

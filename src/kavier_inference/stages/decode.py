@@ -6,7 +6,8 @@ from kavier_library.specs.LLMSpec import LLMSpec
 
 
 def get_decode_time_s(n_out: int, llm: LLMSpec, gpu: GPUSpec, kv_cache: bool) -> float:
-    """Return decode time (seconds) for ``n_out`` output tokens; linear with KV cache, quadratic (n(n+1)/2) without it."""
+    """Return decode time (seconds) for ``n_out`` output tokens; linear with KV cache, quadratic
+    (n(n+1)/2) without it."""
     f_tok = 2.0 * llm.m_params
     b = llm.p_bytes
 

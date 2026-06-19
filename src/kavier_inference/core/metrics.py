@@ -36,7 +36,8 @@ class Metrics:
         llm: LLMSpec,
         cfg: SimConfig,
     ) -> str:
-        """Return a human-readable summary block (GPU/model, config, total prefill/decode/total time in s and h, p95 latency in ms, cache hit ratio, evictions)."""
+        """Return a human-readable summary block (GPU/model, config, total prefill/decode/total time in
+        s and h, p95 latency in ms, cache hit ratio, evictions)."""
         p95_lat = np.percentile(self.latencies, 95)
         total_s = self.sum_prefill + self.sum_decode
 

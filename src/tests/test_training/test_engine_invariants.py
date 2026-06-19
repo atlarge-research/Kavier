@@ -69,15 +69,25 @@ def test_per_gpu_throughput_never_beats_single_gpu() -> None:
     # Adding GPUs introduces communication/correction overhead; per-GPU efficiency
     # can only stay flat or drop, never exceed the lone-GPU rate.
     one = simulate_full_training(
-        model_name="mistral-7b-v0.1", method="full", gpu_model=_GPU,
-        tokens_per_sample=1024, batch_size=4, number_gpus=1, number_nodes=1,
+        model_name="mistral-7b-v0.1",
+        method="full",
+        gpu_model=_GPU,
+        tokens_per_sample=1024,
+        batch_size=4,
+        number_gpus=1,
+        number_nodes=1,
         total_tokens=1_000_000,
     )["train_tokens_per_gpu_per_second"]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         many = simulate_full_training(
-            model_name="mistral-7b-v0.1", method="full", gpu_model=_GPU,
-            tokens_per_sample=1024, batch_size=4, number_gpus=8, number_nodes=1,
+            model_name="mistral-7b-v0.1",
+            method="full",
+            gpu_model=_GPU,
+            tokens_per_sample=1024,
+            batch_size=4,
+            number_gpus=8,
+            number_nodes=1,
             total_tokens=1_000_000,
         )["train_tokens_per_gpu_per_second"]
     assert many <= one * (1.0 + 1e-9)
@@ -86,8 +96,13 @@ def test_per_gpu_throughput_never_beats_single_gpu() -> None:
 def test_runtime_scales_with_total_tokens() -> None:
     # 2x the tokens at a fixed throughput -> 2x runtime (exactly, same config).
     common = dict(
-        model_name="mistral-7b-v0.1", method="full", gpu_model=_GPU,
-        tokens_per_sample=1024, batch_size=4, number_gpus=2, number_nodes=1,
+        model_name="mistral-7b-v0.1",
+        method="full",
+        gpu_model=_GPU,
+        tokens_per_sample=1024,
+        batch_size=4,
+        number_gpus=2,
+        number_nodes=1,
     )
     r1 = simulate_full_training(total_tokens=1_000_000, **common)
     r2 = simulate_full_training(total_tokens=2_000_000, **common)

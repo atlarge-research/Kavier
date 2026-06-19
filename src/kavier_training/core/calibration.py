@@ -1,11 +1,12 @@
-"""Loader and accessors for the fitted calibration tables (data/calibration.json) applied by the engine when calibrated=True."""
+"""Loader and accessors for the fitted calibration tables (data/calibration.json) applied by the engine
+when calibrated=True."""
 
 from __future__ import annotations
 
 import json
 import warnings
 from importlib.resources import files
-from typing import Any
+from typing import Any, cast
 
 # Packaged location of calibration.json, resolved via importlib.resources (wheel-safe).
 _CALIBRATION_PACKAGE = "kavier_training"
@@ -26,7 +27,7 @@ def _read_calibration() -> dict[str, Any]:
     """Read and parse the packaged calibration.json via importlib.resources (wheel-safe)."""
     resource = files(_CALIBRATION_PACKAGE).joinpath(*_CALIBRATION_RESOURCE)
     with resource.open(encoding="utf-8") as f:
-        return json.load(f)
+        return cast("dict[str, Any]", json.load(f))
 
 
 def _active_calibration() -> dict[str, Any]:
@@ -87,7 +88,8 @@ def get_mfu_multiplier(gpu_name: str) -> float:
 
 
 def get_multi_gpu_correction(num_gpus: int) -> float:
-    """Throughput-scaling divisor for ``num_gpus``; 1.0 for a single GPU, else the fitted value (snapped to the nearest fitted count, no interpolation)."""
+    """Throughput-scaling divisor for ``num_gpus``; 1.0 for a single GPU, else the fitted value
+    (snapped to the nearest fitted count, no interpolation)."""
     if num_gpus <= 1:
         return 1.0
     table = _active_calibration()["multi_gpu_correction"]["by_num_gpus"]

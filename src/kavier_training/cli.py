@@ -1,4 +1,5 @@
-"""``kavier-train`` console entry point: simulate a single config or every row of a CSV, optionally exporting an OpenDC workload."""
+"""``kavier-train`` console entry point: simulate a single config or every row of a CSV, optionally
+exporting an OpenDC workload."""
 
 from __future__ import annotations
 
@@ -8,10 +9,9 @@ import json
 import sys
 from typing import NoReturn
 
-from kavier_io.training_opendc import export_training_opendc
-from kavier_training.core.cli_args import add_training_args
-from kavier_training.core.engine import simulate_full_training, simulate_training_step
 from kavier_library.lookup import UnknownSpecError
+from kavier_training.core.cli_args import add_training_args
+from kavier_training.core.engine import simulate_full_training
 
 _EXAMPLE_CMD = (
     "kavier-train --model_name mistral-7b-v0.1 --method lora "

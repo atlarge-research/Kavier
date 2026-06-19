@@ -35,6 +35,7 @@ Usage:
 
 Dry-run (print, don't touch calibration.json) by omitting --write.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -101,9 +102,7 @@ def _mdape(y: np.ndarray, p: np.ndarray) -> float:
 
 def fit_model(model: str, trace: pd.DataFrame, base_cal: dict) -> dict:
     s = trace[
-        (trace["model_name"] == model)
-        & (trace["is_valid"] == 1.0)
-        & (trace["dataset_tokens_per_second"] > 0)
+        (trace["model_name"] == model) & (trace["is_valid"] == 1.0) & (trace["dataset_tokens_per_second"] > 0)
     ].copy()
     s["total"] = (pd.to_numeric(s["number_gpus"]) * pd.to_numeric(s["number_nodes"])).astype(int)
     s = s[s["total"] <= MAX_GPUS].copy()
@@ -116,9 +115,7 @@ def fit_model(model: str, trace: pd.DataFrame, base_cal: dict) -> dict:
     # base = global scales only; this model neutral (model_scale/interaction removed -> 1.0)
     base = copy.deepcopy(base_cal)
     base["model_scale"].pop(model, None)
-    base["interaction_scale"] = {
-        k: v for k, v in base["interaction_scale"].items() if not k.startswith(model + "|")
-    }
+    base["interaction_scale"] = {k: v for k, v in base["interaction_scale"].items() if not k.startswith(model + "|")}
 
     y_tr = train["dataset_tokens_per_second"].to_numpy(float)
     model_scale = float(np.median(y_tr / _predict(train, model, base)))

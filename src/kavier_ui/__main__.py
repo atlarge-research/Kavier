@@ -1,4 +1,5 @@
 """`python -m kavier_ui` entry point."""
+
 from __future__ import annotations
 
 import sys

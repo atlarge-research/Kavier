@@ -10,7 +10,8 @@ from kavier_training.core.engine import simulate_training_step
 
 
 def run_benchmark(df: pd.DataFrame, name: str, filter_fn=None) -> Dict:
-    """Run the engine over an (optionally filtered) slice of ``df`` and return name/sample-count/MAPE/median/min/max/std percent-error stats, or None if empty."""
+    """Run the engine over an (optionally filtered) slice of ``df`` and return
+    name/sample-count/MAPE/median/min/max/std percent-error stats, or None if empty."""
     if filter_fn:
         subset = df[filter_fn(df)].copy()
     else:

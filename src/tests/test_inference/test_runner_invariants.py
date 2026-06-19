@@ -28,8 +28,17 @@ def _run(n_in: int, n_out: int, kv: bool = True):
     cfg = SimConfig(kv_cache=kv, cache=CacheCfg())
     cache = PrefixCache(cfg.cache)
     return simulate_one(
-        idx=0, session_id="s", n_in_tokens=n_in, n_out_tokens=n_out, in_tokens=None,
-        llm=_LLM, gpu=_GPU, cache=cache, cfg=cfg, export_rate_s=cfg.export_rate, t0_ms=0,
+        idx=0,
+        session_id="s",
+        n_in_tokens=n_in,
+        n_out_tokens=n_out,
+        in_tokens=None,
+        llm=_LLM,
+        gpu=_GPU,
+        cache=cache,
+        cfg=cfg,
+        export_rate_s=cfg.export_rate,
+        t0_ms=0,
     )
 
 

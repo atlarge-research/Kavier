@@ -4,6 +4,7 @@ The interactive widgets need a TTY and are exercised separately by hand; here we
 pin the (pure) sim adapters that produce what the rich panels render, plus the
 no-TTY guard and graceful error propagation.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,9 +18,14 @@ from kavier_ui import sims
 
 def _infer_inputs(**over: object) -> dict[str, object]:
     base = {
-        "model": "Llama-3-8B", "gpu": "A10", "num_requests": 32,
-        "input_tokens": 256, "output_tokens": 64, "kv_cache": True,
-        "prefix_policy": "prefill", "prefix_min_tokens": 1024,
+        "model": "Llama-3-8B",
+        "gpu": "A10",
+        "num_requests": 32,
+        "input_tokens": 256,
+        "output_tokens": 64,
+        "kv_cache": True,
+        "prefix_policy": "prefill",
+        "prefix_min_tokens": 1024,
     }
     base.update(over)
     return base
@@ -27,8 +33,13 @@ def _infer_inputs(**over: object) -> dict[str, object]:
 
 def _train_inputs(**over: object) -> dict[str, object]:
     base = {
-        "model": "mistral-7b-v0.1", "gpu": "NVIDIA-A100-SXM4-80GB", "method": "lora",
-        "batch_size": 4, "seq_len": 1024, "num_gpus": 8, "num_nodes": 1,
+        "model": "mistral-7b-v0.1",
+        "gpu": "NVIDIA-A100-SXM4-80GB",
+        "method": "lora",
+        "batch_size": 4,
+        "seq_len": 1024,
+        "num_gpus": 8,
+        "num_nodes": 1,
         "total_tokens": 10_000_000,
     }
     base.update(over)
@@ -104,10 +115,13 @@ def test_export_opendc_writes_valid_parquet(tmp_path: Path) -> None:
     assert int(tasks["total_tokens"].sum()) == 8 * (256 + 64)
 
 
-@pytest.mark.parametrize("inputs", [
-    _infer_inputs(model="NoSuchModel"),
-    _infer_inputs(gpu="NoSuchGPU"),
-])
+@pytest.mark.parametrize(
+    "inputs",
+    [
+        _infer_inputs(model="NoSuchModel"),
+        _infer_inputs(gpu="NoSuchGPU"),
+    ],
+)
 def test_unknown_spec_propagates(inputs: dict[str, object]) -> None:
     with pytest.raises(UnknownSpecError):
         sims.run_inference(inputs)

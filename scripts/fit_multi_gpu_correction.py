@@ -44,6 +44,7 @@ The trace is IBM-internal (ado-sfttrainer) and is NOT vendored into kavier; pass
 Required columns: model_name, gpu_model, method, number_gpus, number_nodes, batch_size,
 tokens_per_sample, is_valid, dataset_tokens_per_second.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -60,9 +61,9 @@ _SRC = _HERE.parent / "src"
 sys.path.insert(0, str(_SRC))
 
 import kavier_training.core.calibration as cal  # noqa: E402
-from kavier_training.core.engine import simulate_training_step  # noqa: E402
 from kavier_library.gpu import GPU_SPEC_LIBRARY  # noqa: E402
 from kavier_library.llm import LLM_SPEC_LIBRARY  # noqa: E402
+from kavier_training.core.engine import simulate_training_step  # noqa: E402
 
 CAL_PATH = _SRC / "kavier_training" / "data" / "calibration.json"
 DEFAULT_TRACE = _HERE.parent.parent / "trace-archive" / "pd1-profiling-dataset" / "ado-sfttrainer-raw.csv"
@@ -83,9 +84,13 @@ def fit_count(trace: pd.DataFrame, n: int, base_cal: dict) -> list[float]:
                 continue  # engine can't resolve this spec; skip
             try:
                 pred1 = simulate_training_step(
-                    model_name=r.model_name, gpu_model=str(r.gpu_model),
-                    tokens_per_sample=int(r.tokens_per_sample), batch_size=int(r.batch_size),
-                    method=str(r.method), num_gpus=int(n), num_nodes=int(r.number_nodes),
+                    model_name=r.model_name,
+                    gpu_model=str(r.gpu_model),
+                    tokens_per_sample=int(r.tokens_per_sample),
+                    batch_size=int(r.batch_size),
+                    method=str(r.method),
+                    num_gpus=int(n),
+                    num_nodes=int(r.number_nodes),
                 )["tokens_per_second"]
             except Exception:
                 continue
@@ -100,8 +105,9 @@ def fit_count(trace: pd.DataFrame, n: int, base_cal: dict) -> list[float]:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--trace", type=Path, default=DEFAULT_TRACE)
-    ap.add_argument("--counts", type=int, nargs="+", default=[16, 32, 128],
-                    help="total-GPU counts to fit (and write with --write)")
+    ap.add_argument(
+        "--counts", type=int, nargs="+", default=[16, 32, 128], help="total-GPU counts to fit (and write with --write)"
+    )
     ap.add_argument("--write", action="store_true", help="write fitted values into calibration.json")
     args = ap.parse_args()
 

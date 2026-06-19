@@ -1,4 +1,5 @@
-"""Analytical training-step engine: FLOPs/MFU + comm/optimizer model yielding throughput, runtime, GPU utilization and power."""
+"""Analytical training-step engine: FLOPs/MFU + comm/optimizer model yielding throughput, runtime, GPU
+utilization and power."""
 
 from __future__ import annotations
 

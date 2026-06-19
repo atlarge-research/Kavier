@@ -1,4 +1,5 @@
-"""Performance-run service: wire CLI args to the engine, run the simulation, and write OpenDC tasks/fragments plus spec outputs to a timestamped folder."""
+"""Performance-run service: wire CLI args to the engine, run the simulation, and write OpenDC
+tasks/fragments plus spec outputs to a timestamped folder."""
 
 import datetime
 import os
@@ -17,7 +18,8 @@ from kavier_opendc.adapter import output_kavier_specs, prepare_opendc_input
 
 
 def run_performance(args) -> str:
-    """Run a full performance simulation: load trace/LLM/GPU specs, simulate, export OpenDC + Kavier outputs to a timestamped folder, and return the summary string."""
+    """Run a full performance simulation: load trace/LLM/GPU specs, simulate, export OpenDC + Kavier
+    outputs to a timestamped folder, and return the summary string."""
     np.random.seed(42)
 
     cfg = SimConfig.from_cli(args)

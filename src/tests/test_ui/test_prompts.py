@@ -1,4 +1,5 @@
 """Tests for the TTY-free parts of the UI: Choice coercion and the non-TTY guard."""
+
 from __future__ import annotations
 
 import sys

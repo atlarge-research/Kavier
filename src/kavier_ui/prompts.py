@@ -4,6 +4,7 @@ Raw-key navigation in the style of the reproducibility-capsule `make ui`: arrow
 keys + enter, plus a type-to-filter fuzzy selector for the (long) model/GPU lists.
 Every widget is cancellable with Ctrl-C / Esc, which raises ``Abort``.
 """
+
 from __future__ import annotations
 
 import os
@@ -66,8 +67,14 @@ def _coerce(choices: Sequence[Choice | str]) -> list[Choice]:
     return [c if isinstance(c, Choice) else Choice(c, str(c)) for c in choices]
 
 
-def menu(title: str, choices: Sequence[Choice | str], *, accent: str = "cyan", default: int = 0,
-         footer: str = "↑↓ move · enter select · q quit") -> object:
+def menu(
+    title: str,
+    choices: Sequence[Choice | str],
+    *,
+    accent: str = "cyan",
+    default: int = 0,
+    footer: str = "↑↓ move · enter select · q quit",
+) -> object:
     """Arrow-key menu. Returns the chosen ``Choice.value``. 'q'/Esc raise Abort."""
     items = _coerce(choices)
     idx = max(0, min(default, len(items) - 1))
@@ -101,8 +108,14 @@ def menu(title: str, choices: Sequence[Choice | str], *, accent: str = "cyan", d
             live.update(render(), refresh=True)
 
 
-def fuzzy_select(title: str, choices: Sequence[Choice | str], *, accent: str = "cyan",
-                 default: object | None = None, max_rows: int = 9) -> object:
+def fuzzy_select(
+    title: str,
+    choices: Sequence[Choice | str],
+    *,
+    accent: str = "cyan",
+    default: object | None = None,
+    max_rows: int = 9,
+) -> object:
     """Type-to-filter selector for long lists (models/GPUs). Substring match,
     arrow keys to move within the filtered set, enter to pick. Esc cancels."""
     items = _coerce(choices)
@@ -125,7 +138,7 @@ def fuzzy_select(title: str, choices: Sequence[Choice | str], *, accent: str = "
         nonlocal idx
         idx = max(0, min(idx, len(rows) - 1)) if rows else 0
         win_start = max(0, min(idx - max_rows // 2, max(0, len(rows) - max_rows)))
-        view = rows[win_start:win_start + max_rows]
+        view = rows[win_start : win_start + max_rows]
 
         table = Table(box=None, pad_edge=False, show_header=False)
         table.add_column(width=3)
@@ -141,8 +154,11 @@ def fuzzy_select(title: str, choices: Sequence[Choice | str], *, accent: str = "
         if not rows:
             table.add_row(Text(" "), Text("(no match)", style="dim italic"), Text(""))
 
-        qline = Text.assemble(("  search ", "dim"), (query or "type to filter…", "white" if query else "dim italic"),
-                              ("▏", f"bold {accent}"))
+        qline = Text.assemble(
+            ("  search ", "dim"),
+            (query or "type to filter…", "white" if query else "dim italic"),
+            ("▏", f"bold {accent}"),
+        )
         count = Text(f"  {len(rows)}/{len(items)} · ↑↓ move · enter select · esc cancel", style="dim")
         body = Group(qline, Text(), table, Text(), count)
         return Panel(body, title=f"[bold {accent}]{title}[/]", border_style=accent, padding=(1, 2))
@@ -174,8 +190,9 @@ def text_prompt(message: str, *, default: str = "", accent: str = "cyan") -> str
     buf = default
 
     def render() -> Text:
-        return Text.assemble(("  ? ", f"bold {accent}"), (message + "  ", "white"),
-                             (buf, "bold white"), ("▏", f"bold {accent}"))
+        return Text.assemble(
+            ("  ? ", f"bold {accent}"), (message + "  ", "white"), (buf, "bold white"), ("▏", f"bold {accent}")
+        )
 
     with Live(render(), console=console, auto_refresh=False, screen=False) as live:
         while True:
@@ -191,9 +208,15 @@ def text_prompt(message: str, *, default: str = "", accent: str = "cyan") -> str
             live.update(render(), refresh=True)
 
 
-def number_prompt(message: str, *, default: float | int, accent: str = "cyan",
-                  minimum: float | None = None, maximum: float | None = None,
-                  integer: bool = True) -> float | int:
+def number_prompt(
+    message: str,
+    *,
+    default: float | int,
+    accent: str = "cyan",
+    minimum: float | None = None,
+    maximum: float | None = None,
+    integer: bool = True,
+) -> float | int:
     """Numeric entry with validation + re-prompt on bad input. Empty == default."""
     is_int = integer and isinstance(default, int)
     while True:

@@ -1,4 +1,5 @@
-"""Per-request simulation: compute prefill/decode latency, apply prefix-cache hits, and emit one OpenDC task plus its time-sliced GPU-usage fragments."""
+"""Per-request simulation: compute prefill/decode latency, apply prefix-cache hits, and emit one OpenDC
+task plus its time-sliced GPU-usage fragments."""
 
 from __future__ import annotations
 

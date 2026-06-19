@@ -1,14 +1,15 @@
-"""Kavier umbrella facade: re-exports the engine entry points plus GPU/LLM spec libraries, and aliases ``kavier.<sub>`` to the legacy top-level ``kavier_<sub>`` packages."""
+"""Kavier umbrella facade: re-exports the engine entry points plus GPU/LLM spec libraries, and aliases
+``kavier.<sub>`` to the legacy top-level ``kavier_<sub>`` packages."""
 
 from __future__ import annotations
 
 import importlib as _importlib
 import sys as _sys
-from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
-from importlib.metadata import version as _pkg_version
 from importlib.abc import Loader as _Loader
 from importlib.abc import MetaPathFinder as _MetaPathFinder
 from importlib.machinery import ModuleSpec as _ModuleSpec
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from types import ModuleType as _ModuleType
 from typing import Any as _Any
 from typing import Sequence as _Sequence
@@ -75,12 +76,12 @@ def __getattr__(name: str) -> _Any:
 
 
 # --- Public API re-exports (canonical surface) ---------------------------- #
+from kavier_library.gpu import GPU_SPEC_LIBRARY  # noqa: E402
+from kavier_library.llm import LLM_SPEC_LIBRARY  # noqa: E402
 from kavier_training.core.engine import (  # noqa: E402
     simulate_full_training,
     simulate_training_step,
 )
-from kavier_library.gpu import GPU_SPEC_LIBRARY  # noqa: E402
-from kavier_library.llm import LLM_SPEC_LIBRARY  # noqa: E402
 
 __all__ = [
     "simulate_training_step",

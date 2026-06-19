@@ -34,9 +34,7 @@ def _total_gpu_hours(tasks: pd.DataFrame) -> float:
     return tasks["duration"].sum() / 1_000 / 3_600
 
 
-def sustainability_efficiency(
-    powerSource: pd.DataFrame, tasks: pd.DataFrame, total_tokens: int
-) -> float:
+def sustainability_efficiency(powerSource: pd.DataFrame, tasks: pd.DataFrame, total_tokens: int) -> float:
     """Energy efficiency: **Wh per million tokens** (lower = better) = energy / tokens.
 
     ``tasks`` is accepted for a stable call signature but unused: energy-per-token has no
@@ -44,9 +42,7 @@ def sustainability_efficiency(
     return _extract_energy_wh(powerSource) / total_tokens * TOKENS_PER_UNIT
 
 
-def sustainability_efficiency_CO2(
-    powerSource: pd.DataFrame, tasks: pd.DataFrame, total_tokens: int
-) -> float:
+def sustainability_efficiency_CO2(powerSource: pd.DataFrame, tasks: pd.DataFrame, total_tokens: int) -> float:
     """Carbon efficiency: **gCO2 per million tokens** (lower = better) = carbon / tokens."""
     return _extract_co2_emission_g(powerSource) / total_tokens * TOKENS_PER_UNIT
 
@@ -72,8 +68,7 @@ def efficiency_summary(
         "energy_efficiency (Wh/Mtoken)": sustainability_efficiency(powerSource_df, tasks_df, total_tokens),
         "carbon_efficiency (gCO2/Mtoken)": sustainability_efficiency_CO2(powerSource_df, tasks_df, total_tokens),
         "financial_efficiency ($/Mtoken)": (
-            financial_efficiency(tasks_df, total_tokens, gpu_hour_price)
-            if gpu_hour_price is not None else None
+            financial_efficiency(tasks_df, total_tokens, gpu_hour_price) if gpu_hour_price is not None else None
         ),
         "total_tokens": int(total_tokens),
     }

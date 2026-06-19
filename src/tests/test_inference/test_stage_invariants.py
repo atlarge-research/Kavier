@@ -95,8 +95,14 @@ def test_bigger_model_decodes_at_least_as_slow() -> None:
 def test_kv_utilization_disabled_is_zero() -> None:
     assert (
         get_kv_cache_utilization(
-            _SMALL_LLM, _GPU, t_prefill=1.0, t_decode=1.0, t=0.5,
-            prompt_len=100, response_len=20, kv_cache=False,
+            _SMALL_LLM,
+            _GPU,
+            t_prefill=1.0,
+            t_decode=1.0,
+            t=0.5,
+            prompt_len=100,
+            response_len=20,
+            kv_cache=False,
         )
         == 0
     )
@@ -112,8 +118,14 @@ def test_kv_utilization_in_unit_interval(frac, prompt_len, response_len) -> None
     t_prefill, t_decode = 0.4, 0.8
     t = frac * (t_prefill + t_decode)
     use = get_kv_cache_utilization(
-        _SMALL_LLM, _GPU, t_prefill=t_prefill, t_decode=t_decode, t=t,
-        prompt_len=prompt_len, response_len=response_len, kv_cache=True,
+        _SMALL_LLM,
+        _GPU,
+        t_prefill=t_prefill,
+        t_decode=t_decode,
+        t=t,
+        prompt_len=prompt_len,
+        response_len=response_len,
+        kv_cache=True,
     )
     assert 0.0 <= use <= 1.0
 
@@ -126,8 +138,14 @@ def test_kv_utilization_monotonic_through_request() -> None:
     prev = -1.0
     for frac in [0.0, 0.25, 0.5, 0.75, 1.0]:
         use = get_kv_cache_utilization(
-            _SMALL_LLM, _GPU, t_prefill=t_prefill, t_decode=t_decode, t=frac * total,
-            prompt_len=500, response_len=500, kv_cache=True,
+            _SMALL_LLM,
+            _GPU,
+            t_prefill=t_prefill,
+            t_decode=t_decode,
+            t=frac * total,
+            prompt_len=500,
+            response_len=500,
+            kv_cache=True,
         )
         assert use >= prev
         prev = use

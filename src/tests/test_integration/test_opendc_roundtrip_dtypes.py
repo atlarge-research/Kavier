@@ -23,9 +23,14 @@ from kavier_opendc.adapter import (
 
 def _raw_tasks(with_tokens: bool = False) -> pd.DataFrame:
     row = {
-        "id": 5, "submission_time": 1234, "duration": 100000,
-        "cpu_count": 2, "cpu_capacity": 1000.0, "mem_capacity": 4096,
-        "gpu_count": 2, "gpu_capacity": 1410.0,
+        "id": 5,
+        "submission_time": 1234,
+        "duration": 100000,
+        "cpu_count": 2,
+        "cpu_capacity": 1000.0,
+        "mem_capacity": 4096,
+        "gpu_count": 2,
+        "gpu_capacity": 1410.0,
     }
     if with_tokens:
         row["total_tokens"] = 4242
@@ -95,7 +100,5 @@ def test_prepare_opendc_input_writes_both_files_readable(tmp_path) -> None:
     assert tasks.num_rows == 1
     assert frags.num_rows == 2
     # Fragment durations must tile the task duration (30000 + 70000 == 100000 ms).
-    total_frag_ms = sum(
-        pd.Timedelta(d) / pd.Timedelta(milliseconds=1) for d in frags.column("duration").to_pylist()
-    )
+    total_frag_ms = sum(pd.Timedelta(d) / pd.Timedelta(milliseconds=1) for d in frags.column("duration").to_pylist())
     assert total_frag_ms == pytest.approx(tasks.column("duration").to_pylist()[0])

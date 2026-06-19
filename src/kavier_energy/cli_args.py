@@ -19,7 +19,7 @@ def add_efficiency_args(parser):
         type=float,
         default=None,
         help="GPU-hour price for the $/token metric. No default -- financial efficiency "
-             "is reported only when you set it (the GPU cost is yours to specify).",
+        "is reported only when you set it (the GPU cost is yours to specify).",
     )
     parser.add_argument(
         "--out",

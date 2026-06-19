@@ -15,12 +15,21 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--number_gpus", type=int)
     parser.add_argument("--number_nodes", type=int)
-    parser.add_argument("--total_tokens", type=int, default=None,
-                        help="Total tokens to train over (sets runtime); or use --epochs + --dataset_tokens.")
-    parser.add_argument("--epochs", type=float, default=None,
-                        help="Passes over the dataset; with --dataset_tokens derives total_tokens.")
-    parser.add_argument("--dataset_tokens", type=int, default=None,
-                        help="Tokens in one epoch of the dataset (used with --epochs).")
+    parser.add_argument(
+        "--total_tokens",
+        type=int,
+        default=None,
+        help="Total tokens to train over (sets runtime); or use --epochs + --dataset_tokens.",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=float,
+        default=None,
+        help="Passes over the dataset; with --dataset_tokens derives total_tokens.",
+    )
+    parser.add_argument(
+        "--dataset_tokens", type=int, default=None, help="Tokens in one epoch of the dataset (used with --epochs)."
+    )
     parser.add_argument("--opendc_output_dir", default=None)
     parser.add_argument("--opendc_task_id", type=int, default=0)
     parser.add_argument("--opendc_submission_time_ms", type=int, default=0)

@@ -37,8 +37,7 @@ def _run(module: str, args: list[str]) -> subprocess.CompletedProcess:
 def test_kavier_perf_runs_and_writes_opendc(tmp_path) -> None:
     proc = _run(
         "kavier_inference.cli",
-        ["--trace", str(INFERENCE_EXAMPLE), "--output_folder", str(tmp_path),
-         "--llm", "Llama-3-8B", "--gpu", "A10"],
+        ["--trace", str(INFERENCE_EXAMPLE), "--output_folder", str(tmp_path), "--llm", "Llama-3-8B", "--gpu", "A10"],
     )
     assert proc.returncode == 0, proc.stderr
     assert "SIMULATION SUMMARY" in (proc.stdout + proc.stderr)
@@ -59,9 +58,22 @@ def test_kavier_perf_runs_and_writes_opendc(tmp_path) -> None:
 def test_kavier_train_single_config_exits_zero_and_emits_json() -> None:
     proc = _run(
         "kavier_training.cli",
-        ["--model_name", "mistral-7b-v0.1", "--method", "lora",
-         "--gpu_model", "NVIDIA-A100-SXM4-80GB", "--tokens_per_sample", "1024",
-         "--batch_size", "4", "--number_gpus", "8", "--number_nodes", "1"],
+        [
+            "--model_name",
+            "mistral-7b-v0.1",
+            "--method",
+            "lora",
+            "--gpu_model",
+            "NVIDIA-A100-SXM4-80GB",
+            "--tokens_per_sample",
+            "1024",
+            "--batch_size",
+            "4",
+            "--number_gpus",
+            "8",
+            "--number_nodes",
+            "1",
+        ],
     )
     assert proc.returncode == 0, proc.stderr
     # The tail of stdout is a JSON object; it must parse and carry positive tps.
@@ -74,9 +86,22 @@ def test_kavier_train_single_config_exits_zero_and_emits_json() -> None:
 def test_kavier_train_unknown_model_exits_nonzero_with_message() -> None:
     proc = _run(
         "kavier_training.cli",
-        ["--model_name", "not-a-real-model", "--method", "lora",
-         "--gpu_model", "NVIDIA-A100-SXM4-80GB", "--tokens_per_sample", "1024",
-         "--batch_size", "4", "--number_gpus", "1", "--number_nodes", "1"],
+        [
+            "--model_name",
+            "not-a-real-model",
+            "--method",
+            "lora",
+            "--gpu_model",
+            "NVIDIA-A100-SXM4-80GB",
+            "--tokens_per_sample",
+            "1024",
+            "--batch_size",
+            "4",
+            "--number_gpus",
+            "1",
+            "--number_nodes",
+            "1",
+        ],
     )
     assert proc.returncode != 0
     assert "not-a-real-model" in proc.stderr
@@ -96,8 +121,7 @@ def _perf_to_tasks_parquet(tmp_path) -> Path:
     """Run kavier-perf on the shipped example, return the tasks.parquet path."""
     perf = _run(
         "kavier_inference.cli",
-        ["--trace", str(INFERENCE_EXAMPLE), "--output_folder", str(tmp_path),
-         "--llm", "Llama-3-8B", "--gpu", "A10"],
+        ["--trace", str(INFERENCE_EXAMPLE), "--output_folder", str(tmp_path), "--llm", "Llama-3-8B", "--gpu", "A10"],
     )
     assert perf.returncode == 0, perf.stderr
     run_dir = next(p for p in tmp_path.iterdir() if p.is_dir())
@@ -137,8 +161,7 @@ def test_perf_then_energy_out_json_serializable(tmp_path) -> None:
     out_json = tmp_path / "summary.json"
     energy = _run(
         "kavier_energy.calculator",
-        ["--kavier", str(tasks_path), "--opendc", str(power_path),
-         "--price", "2.0", "--out", str(out_json)],
+        ["--kavier", str(tasks_path), "--opendc", str(power_path), "--price", "2.0", "--out", str(out_json)],
     )
     assert energy.returncode == 0, energy.stderr
     summary = json.loads(out_json.read_text())

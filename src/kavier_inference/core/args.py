@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field, ValidationError
 
 
 class PerfArgs(BaseModel):
-    """Validated CLI arguments for a performance run: LLM/GPU names, trace path, output folder, and KV/prefix-cache settings."""
+    """Validated CLI arguments for a performance run: LLM/GPU names, trace path, output folder, and
+    KV/prefix-cache settings."""
 
     llm: str = Field(pattern=r"^[A-Za-z0-9._-]+$")
     gpu: str = Field(pattern=r"^[A-Za-z0-9._-]+$")

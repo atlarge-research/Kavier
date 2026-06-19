@@ -1,4 +1,5 @@
-"""Console-script entry points for the inference simulator (``kavier-perf`` and the deprecated ``kavier-eff``/``kavier-energy``)."""
+"""Console-script entry points for the inference simulator (``kavier-perf`` and the deprecated
+``kavier-eff``/``kavier-energy``)."""
 
 from __future__ import annotations
 
@@ -10,7 +11,8 @@ from kavier_library.lookup import UnknownSpecError
 
 
 def main() -> None:
-    """``kavier-perf`` entry point: parse CLI args and run the performance simulation; exits 2 on an unknown LLM/GPU spec."""
+    """``kavier-perf`` entry point: parse CLI args and run the performance simulation; exits 2 on an
+    unknown LLM/GPU spec."""
     args = parse_args()
     try:
         run_performance(args)

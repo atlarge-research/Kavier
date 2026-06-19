@@ -8,7 +8,8 @@ from kavier_inference.core.config import CacheCfg
 
 
 class PrefixCache:
-    """Bounded LRU cache keyed on the first ``min_len`` prompt tokens (optionally per session), used to model prefix-cache hits."""
+    """Bounded LRU cache keyed on the first ``min_len`` prompt tokens (optionally per session), used to
+    model prefix-cache hits."""
 
     def __init__(self, cfg: CacheCfg):
         self.cfg = cfg
@@ -25,7 +26,8 @@ class PrefixCache:
         return (sid, core) if self.cfg.scope == "session" else core
 
     def lookup(self, sid, tokens) -> bool:
-        """Return True on a prefix hit (incrementing ``hits``); otherwise insert the key (evicting LRU if full) and return False."""
+        """Return True on a prefix hit (incrementing ``hits``); otherwise insert the key (evicting LRU
+        if full) and return False."""
         k = self._key(sid, tokens)
         if k in self._store:  # hit
             _ = self._store[k]

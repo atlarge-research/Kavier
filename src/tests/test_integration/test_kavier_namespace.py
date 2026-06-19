@@ -34,14 +34,14 @@ def test_top_level_symbols_are_identical_to_legacy():
         simulate_full_training,
         simulate_training_step,
     )
+    from kavier_library.gpu import GPU_SPEC_LIBRARY as legacy_gpu
+    from kavier_library.llm import LLM_SPEC_LIBRARY as legacy_llm
     from kavier_training.core.engine import (
         simulate_full_training as legacy_full,
     )
     from kavier_training.core.engine import (
         simulate_training_step as legacy_step,
     )
-    from kavier_library.gpu import GPU_SPEC_LIBRARY as legacy_gpu
-    from kavier_library.llm import LLM_SPEC_LIBRARY as legacy_llm
 
     assert simulate_training_step is legacy_step
     assert simulate_full_training is legacy_full

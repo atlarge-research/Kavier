@@ -5,6 +5,7 @@ downstream (the fragments and kavier_energy) as MILLISECONDS, so simulate_one mu
 ms, not raw seconds (a 1000x under-count that also truncated sub-second requests to 0),
 and the fragments must tile the task duration exactly.
 """
+
 from kavier_inference.core.cache import PrefixCache
 from kavier_inference.core.config import SimConfig
 from kavier_inference.core.runner import simulate_one
@@ -18,8 +19,17 @@ def _run(n_in: int, n_out: int):
     llm = next(iter(LLM_SPEC_LIBRARY.values()))
     gpu = next(iter(GPU_SPEC_LIBRARY.values()))
     return simulate_one(
-        idx=0, session_id="s", n_in_tokens=n_in, n_out_tokens=n_out, in_tokens=None,
-        llm=llm, gpu=gpu, cache=cache, cfg=cfg, export_rate_s=cfg.export_rate, t0_ms=0,
+        idx=0,
+        session_id="s",
+        n_in_tokens=n_in,
+        n_out_tokens=n_out,
+        in_tokens=None,
+        llm=llm,
+        gpu=gpu,
+        cache=cache,
+        cfg=cfg,
+        export_rate_s=cfg.export_rate,
+        t0_ms=0,
     )
 
 

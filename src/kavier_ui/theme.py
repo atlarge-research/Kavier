@@ -1,4 +1,5 @@
 """Shared console, palette and banner for the Kavier interactive UI."""
+
 from __future__ import annotations
 
 from rich.align import Align
@@ -20,14 +21,10 @@ ACCENTS: dict[str, str] = {
 
 # (key, label, accent, blurb) — the four simulators, surfaced on the main menu.
 DOMAINS: list[tuple[str, str, str, str]] = [
-    ("inference", "Inference", "cyan",
-     "Prefill / decode latency, throughput, KV + prefix cache."),
-    ("training", "Training", "magenta",
-     "Step throughput, runtime, MFU and power for a fine-tune."),
-    ("energy", "Energy", "green",
-     "Energy, carbon and $ efficiency per million tokens."),
-    ("co2", "Carbon", "yellow",
-     "Grams of CO2 for a run against a carbon intensity."),
+    ("inference", "Inference", "cyan", "Prefill / decode latency, throughput, KV + prefix cache."),
+    ("training", "Training", "magenta", "Step throughput, runtime, MFU and power for a fine-tune."),
+    ("energy", "Energy", "green", "Energy, carbon and $ efficiency per million tokens."),
+    ("co2", "Carbon", "yellow", "Grams of CO2 for a run against a carbon intensity."),
 ]
 
 _LOGO = r"""

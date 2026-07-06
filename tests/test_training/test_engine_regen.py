@@ -117,14 +117,18 @@ def test_cold_cache_accessor_resolves_package_and_reads_shipped_comm_scale():
     raise "not a package". Independent oracle: the value must equal calibration.json's comm_scale
     read straight off disk, which also proves it resolved the RIGHT file, not merely some file."""
     import os
+    from pathlib import Path
 
     import kavier.sdk.training.calibration as cal
-    from kavier.sdk.training.calibration.engine import CAL_PATH
 
     if os.environ.get("KAVIER_CALIBRATION"):
         pytest.skip("KAVIER_CALIBRATION overrides which file the default accessor loads")
 
-    expected = json.loads(CAL_PATH.read_text(encoding="utf-8"))["comm_scale"]
+    # Independent oracle: read the shipped calibration.json straight off disk. Resolve it from the
+    # import-light package (NOT engine.py, which imports scipy/sklearn -- absent on a clean checkout);
+    # this is the same file as engine.CAL_PATH: <calibration package>/calibration.json.
+    cal_path = Path(cal.__file__).parent / "calibration.json"
+    expected = json.loads(cal_path.read_text(encoding="utf-8"))["comm_scale"]
     saved = cal._CAL
     try:
         cal._CAL = None  # force importlib.resources.files() + a fresh default load

@@ -1,0 +1,60 @@
+# all python specifics
+__pycache__
+
+# all macos specifics
+.DS_Store
+
+# ── Python build / packaging ─────────────
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Byte-code & caches ───────────────────
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.coverage
+
+# ── Editable-install artefacts ───────────
+*.pth
+*.egg
+
+# ── Virtual-envs ─────────────────────────
+.venv/
+env/
+venv/
+
+# ── IDE / OS clutter ─────────────────────
+.vscode/
+.idea/
+.bob/
+.claude/*
+# …but do version-control shared repo skills (agent guidance for the whole team)
+!.claude/skills/
+
+# ── MkDocs build output ──────────────────
+docs/site/
+.cache/
+
+# ── Simulator output ─────────────────────
+data/output_traces/
+**/tasks.parquet
+**/fragments.parquet
+_sim_results.txt
+
+# ── Fine-tuning data (private) ───────────
+finetuning-data/
+
+# ── Analysis / diagnostics (local only) ──
+analysis/
+
+# ── Generated validation output ───────────────
+dev/data/output/
+
+src/reader/
+
+# Large inference demo trace: kept locally for reference, never shipped or
+# committed (size + dataset-license). See examples-local/README.md.
+examples-local/*.csv

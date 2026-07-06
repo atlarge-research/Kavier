@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_call:  # reused by release.yml as the pre-publish gate
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Sync (runtime + dev group)
+        run: uv sync --python 3.13
+
+      - name: Ruff version (pinned)
+        run: uv run ruff --version
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: Ruff (format check)
+        run: uv run ruff format --check .
+
+      # Strict mypy is gated incrementally (issue #11). Everything checked below is
+      # strict-clean and must stay clean. Full-tree strict is NOT clean yet — the
+      # remaining ungated debt (as filed in issue #11):
+      #   src/kavier/sdk/training/calibration/engine.py   53
+      #   src/kavier/sdk/io/input_spec.py                 21
+      #   src/kavier/sdk/io/stream_writer.py               5
+      #   + ~12 smaller files in kavier/sdk/inference, kavier/sdk/energy, kavier/sdk/library
+      # Burn-down path: make a file/package strict-clean, then add it to a gate below.
+      - name: Mypy (strict gate — clean packages)
+        run: |
+          uv run mypy --strict --show-error-codes \
+            -p kavier.cli -p kavier.ui -p kavier.sdk.co2
+      - name: Mypy (strict gate — top-level + training engine)
+        run: |
+          uv run mypy --strict --follow-imports=skip --show-error-codes \
+            src/kavier/__init__.py \
+            src/kavier/__main__.py \
+            src/kavier/sdk/training/calibration/__init__.py \
+            src/kavier/sdk/training/core/engine.py
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Sync (dev group; +calibration on 3.13)
+        run: |
+          # One leg also installs the [calibration] extra (scipy/scikit-learn) so the
+          # engine-regen tests (test_engine_regen.py) actually run instead of importorskip-ing.
+          if [ "${{ matrix.python-version }}" = "3.13" ]; then
+            uv sync --python 3.13 --extra calibration
+          else
+            uv sync --python "${{ matrix.python-version }}"
+          fi
+
+      - name: CLI smoke (entry points resolve)
+        run: |
+          uv run kavier --help
+          uv run kavier inference --help
+          uv run kavier training --help
+          uv run kavier energy --help
+          uv run kavier carbon --help
+          # Module-execution entrypoints must resolve too.
+          uv run python -m kavier --help
+          uv run python -m kavier.cli --help
+          uv run python -m kavier.ui < /dev/null
+          # UI is POSIX-only (termios); import must work on Linux. The REPL detects the
+          # non-TTY stdin and exits cleanly.
+          uv run python -c "import kavier.ui.app"
+
+      - name: Run pytest
+        run: uv run pytest
+
+  # Test what we actually ship: build the wheel, install it into a fresh venv
+  # (no repo on the path), and smoke every console script + packaged data (issue #12).
+  wheel-smoke:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      - name: Install wheel into a fresh venv and smoke it
+        run: |
+          uv venv "$RUNNER_TEMP/wheel-venv" --python 3.13
+          uv pip install --python "$RUNNER_TEMP/wheel-venv/bin/python" dist/*.whl
+          # Run from an empty dir so nothing can be imported from the repo checkout.
+          mkdir -p "$RUNNER_TEMP/wheel-smoke"
+          cd "$RUNNER_TEMP/wheel-smoke"
+          export PATH="$RUNNER_TEMP/wheel-venv/bin:$PATH"
+          kavier --help
+          kavier inference --help
+          kavier training --help
+          kavier energy --help
+          kavier carbon --help
+          kavier-ui < /dev/null
+          python -m kavier --help
+          python -m kavier.cli --help
+          # Packaged calibration tables must ship in the wheel and load.
+          python -c "from kavier.sdk.training import calibration; assert calibration.available_calibrations()"
+          # UI must import on POSIX (termios/tty are top-level imports).
+          python -c "import kavier.ui.app"

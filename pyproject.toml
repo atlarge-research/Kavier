@@ -1,0 +1,119 @@
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12"]
+build-backend = "uv_build"
+
+[project]
+name = "kavier"
+version = "0.5.0"
+description = "Kavier: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference and Training"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+authors = [
+    { name = "Radu Nicolae" },
+    { name = "AtLarge Research", email = "info@atlarge-research.com" },
+]
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.9",
+    "pandas>=2.2.3",
+    # pyarrow>=23.0.1: clears Arrow IPC use-after-free GHSA (high-sev).
+    "pyarrow>=23.0.1",
+    "numpy>=2.2.6",
+    "tqdm>=4.67.1",
+    "cachetools>=6.1",
+    "rich>=13.9",
+    "pyyaml>=6.0.2",
+]
+keywords = [
+    "LLM",
+    "simulation",
+    "performance",
+    "sustainability",
+    "energy",
+    "carbon",
+    "GPU",
+    "training",
+    "inference",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    # The interactive `kavier-ui` REPL drives the terminal via termios/tty (kavier.ui.prompts),
+    # so the distribution is POSIX-only; the one-shot `kavier` CLI is what Windows users would miss.
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.urls]
+Homepage = "https://github.com/atlarge-research/kavier"
+Repository = "https://github.com/atlarge-research/kavier"
+Documentation = "https://github.com/atlarge-research/kavier"
+"Bug Tracker" = "https://github.com/atlarge-research/kavier/issues"
+
+[project.scripts]
+kavier = "kavier.cli:main"
+kavier-ui = "kavier.ui:main"
+
+[project.optional-dependencies]
+# Heavier deps used ONLY by the dev-only calibration engine (kavier.sdk.training.calibration.engine).
+# The runtime package (incl. the stdlib-only kavier.sdk.training.calibration accessor) never imports these.
+calibration = [
+    "scipy>=1.14",
+    "scikit-learn>=1.6",
+]
+
+# PEP 735 dev group — synced by default with `uv sync`; not part of the published distribution.
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "hypothesis>=6.102",
+    "ruff==0.15.15",
+    "mypy>=1.10",
+    "pandas-stubs>=2.2",
+    "types-tqdm",
+    "types-cachetools",
+    "types-PyYAML",
+]
+
+# ------------------------------------------------------------------
+#  Build backend
+# ------------------------------------------------------------------
+
+# uv_build ships the entire src/kavier/ tree into the wheel (calibration.json, versions/*.json,
+# data/input/*.csv, and the py.typed marker all ride along automatically — no package-data map needed).
+# Excludes below only keep VCS/runtime noise out of the built artifacts.
+[tool.uv.build-backend]
+wheel-exclude = ["**/data/output/**", "**/.gitignore", "**/snapshots/**"]
+source-exclude = ["**/data/output/**"]
+
+# ------------------------------------------------------------------
+#  Tooling
+# ------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+mypy_path = "src"
+# Strict-clean packages (the full tree is gated incrementally — see .github/workflows/ci.yml).
+packages = [
+    "kavier.cli",
+    "kavier.ui",
+    "kavier.sdk.co2",
+]
+exclude = ["tests/"]

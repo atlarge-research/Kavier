@@ -1,0 +1,41 @@
+"""LRU prefix cache modelling vLLM-style prompt-prefix reuse; tracks hit and eviction counts."""
+
+from typing import Any, Tuple
+
+from cachetools import LRUCache
+
+from kavier.sdk.inference.core.config import CacheCfg
+
+
+class PrefixCache:
+    """LRU cache keyed on the first ``min_len`` prompt tokens (optionally per session)."""
+
+    def __init__(self, cfg: CacheCfg):
+        self.cfg = cfg
+        self._store: LRUCache[Tuple[Any, Tuple[int, ...]], None] = LRUCache(maxsize=cfg.max_entries)
+
+        self.hits: int = 0
+        self.evictions: int = 0
+
+    def _evict(self) -> None:
+        self.evictions += 1
+
+    def _key(self, sid, tokens):
+        core = tuple(tokens[: self.cfg.min_len])
+        return (sid, core) if self.cfg.scope == "session" else core
+
+    def lookup(self, sid, tokens) -> bool:
+        """True on a prefix hit; else insert the key (evicting LRU if full) and return False."""
+        k = self._key(sid, tokens)
+        if k in self._store:
+            _ = self._store[k]
+            self.hits += 1
+            return True
+
+        if len(self._store) >= self.cfg.max_entries:
+            self._store.popitem()
+            self._evict()
+
+        self._store[k] = None
+
+        return False

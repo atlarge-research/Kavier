@@ -1,0 +1,20 @@
+# Two services off one multi-stage build — no bind mount, no PYTHONPATH (the image installs the built
+# wheel). `cli` runs the unified `kavier` CLI; `ui` runs the interactive REPL.
+#     docker compose run --rm cli inference --help
+#     docker compose run --rm ui
+services:
+  cli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: cli
+    image: kavier:cli
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ui
+    image: kavier:ui
+    stdin_open: true
+    tty: true

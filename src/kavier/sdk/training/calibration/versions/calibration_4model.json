@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "version": 3,
+  "comm_scale": 1.0000000199126546,
+  "training_overhead_s": 0.0,
+  "mfu_batch_scale": {
+    "alpha": 0.0341,
+    "beta": 0.8147
+  },
+  "mfu_multiplier": {
+    "NVIDIA-A100-SXM4-80GB": 1.0745431586661538,
+    "NVIDIA-A100-80GB-PCIe": 0.9947228179467483,
+    "L40S": 0.999999999978328,
+    "NVIDIA-H100-PCIe": 0.9776572125990897
+  },
+  "multi_gpu_correction": {
+    "by_num_gpus": {
+      "2": 1.018304285446814,
+      "4": 1.06259537929583,
+      "8": 1.120305556946157,
+      "16": 2.28,
+      "32": 4.6602,
+      "64": 8.61,
+      "128": 15.9091
+    },
+    "_note": "2/4/8: joint Powell fit on the <=8-GPU profiling rows (all models, single-node). 32/128: mgc-only median-ratio fit on the raw multi-node trace, all other scales frozen at the from-scratch <=8 calibration (a joint refit up here is non-identifiable). 16/64: log2-geometric interpolation of neighbours. >8 is a scalar extrapolation: no interaction_scale coverage above 8 GPU; the recommender restricts to <=8."
+  },
+  "method_scale": {
+    "full": 0.9428039847516203,
+    "gptq-lora": 1.14204145149734,
+    "lora": 1.0336137388928808
+  },
+  "model_scale": {
+    "mistral-7b-v0.1": 1.0449006908151586,
+    "granite-3.3-8b": 1.0139645541439228,
+    "granite-3-8b": 0.9999999834464547,
+    "llama3.2-3b": 0.9043399372429876
+  },
+  "interaction_scale": {
+    "granite-3-8b|full|NVIDIA-H100-PCIe|1": 1.0167,
+    "granite-3-8b|lora|NVIDIA-H100-PCIe|1": 0.9534,
+    "granite-3.3-8b|full|NVIDIA-A100-SXM4-80GB|1": 1.0459,
+    "granite-3.3-8b|full|NVIDIA-A100-SXM4-80GB|2": 0.9645,
+    "granite-3.3-8b|full|NVIDIA-A100-SXM4-80GB|4": 0.9628,
+    "granite-3.3-8b|full|NVIDIA-A100-SXM4-80GB|8": 0.9751,
+    "granite-3.3-8b|lora|NVIDIA-A100-SXM4-80GB|1": 1.0316,
+    "granite-3.3-8b|lora|NVIDIA-A100-SXM4-80GB|2": 0.9672,
+    "granite-3.3-8b|lora|NVIDIA-A100-SXM4-80GB|4": 0.9741,
+    "granite-3.3-8b|lora|NVIDIA-A100-SXM4-80GB|8": 0.9857,
+    "llama3.2-3b|full|NVIDIA-A100-SXM4-80GB|1": 1.0647,
+    "llama3.2-3b|full|NVIDIA-A100-SXM4-80GB|2": 0.9625,
+    "llama3.2-3b|full|NVIDIA-A100-SXM4-80GB|4": 0.954,
+    "llama3.2-3b|full|NVIDIA-A100-SXM4-80GB|8": 0.9618,
+    "llama3.2-3b|lora|NVIDIA-A100-SXM4-80GB|1": 1.0,
+    "llama3.2-3b|lora|NVIDIA-A100-SXM4-80GB|2": 0.8999,
+    "llama3.2-3b|lora|NVIDIA-A100-SXM4-80GB|4": 0.8942,
+    "llama3.2-3b|lora|NVIDIA-A100-SXM4-80GB|8": 0.8417,
+    "mistral-7b-v0.1|full|L40S|2": 0.7575,
+    "mistral-7b-v0.1|full|L40S|4": 1.433,
+    "mistral-7b-v0.1|full|NVIDIA-A100-80GB-PCIe|1": 0.9937,
+    "mistral-7b-v0.1|full|NVIDIA-A100-80GB-PCIe|2": 0.8954,
+    "mistral-7b-v0.1|full|NVIDIA-A100-80GB-PCIe|4": 0.7492,
+    "mistral-7b-v0.1|full|NVIDIA-A100-SXM4-80GB|1": 1.0454,
+    "mistral-7b-v0.1|full|NVIDIA-A100-SXM4-80GB|2": 0.9836,
+    "mistral-7b-v0.1|full|NVIDIA-A100-SXM4-80GB|4": 0.9865,
+    "mistral-7b-v0.1|full|NVIDIA-A100-SXM4-80GB|8": 1.0066,
+    "mistral-7b-v0.1|gptq-lora|NVIDIA-A100-SXM4-80GB|1": 1.0373,
+    "mistral-7b-v0.1|gptq-lora|NVIDIA-A100-SXM4-80GB|2": 1.0168,
+    "mistral-7b-v0.1|gptq-lora|NVIDIA-A100-SXM4-80GB|4": 1.0063,
+    "mistral-7b-v0.1|gptq-lora|NVIDIA-A100-SXM4-80GB|8": 1.0045,
+    "mistral-7b-v0.1|lora|NVIDIA-A100-80GB-PCIe|1": 1.0386,
+    "mistral-7b-v0.1|lora|NVIDIA-A100-SXM4-80GB|1": 1.0377,
+    "mistral-7b-v0.1|lora|NVIDIA-A100-SXM4-80GB|2": 1.0306,
+    "mistral-7b-v0.1|lora|NVIDIA-A100-SXM4-80GB|4": 1.0436,
+    "mistral-7b-v0.1|lora|NVIDIA-A100-SXM4-80GB|8": 1.1129
+  },
+  "_note": "Regenerated from scratch by kavier.sdk.training.calibration.engine: raw (uncalibrated) kavier + the profiling trace, seed-42 70/15/15 split. Tier-1 (comm_scale / per-GPU MFU / per-method / per-model / multi-GPU 2-4-8) = regularized Powell joint fit on train, lambda chosen on val; Tier-2 interaction_scale = per-cell median residual on train+val. Nothing carried from any prior calibration; the held-out 15% test split reports the accuracy."
+}

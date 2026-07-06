@@ -1,0 +1,3 @@
+# Analysis-only calibration variant (not shipped) — see calibration/engine.py.
+# Kept out of the public package (derived from the internal trace; read only by a downstream TabPFN comparison).
+calibration_6models_85.json

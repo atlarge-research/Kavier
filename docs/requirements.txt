@@ -1,0 +1,4 @@
+# Documentation build dependencies (MkDocs + Material).
+# mkdocs-material pulls in mkdocs, pymdown-extensions, and mkdocs-material-extensions,
+# which cover admonitions, superfences (Mermaid), arithmatex (MathJax), and snippets.
+mkdocs-material>=9.5,<10

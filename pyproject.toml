@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "kavier"
-version = "0.5.0"
+version = "0.5.1"
 description = "Kavier: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference and Training"
 readme = "README.md"
 license = "MIT"
@@ -17,8 +17,11 @@ requires-python = ">=3.13"
 dependencies = [
     "pydantic>=2.9",
     "pandas>=2.2.3",
-    # pyarrow>=23.0.1: clears Arrow IPC use-after-free GHSA (high-sev).
-    "pyarrow>=23.0.1",
+    # pyarrow>=15: floor relaxed from 23.0.1 so downstream resolvers can satisfy
+    # autogluon's pyarrow<21 cap (via coastline -> ado-autoconf). The 23.0.1 GHSA
+    # (OOB write reading Arrow IPC files with pre-buffering) is unreachable here:
+    # kavier uses pyarrow.dataset/parquet only and never reads Arrow IPC files.
+    "pyarrow>=15",
     "numpy>=2.2.6",
     "tqdm>=4.67.1",
     "cachetools>=6.1",

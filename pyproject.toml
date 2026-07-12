@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "kavier"
-version = "0.5.0.1"
+version = "0.5.1"
 description = "Kavier: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference and Training"
 readme = "README.md"
 license = "MIT"
@@ -118,5 +118,6 @@ packages = [
     "kavier.cli",
     "kavier.ui",
     "kavier.sdk.co2",
+    "kavier.sdk.cluster",
 ]
 exclude = ["tests/"]

@@ -22,7 +22,7 @@ from kavier.cli.main import _COMMANDS, main
 # The subcommands the dispatcher must expose, in table order. Kept explicit (not read from _COMMANDS)
 # so the test is an INDEPENDENT statement of the contract: dropping/renaming/reordering a command, or
 # adding an undocumented one, must turn a test red. (`calibrate` needs the [calibration] extra.)
-_SUBCOMMANDS = ("inference", "training", "energy", "carbon", "calibrate")
+_SUBCOMMANDS = ("inference", "training", "cluster", "energy", "carbon", "calibrate")
 
 
 def test_command_table_is_exactly_the_documented_subcommands() -> None:

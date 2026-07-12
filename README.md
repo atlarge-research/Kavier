@@ -36,7 +36,7 @@ uv run kavier inference --trace src/kavier/sdk/inference/data/input/input_exampl
 
 Congrats! You have just run your first simulation with Kavier! 🎉
 
-Kavier is one CLI with four subcommands — `inference`, `training`, `energy`, `carbon`:
+Kavier is one CLI with several subcommands — `inference`, `training`, `cluster`, `energy`, `carbon`:
 
 ```bash
 uv run kavier --help
@@ -64,17 +64,35 @@ TRACE=$(python -c "from importlib.resources import files; print(files('kavier.sd
 kavier inference --trace "$TRACE"
 ```
 
+## Simulating a cluster
+
+`kavier cluster` is a FIFO/backfill **queuing simulator**: give it a CSV trace of jobs (arrival
+time, GPUs requested, GPU-locked duration) and a fixed cluster size, and it schedules them and
+reports per-job timings (wait, start/end, runtime, energy) plus cluster metrics (makespan,
+utilization, goodput, peak queue). A tiny example trace ships with Kavier — swap in your own:
+
+```bash
+# trace columns: submit_s,gpus,duration_s[,nodes,power_w_per_gpu]
+uv run kavier cluster --jobs src/kavier/sdk/cluster/data/input/trace_example.csv \
+  --policy fcfs --num-gpus 32 --out per_job.csv
+```
+
+Per-job results go to `--out` (CSV); the cluster summary prints as JSON. Programmatic use:
+`from kavier.sdk.cluster import schedule` — call `schedule(pd.read_csv("trace.csv"), policy="fcfs",
+num_gpus=32)` and read `result.jobs` / `result.cluster`.
+
 ## Structure
 
 Kavier is a single importable package, `kavier`:
 
 ```
 src/kavier/
-├── cli/              # the unified `kavier` CLI (subcommands: inference/training/energy/carbon)
+├── cli/              # the unified `kavier` CLI (subcommands: inference/training/cluster/energy/carbon)
 ├── ui/               # the interactive REPL (the `kavier-ui` command)
 └── sdk/              # the functionality — one subpackage per domain
     ├── inference/    # per-request inference simulator + the verb facade (facade.py)
     ├── training/     # analytical training model + calibration + the verb facade (facade.py)
+    ├── cluster/      # FIFO/backfill cluster queuing simulator + the schedule() facade
     ├── energy/       # GPU power / efficiency
     ├── co2/          # carbon emissions
     ├── io/           # trace I/O + OpenDC export (io/opendc/)

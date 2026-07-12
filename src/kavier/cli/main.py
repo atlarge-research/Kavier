@@ -1,7 +1,8 @@
-"""The unified ``kavier`` command-line interface: one entrypoint, five subcommands.
+"""The unified ``kavier`` command-line interface: one entrypoint, six subcommands.
 
     kavier inference ...   run the per-request inference simulator   (was kavier-perf)
     kavier training ...    run the analytical training simulator      (was kavier-train)
+    kavier cluster ...     simulate a FIFO/backfill GPU cluster of jobs with known durations
     kavier energy ...      per-Mtoken energy/$ efficiency             (was kavier-energy)
     kavier carbon ...      CO2 vs a carbon trace                      (was kavier-co2)
     kavier calibrate ...   fit a training-calibration table from a profiling CSV ([calibration] extra)
@@ -32,6 +33,12 @@ def _run_training(argv: Sequence[str] | None) -> None:
     main(argv)
 
 
+def _run_cluster(argv: Sequence[str] | None) -> None:
+    from kavier.cli.cluster import main
+
+    main(argv)
+
+
 def _run_energy(argv: Sequence[str] | None) -> None:
     from kavier.cli.energy import main
 
@@ -55,6 +62,7 @@ def _run_calibrate(argv: Sequence[str] | None) -> None:
 _COMMANDS: dict[str, tuple[str, _Handler]] = {
     "inference": ("Run the per-request inference simulator (latency/throughput + OpenDC export).", _run_inference),
     "training": ("Run the analytical training simulator (throughput/runtime).", _run_training),
+    "cluster": ("Simulate a FIFO/backfill GPU cluster running jobs of known duration.", _run_cluster),
     "energy": ("Per-Mtoken energy/$ efficiency from Kavier + OpenDC output.", _run_energy),
     "carbon": ("Estimate CO2 from a training sim or OpenDC power against a carbon trace.", _run_carbon),
     "calibrate": ("Fit a training-calibration table from a profiling CSV ([calibration] extra).", _run_calibrate),

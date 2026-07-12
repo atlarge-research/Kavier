@@ -38,7 +38,7 @@ jobs:
       - name: Mypy (strict gate — clean packages)
         run: |
           uv run mypy --strict --show-error-codes \
-            -p kavier.cli -p kavier.ui -p kavier.sdk.co2
+            -p kavier.cli -p kavier.ui -p kavier.sdk.co2 -p kavier.sdk.cluster
       - name: Mypy (strict gate — top-level + training engine)
         run: |
           uv run mypy --strict --follow-imports=skip --show-error-codes \
@@ -76,6 +76,7 @@ jobs:
           uv run kavier --help
           uv run kavier inference --help
           uv run kavier training --help
+          uv run kavier cluster --help
           uv run kavier energy --help
           uv run kavier carbon --help
           # Module-execution entrypoints must resolve too.
@@ -115,6 +116,7 @@ jobs:
           kavier --help
           kavier inference --help
           kavier training --help
+          kavier cluster --help
           kavier energy --help
           kavier carbon --help
           kavier-ui < /dev/null

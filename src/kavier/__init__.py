@@ -6,6 +6,8 @@ Public API (lazily loaded, so ``import kavier`` stays cheap and stdlib-light):
   (``performance`` / ``energy`` / ``efficiency`` / ``carbon``). Each takes a workload batch
   (a pandas DataFrame, a ``list[dict]``, or a single ``dict``) and returns the input rows plus the
   predicted columns.
+* ``kavier.cluster`` — the cluster simulator (``schedule``): FIFO/backfill scheduling of jobs of
+  known duration onto a fixed GPU cluster, with per-job and per-cluster metrics.
 * ``GPU_SPEC_LIBRARY`` / ``LLM_SPEC_LIBRARY`` — the static GPU/LLM spec catalogues.
 * ``simulate_full_training`` / ``simulate_training_step`` — the low-level training engine.
 
@@ -21,6 +23,7 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # for type-checkers only — never imported at runtime (keeps import-time light)
+    from kavier.sdk import cluster as cluster
     from kavier.sdk import inference as inference
     from kavier.sdk import training as training
     from kavier.sdk.library import GPU_SPEC_LIBRARY as GPU_SPEC_LIBRARY
@@ -29,6 +32,7 @@ if TYPE_CHECKING:  # for type-checkers only — never imported at runtime (keeps
     from kavier.sdk.training.core.engine import simulate_training_step as simulate_training_step
 
 __all__ = [
+    "cluster",
     "inference",
     "training",
     "GPU_SPEC_LIBRARY",
@@ -45,6 +49,7 @@ __all__ = [
 # ``kavier.inference`` / ``kavier.training`` are convenience aliases for the sdk verb packages: the
 # functionality (engine + the performance/energy/efficiency/carbon verbs) lives under ``kavier.sdk.*``.
 _LAZY_ALIASES = {
+    "cluster": "kavier.sdk.cluster",
     "inference": "kavier.sdk.inference",
     "training": "kavier.sdk.training",
 }

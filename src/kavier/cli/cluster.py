@@ -55,6 +55,11 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "--watts-per-gpu", type=float, default=None, help="Fallback per-GPU power (W) for the energy estimate"
     )
     parser.add_argument("--out", default=None, help="Optional path to write the per-job schedule CSV")
+    parser.add_argument(
+        "--plot",
+        default=None,
+        help="Optional path to render the cluster-timeline figure (.pdf/.png; needs the [plot] extra)",
+    )
     parser.add_argument("--config", default=None, help="Optional YAML config supplying flag defaults")
     return parser
 
@@ -142,6 +147,16 @@ def main(argv: Sequence[str] | None = None) -> None:
         out_path = Path(args.out).expanduser()
         _write_per_job(result, out_path)
         print(f"Per-job schedule → {out_path}", file=sys.stderr)
+    if args.plot:
+        from kavier.sdk.cluster import plot_timeline
+
+        plot_path = Path(args.plot).expanduser()
+        plot_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            plot_timeline(result, str(plot_path))
+        except ImportError as exc:
+            parser.error(str(exc))
+        print(f"Cluster timeline → {plot_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

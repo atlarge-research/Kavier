@@ -61,12 +61,13 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Sync (dev group; +calibration on 3.13)
+      - name: Sync (dev group; +calibration +plot on 3.13)
         run: |
-          # One leg also installs the [calibration] extra (scipy/scikit-learn) so the
-          # engine-regen tests (test_engine_regen.py) actually run instead of importorskip-ing.
+          # One leg also installs the [calibration] (scipy/scikit-learn) and [plot] (matplotlib)
+          # extras so the engine-regen tests (test_engine_regen.py) and the cluster plot tests
+          # (test_plot.py) actually run instead of importorskip-ing.
           if [ "${{ matrix.python-version }}" = "3.13" ]; then
-            uv sync --python 3.13 --extra calibration
+            uv sync --python 3.13 --extra calibration --extra plot
           else
             uv sync --python "${{ matrix.python-version }}"
           fi

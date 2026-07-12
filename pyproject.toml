@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "kavier"
-version = "0.5.1"
+version = "0.5.0.2"
 description = "Kavier: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference and Training"
 readme = "README.md"
 license = "MIT"
@@ -69,6 +69,10 @@ calibration = [
     "scikit-learn>=1.6",
 ]
 
+# Plotting: needed only by kavier.sdk.cluster.plot_timeline (and `kavier cluster --plot`). matplotlib is
+# imported lazily inside the plot function, so the core stays importable and dependency-light without it.
+plot = ["matplotlib>=3.5"]
+
 # PEP 735 dev group — synced by default with `uv sync`; not part of the published distribution.
 [dependency-groups]
 dev = [
@@ -121,3 +125,8 @@ packages = [
     "kavier.sdk.cluster",
 ]
 exclude = ["tests/"]
+
+# matplotlib is an optional [plot] extra, imported lazily and absent from the default (gate) env.
+[[tool.mypy.overrides]]
+module = "matplotlib.*"
+ignore_missing_imports = true

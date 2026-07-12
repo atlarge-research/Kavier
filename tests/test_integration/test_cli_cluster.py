@@ -47,3 +47,13 @@ def test_cluster_cli_missing_jobs_file_errors(tmp_path: Path) -> None:
     proc = _run(["--jobs", str(tmp_path / "nope.csv"), "--num-gpus", "4"])
     assert proc.returncode != 0
     assert "nope.csv" in (proc.stderr + proc.stdout)
+
+
+def test_cluster_cli_renders_timeline_plot(tmp_path: Path) -> None:
+    pytest.importorskip("matplotlib")
+    jobs = tmp_path / "jobs.csv"
+    _write_jobs(jobs)
+    out = tmp_path / "timeline.pdf"
+    proc = _run(["--jobs", str(jobs), "--num-gpus", "4", "--plot", str(out)])
+    assert proc.returncode == 0, proc.stderr
+    assert out.exists() and out.stat().st_size > 0  # the figure was rendered by the CLI

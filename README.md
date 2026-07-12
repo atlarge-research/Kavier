@@ -74,12 +74,14 @@ utilization, goodput, peak queue). A tiny example trace ships with Kavier — sw
 ```bash
 # trace columns: submit_s,gpus,duration_s[,nodes,power_w_per_gpu]
 uv run kavier cluster --jobs src/kavier/sdk/cluster/data/input/trace_example.csv \
-  --policy fcfs --num-gpus 32 --out per_job.csv
+  --policy fcfs --num-gpus 32 --out per_job.csv --plot timeline.pdf
 ```
 
-Per-job results go to `--out` (CSV); the cluster summary prints as JSON. Programmatic use:
-`from kavier.sdk.cluster import schedule` — call `schedule(pd.read_csv("trace.csv"), policy="fcfs",
-num_gpus=32)` and read `result.jobs` / `result.cluster`.
+Per-job results go to `--out` (CSV); the cluster summary prints as JSON. `--plot timeline.pdf`
+renders the operational timeline (GPUs-in-use + jobs-queued over time) — needs the `[plot]` extra
+(`uv sync --extra plot`). Programmatic use: `from kavier.sdk.cluster import schedule` — call
+`schedule(pd.read_csv("trace.csv"), policy="fcfs", num_gpus=32)`, read `result.jobs` /
+`result.cluster`, and optionally `plot_timeline(result, "timeline.pdf")`.
 
 ## Structure
 

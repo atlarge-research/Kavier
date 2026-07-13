@@ -1,7 +1,8 @@
-"""Timeline step-series helpers for the cluster simulator (stdlib-only).
+"""Timeline step-series and per-node activity helpers for the cluster simulator (stdlib-only).
 
 ``cumulative_steps`` builds a single staircase from events; ``build_timeline`` builds the aligned
 GPUs-in-use and queue-depth staircases the timeline figure draws (on one shared time axis).
+``node_activity`` reduces one node's busy intervals to peak concurrent GPUs and idle wall-time.
 """
 
 from __future__ import annotations
@@ -73,3 +74,34 @@ def build_timeline(
     gpus.append(run_gpu)
     queue.append(run_queue)
     return times, gpus, queue
+
+
+def node_activity(
+    intervals: list[tuple[float, float, int]], t0: float, t_end: float
+) -> tuple[int, float]:
+    """Peak concurrent GPUs and idle wall-seconds for one node over ``[t0, t_end]``.
+
+    ``intervals`` are ``(start_s, end_s, gpus_on_node)`` for the jobs that placed GPUs on this node.
+    ``idle_s`` is the wall-clock time in the window during which the node had zero GPUs in use. A
+    node with no intervals is idle for the whole window.
+    """
+    if not intervals:
+        return 0, max(0.0, t_end - t0)
+    events: list[tuple[float, int]] = []
+    for start, end, gpus in intervals:
+        events.append((start, gpus))
+        events.append((end, -gpus))
+    events.sort()
+    peak = 0
+    current = 0
+    busy_wall = 0.0
+    prev_t = t0
+    for time, delta in events:
+        if current > 0:
+            busy_wall += time - prev_t
+        current += delta
+        if current > peak:
+            peak = current
+        prev_t = time
+    idle = (t_end - t0) - busy_wall
+    return peak, idle if idle > 0.0 else 0.0

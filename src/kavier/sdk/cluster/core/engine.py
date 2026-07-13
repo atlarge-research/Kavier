@@ -33,6 +33,33 @@ class Placement(NamedTuple):
     gpus: int
 
 
+def place(free: list[int], gpus: int) -> list[tuple[int, int]] | None:
+    """Tight-pack ``gpus`` GPUs, best-fit: fill the least-free node first ("8+2").
+
+    ``free`` is the per-node free-GPU count. Fills the least-free node first (ties broken by lowest
+    node id), allowing partial nodes, until ``gpus`` are placed — consolidating onto small gaps and
+    keeping the roomiest nodes open. Returns the assignment as ``[(node_id, gpus_on_node), ...]``
+    sorted by node id, or ``None`` if ``sum(free) < gpus`` (the job does not fit). ``gpus <= 0``
+    returns ``[]``. Does not mutate ``free``.
+    """
+    if gpus <= 0:
+        return []
+    if sum(free) < gpus:
+        return None
+    remaining = gpus
+    taken: dict[int, int] = {}
+    for node_id in sorted(range(len(free)), key=lambda n: (free[n], n)):
+        if remaining <= 0:
+            break
+        avail = free[node_id]
+        if avail <= 0:
+            continue
+        take = avail if avail < remaining else remaining
+        taken[node_id] = take
+        remaining -= take
+    return sorted(taken.items())
+
+
 def run_fcfs(jobs: list[Job], capacity_gpus: int, oversized: str = "cap") -> list[Placement]:
     """Strict First-Come-First-Served on a flat pool of ``capacity_gpus`` GPUs (no backfill).
 

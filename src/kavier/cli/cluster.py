@@ -31,7 +31,8 @@ _PER_JOB_FIELDS = (
     "runtime_s",
     "turnaround_s",
     "energy_kwh",
-    "nodes",
+    "node:gpus",
+    "placement",
 )
 
 _PER_NODE_FIELDS = (
@@ -126,14 +127,23 @@ def _format_nodes(nodes: tuple[tuple[int, int], ...]) -> str:
     return ";".join(f"{node_id}:{gpus}" for node_id, gpus in nodes)
 
 
+def _describe_nodes(nodes: tuple[tuple[int, int], ...]) -> str:
+    """Human-readable placement, e.g. ``"8 GPUs on node 1 + 1 GPU on node 2"``."""
+    return " + ".join(f"{gpus} GPU{'s' if gpus != 1 else ''} on node {node_id}" for node_id, gpus in nodes)
+
+
+_COMPUTED_JOB_FIELDS = ("node:gpus", "placement")
+
+
 def _write_per_job(result: ClusterSimResult, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(_PER_JOB_FIELDS))
         writer.writeheader()
         for job in result.jobs:
-            row = {field: getattr(job, field) for field in _PER_JOB_FIELDS if field != "nodes"}
-            row["nodes"] = _format_nodes(job.nodes)
+            row = {field: getattr(job, field) for field in _PER_JOB_FIELDS if field not in _COMPUTED_JOB_FIELDS}
+            row["node:gpus"] = _format_nodes(job.nodes)
+            row["placement"] = _describe_nodes(job.nodes)
             writer.writerow(row)
 
 

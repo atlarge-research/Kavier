@@ -73,7 +73,10 @@ def test_per_job_csv_has_nodes_column(tmp_path: Path) -> None:
     proc = _run(["--jobs", str(jobs), "--num-nodes", "2", "--node-gpus", "8", "--out", str(out)])
     assert proc.returncode == 0
     header = out.read_text().splitlines()[0]
-    assert "nodes" in header.split(",")
+    assert "node:gpus" in header.split(",")
+    assert "placement" in header.split(",")
+    # The placement column spells the assignment out in words, e.g. "2 GPUs on node 0".
+    assert "GPU" in out.read_text().splitlines()[1]
 
 
 def test_per_node_csv_is_written(tmp_path: Path) -> None:

@@ -79,7 +79,9 @@ uv run kavier cluster --jobs src/kavier/sdk/cluster/data/input/trace_example.csv
 ```
 
 The cluster is a homogeneous `--num-nodes × --node-gpus` datacenter (both required). Per-job results go
-to `--out` (CSV) — including a `nodes` column naming the node(s) each job was placed on, e.g. `0:8;1:2`.
+to `--out` (CSV) — including a `node:gpus` column naming the node(s) each job was placed on and how many
+GPUs on each, e.g. `0:8;1:2`, plus a human-readable `placement` column (`8 GPUs on node 0 + 2 GPUs on
+node 1`).
 Per-node results go to `--out-nodes` (utilisation, jobs hosted, peak GPUs, idle time, energy). The
 cluster summary prints as JSON. Jobs are placed **tight-packed** (a 10-GPU job on 8-GPU nodes runs 8+2).
 `--plot timeline.pdf` renders the operational timeline — needs the `[plot]` extra (`uv sync --extra

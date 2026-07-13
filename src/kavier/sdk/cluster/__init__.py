@@ -21,6 +21,9 @@ if TYPE_CHECKING:  # type-checkers only; never imported at runtime
         JobRecord as JobRecord,
     )
     from kavier.sdk.cluster.facade import (
+        NodeRecord as NodeRecord,
+    )
+    from kavier.sdk.cluster.facade import (
         schedule as schedule,
     )
     from kavier.sdk.cluster.plot import (
@@ -33,6 +36,7 @@ _LAZY_EXPORTS = {
     "ClusterSimResult": "facade",
     "ClusterMetrics": "facade",
     "JobRecord": "facade",
+    "NodeRecord": "facade",
     "plot_timeline": "plot",
 }
 

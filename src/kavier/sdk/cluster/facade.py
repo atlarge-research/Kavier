@@ -38,6 +38,7 @@ class JobRecord:
     runtime_s: float  # end - start (equals the job's duration)
     turnaround_s: float  # end - submit (wait + runtime)
     energy_kwh: float | None  # None when no per-GPU power is known
+    nodes: tuple[tuple[int, int], ...]  # ((node_id, gpus_on_node), ...) the job was placed on
 
     @property
     def submit_h(self) -> float:
@@ -98,6 +99,20 @@ class ClusterMetrics:
 
 
 @dataclass(frozen=True)
+class NodeRecord:
+    """Per-node aggregate over the scheduled jobs. Canonical time unit is seconds."""
+
+    node_id: int
+    gpus: int  # GPUs on this node (= node_gpus)
+    jobs_hosted: int  # jobs that placed >=1 GPU on this node
+    busy_gpu_s: float  # Σ (gpus-on-node × runtime_s) over hosted jobs
+    utilization: float  # busy_gpu_s / (gpus × makespan_s)
+    peak_gpus_used: int  # max concurrent GPUs in use on this node
+    idle_s: float  # wall-seconds with zero GPUs in use over the makespan window
+    energy_kwh: float | None  # apportioned per-job energy; None when no hosted job had power
+
+
+@dataclass(frozen=True)
 class Timeline:
     """Aligned step-series over one shared time axis (seconds); ``*_h`` gives hours."""
 
@@ -112,13 +127,14 @@ class Timeline:
 
 @dataclass(frozen=True)
 class ClusterSimResult:
-    """Result of :func:`schedule`: scheduled jobs, cluster metrics, timeline, and dropped-job ids."""
+    """Result of :func:`schedule`: scheduled jobs, cluster metrics, timeline, node metrics, drops."""
 
     policy: str
     jobs: list[JobRecord]
     cluster: ClusterMetrics
     timeline: Timeline
     dropped: list[Any]
+    nodes: list[NodeRecord]
 
 
 def _normalise(jobs: Any) -> list[dict[str, Any]]:
@@ -172,58 +188,44 @@ def _normalise(jobs: Any) -> list[dict[str, Any]]:
     return out
 
 
-def _resolve_nodes(num_gpus: int | None, num_nodes: int | None, node_gpus: int | None) -> tuple[int, int]:
-    """(num_nodes, node_gpus) for the node-aware backfill policy."""
-    if num_nodes is not None and node_gpus is not None:
-        return int(num_nodes), int(node_gpus)
-    if num_gpus is not None:  # treat the flat budget as one big node
-        return 1, int(num_gpus)
-    raise ValueError("backfill policy needs (num_nodes and node_gpus) or num_gpus")
-
-
-def _resolve_capacity(policy: str, num_gpus: int | None, num_nodes: int | None, node_gpus: int | None) -> int:
-    if policy == "fcfs":
-        if num_gpus is not None:
-            return int(num_gpus)
-        if num_nodes is not None and node_gpus is not None:
-            return int(num_nodes) * int(node_gpus)
-        raise ValueError("fcfs policy needs num_gpus (or num_nodes and node_gpus)")
-    nn, ng = _resolve_nodes(num_gpus, num_nodes, node_gpus)
-    return nn * ng
-
-
 def schedule(
     jobs: Any,
     *,
     policy: str = "fcfs",
-    num_gpus: int | None = None,
     num_nodes: int | None = None,
     node_gpus: int | None = None,
     oversized: str = "cap",
     default_watts_per_gpu: float | None = None,
 ) -> ClusterSimResult:
-    """Simulate ``jobs`` on a fixed cluster under ``policy`` and return per-job + per-cluster metrics.
+    """Simulate ``jobs`` on a homogeneous ``num_nodes × node_gpus`` datacenter and return per-job,
+    per-cluster, and per-node metrics.
 
     ``jobs`` is a ``list[dict]`` / ``list[tuple]`` / ``pandas.DataFrame`` of
-    ``submit_s, gpus, duration_s[, nodes, power_w_per_gpu, job_id]``. ``policy="fcfs"`` uses a flat
-    ``num_gpus`` pool; ``policy="backfill"`` uses a ``num_nodes × node_gpus`` cluster. ``oversized``
-    clamps (``"cap"``) or skips (``"drop"``) a job bigger than the cluster. Per-job energy is
-    ``(power_w_per_gpu or default_watts_per_gpu) × gpus × runtime_s / 3.6e6`` kWh, or ``None`` if no power.
+    ``submit_s, gpus, duration_s[, power_w_per_gpu, job_id]`` (the ``nodes`` column is ignored;
+    placement is automatic tight-pack). ``policy="fcfs"`` is strict FCFS timing; ``policy="backfill"``
+    is FIFO+backfill. ``oversized`` is ``"cap"`` (clamp a too-big job to the cluster) or ``"drop"``
+    (skip it). Energy per job is ``(power_w_per_gpu or default_watts_per_gpu) × gpus × runtime_s /
+    3.6e6`` kWh (``None`` if no power).
     """
     if policy not in _POLICIES:
         raise ValueError(f"policy must be one of {_POLICIES}, got {policy!r}")
     if oversized not in _OVERSIZED:
         raise ValueError(f"oversized must be one of {_OVERSIZED}, got {oversized!r}")
+    if num_nodes is None or node_gpus is None:
+        raise ValueError("cluster needs num_nodes and node_gpus (e.g. num_nodes=4, node_gpus=8)")
+    num_nodes = int(num_nodes)
+    node_gpus = int(node_gpus)
+    if num_nodes < 1 or node_gpus < 1:
+        raise ValueError(f"num_nodes and node_gpus must be >= 1, got {num_nodes} and {node_gpus}")
+    capacity = num_nodes * node_gpus
 
     norm = _normalise(jobs)
-    capacity = _resolve_capacity(policy, num_gpus, num_nodes, node_gpus)
     ejobs = [engine.Job(j["index"], j["submit_s"], j["gpus"], j["duration_s"], j["nodes"]) for j in norm]
 
     if policy == "fcfs":
-        placements = engine.run_fcfs(ejobs, capacity, oversized)
+        placements = engine.run_fcfs(ejobs, num_nodes, node_gpus, oversized)
     else:
-        nn, ng = _resolve_nodes(num_gpus, num_nodes, node_gpus)
-        placements = engine.run_backfill(ejobs, ng, nn, oversized)
+        placements = engine.run_backfill(ejobs, node_gpus, num_nodes, oversized)
 
     placed = {p.idx: p for p in placements}
     records: list[JobRecord] = []
@@ -248,12 +250,72 @@ def schedule(
                 runtime_s=runtime_s,
                 turnaround_s=end_s - job["submit_s"],
                 energy_kwh=energy_kwh,
+                nodes=placement.nodes,
             )
         )
 
     dropped = [job["job_id"] for job in norm if job["index"] not in placed]
     cluster, timeline = _summarise(records, capacity)
-    return ClusterSimResult(policy=policy, jobs=records, cluster=cluster, timeline=timeline, dropped=dropped)
+    nodes = _node_records(records, num_nodes, node_gpus)
+    return ClusterSimResult(
+        policy=policy, jobs=records, cluster=cluster, timeline=timeline, dropped=dropped, nodes=nodes
+    )
+
+
+def _node_records(records: list[JobRecord], num_nodes: int, node_gpus: int) -> list[NodeRecord]:
+    """Per-node aggregates over the makespan window ``[min start, max end]``.
+
+    Node energy is the per-job energy apportioned by GPU fraction (``energy_kwh × gpus_on_node /
+    gpus``), so per-node energies sum to the cluster total and a job with unknown power contributes
+    nothing (never a poisoned NaN).
+    """
+    if not records:
+        return [
+            NodeRecord(
+                node_id=n,
+                gpus=node_gpus,
+                jobs_hosted=0,
+                busy_gpu_s=0.0,
+                utilization=0.0,
+                peak_gpus_used=0,
+                idle_s=0.0,
+                energy_kwh=None,
+            )
+            for n in range(num_nodes)
+        ]
+    t0 = min(r.start_s for r in records)
+    t_end = max(r.end_s for r in records)
+    makespan_s = t_end - t0
+    intervals: dict[int, list[tuple[float, float, int]]] = {n: [] for n in range(num_nodes)}
+    jobs_hosted = {n: 0 for n in range(num_nodes)}
+    busy_gpu_s = {n: 0.0 for n in range(num_nodes)}
+    energy = {n: 0.0 for n in range(num_nodes)}
+    energy_known = {n: False for n in range(num_nodes)}
+    for r in records:
+        for node_id, count in r.nodes:
+            intervals[node_id].append((r.start_s, r.end_s, count))
+            jobs_hosted[node_id] += 1
+            busy_gpu_s[node_id] += count * r.runtime_s
+            if r.energy_kwh is not None and r.gpus > 0:
+                energy[node_id] += r.energy_kwh * count / r.gpus
+                energy_known[node_id] = True
+    out: list[NodeRecord] = []
+    for node_id in range(num_nodes):
+        peak, idle = _metrics.node_activity(intervals[node_id], t0, t_end)
+        util = busy_gpu_s[node_id] / (node_gpus * makespan_s) if node_gpus > 0 and makespan_s > 0 else 0.0
+        out.append(
+            NodeRecord(
+                node_id=node_id,
+                gpus=node_gpus,
+                jobs_hosted=jobs_hosted[node_id],
+                busy_gpu_s=busy_gpu_s[node_id],
+                utilization=util,
+                peak_gpus_used=peak,
+                idle_s=idle,
+                energy_kwh=energy[node_id] if energy_known[node_id] else None,
+            )
+        )
+    return out
 
 
 def _summarise(records: list[JobRecord], capacity_gpus: int) -> tuple[ClusterMetrics, Timeline]:

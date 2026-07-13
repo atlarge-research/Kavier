@@ -76,9 +76,7 @@ def build_timeline(
     return times, gpus, queue
 
 
-def node_activity(
-    intervals: list[tuple[float, float, int]], t0: float, t_end: float
-) -> tuple[int, float]:
+def node_activity(intervals: list[tuple[float, float, int]], t0: float, t_end: float) -> tuple[int, float]:
     """Peak concurrent GPUs and idle wall-seconds for one node over ``[t0, t_end]``.
 
     ``intervals`` are ``(start_s, end_s, gpus_on_node)`` for the jobs that placed GPUs on this node.

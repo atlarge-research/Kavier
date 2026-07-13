@@ -23,7 +23,7 @@ def test_plot_timeline_writes_a_nonempty_pdf_and_returns_stats(tmp_path) -> None
     pytest.importorskip("matplotlib")
     from kavier.sdk.cluster import plot_timeline
 
-    result = schedule(_JOBS, policy="fcfs", num_gpus=4)
+    result = schedule(_JOBS, policy="fcfs", num_nodes=1, node_gpus=4)
     out = tmp_path / "timeline.pdf"
     stats = plot_timeline(result, str(out))
 
@@ -35,7 +35,7 @@ def test_plot_timeline_writes_a_nonempty_png(tmp_path) -> None:
     pytest.importorskip("matplotlib")
     from kavier.sdk.cluster import plot_timeline
 
-    result = schedule(_JOBS, policy="fcfs", num_gpus=4)
+    result = schedule(_JOBS, policy="fcfs", num_nodes=1, node_gpus=4)
     out = tmp_path / "timeline.png"
     plot_timeline(result, str(out))
     assert out.exists() and out.stat().st_size > 0

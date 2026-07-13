@@ -1,12 +1,10 @@
-"""Render the operational cluster-timeline figure for a :class:`ClusterSimResult`.
+"""Render the cluster-timeline figure for a :class:`ClusterSimResult`.
 
-Draws GPUs-in-use (filled area, primary axis) + jobs-in-queue (step line, twin axis) over time, taken
-straight from the result's timeline and cluster metrics. This is a duplicate of coastline's
-``plot_trace_timeline`` rendering, adapted to consume Kavier's result object directly.
+Draws GPUs-in-use (filled area, left axis) and jobs-in-queue (step line, right axis) over time from
+the result's timeline and metrics.
 
 matplotlib is an optional dependency (the ``[plot]`` extra), imported lazily inside
-:func:`plot_timeline`, so importing this module — and the rest of ``kavier.sdk.cluster`` — stays light
-and does not require matplotlib.
+:func:`plot_timeline`, so importing this module stays light.
 """
 
 from __future__ import annotations
@@ -24,7 +22,7 @@ def _is_pdf(path: str) -> bool:
 
 
 def _savefig(fig: Any, path: str) -> None:
-    """A ``.pdf`` path -> reproducible vector PDF (timestamp stripped), thesis-ready; else a 130-dpi raster."""
+    """Save a ``.pdf`` as a reproducible vector PDF (timestamp stripped); anything else as a 130-dpi raster."""
     if _is_pdf(path):
         fig.savefig(path, metadata={"CreationDate": None})
     else:
@@ -32,12 +30,12 @@ def _savefig(fig: Any, path: str) -> None:
 
 
 def plot_timeline(result: ClusterSimResult, output_path: str, *, title: str | None = None) -> dict[str, Any]:
-    """Draw ``result``'s operational timeline (GPUs in use + jobs queued over time) to ``output_path``.
+    """Draw ``result``'s timeline (GPUs in use + jobs queued over time) to ``output_path``.
 
-    ``output_path`` ending in ``.pdf`` writes a reproducible vector PDF (no title, thesis-ready);
-    any other extension writes a raster and, unless ``title`` is given, an auto-generated title.
-    Pass ``title=""`` to suppress the title on a raster. Returns a small stats dict
-    (jobs, cluster_gpus, makespan_h, peak_gpus, peak_queue). Requires the ``[plot]`` extra (matplotlib).
+    A ``.pdf`` path writes a reproducible vector PDF with no title; any other extension writes a
+    raster with an auto-generated title unless ``title`` is given (pass ``title=""`` to suppress it).
+    Returns a small stats dict (jobs, cluster_gpus, makespan_h, peak_gpus, peak_queue).
+    Requires the ``[plot]`` extra (matplotlib).
     """
     try:
         import matplotlib
@@ -70,20 +68,20 @@ def plot_timeline(result: ClusterSimResult, output_path: str, *, title: str | No
         )
 
     fs_label, fs_tick, fs_legend, fs_title = 14, 12, 13, 13
-    gpu_dark = "#005a8d"  # darker blue: GPU area edge + left-axis label/ticks (matches the fill)
-    queue_col = "black"  # the jobs-in-queue series + its (right) axis
-    cap_col = "#8a8a8a"  # the dashed cluster-capacity line
+    gpu_dark = "#005a8d"  # darker blue for the GPU area edge and left axis
+    queue_col = "black"  # jobs-in-queue series and right axis
+    cap_col = "#8a8a8a"  # dashed cluster-capacity line
 
     fig, ax = plt.subplots(figsize=(9, 3.9))
 
-    # Light horizontal grid keyed to the GPU axis, kept behind the data.
+    # Light horizontal grid, behind the data.
     ax.set_axisbelow(True)
     ax.grid(axis="y", color="#d3d3d3", lw=0.6, alpha=0.7, zorder=0)
 
-    # Left axis — GPUs in use: filled blue area with a crisp darker-blue top edge.
+    # Left axis: GPUs in use, filled area with a darker top edge, plus the capacity line.
     ax.fill_between(gpu_t, gpu_v, color=_GPU_FILL, alpha=0.45, lw=0, zorder=2)
     ax.plot(gpu_t, gpu_v, color=gpu_dark, lw=1.1, alpha=0.9, zorder=2.5)
-    ax.axhline(cluster_gpus, ls=(0, (6, 4)), color=cap_col, lw=1.3, zorder=1)  # cluster cap
+    ax.axhline(cluster_gpus, ls=(0, (6, 4)), color=cap_col, lw=1.3, zorder=1)
     ax.set_ylim(0, cluster_gpus * 1.08)
     ax.set_xlim(0, t_end if t_end > 0 else 1)
     ax.set_yticks(sorted({0, cluster_gpus // 2, cluster_gpus}))
@@ -93,7 +91,7 @@ def plot_timeline(result: ClusterSimResult, output_path: str, *, title: str | No
     ax.tick_params(axis="y", colors=gpu_dark)
     ax.spines["left"].set_color(gpu_dark)
 
-    # Right axis — jobs in queue: a crisp black step line.
+    # Right axis: jobs in queue, black step line.
     queue_ax = ax.twinx()
     queue_ax.plot(
         q_t, q_v, color=queue_col, lw=1.7, alpha=0.9, solid_joinstyle="round", solid_capstyle="round", zorder=3
@@ -102,11 +100,9 @@ def plot_timeline(result: ClusterSimResult, output_path: str, *, title: str | No
     queue_ax.set_ylabel("Jobs in queue", fontsize=fs_label, color=queue_col)
     queue_ax.tick_params(labelsize=fs_tick)
     queue_ax.tick_params(axis="y", colors=queue_col)
-    # Colour the visible spines to match each series; keep the shared left spine blue.
-    queue_ax.spines["left"].set_color(gpu_dark)
+    queue_ax.spines["left"].set_color(gpu_dark)  # keep the shared left spine blue
     queue_ax.spines["right"].set_color(queue_col)
-    # jobs are integers — keep the queue axis on whole numbers (no 2.5, 5.5, ...)
-    queue_ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    queue_ax.yaxis.set_major_locator(MaxNLocator(integer=True))  # job counts are whole numbers
 
     handles = [
         Patch(facecolor=_GPU_FILL, alpha=0.45, edgecolor=gpu_dark, lw=1.1, label="GPUs in use"),
@@ -126,7 +122,7 @@ def plot_timeline(result: ClusterSimResult, output_path: str, *, title: str | No
         columnspacing=2.0,
         handletextpad=0.7,
     )
-    # Reserve top room for the legend (and a title when present) so nothing collides.
+    # Leave room at the top for the legend (and title, if any).
     fig.tight_layout(rect=(0, 0, 1, 0.84 if title else 0.87))
     _savefig(fig, output_path)
     plt.close(fig)

@@ -1,14 +1,12 @@
 """Public ``kavier.sdk.cluster`` verb: ``schedule(jobs, ...) -> ClusterSimResult``.
 
-Simulates a fixed-size GPU cluster running a set of jobs whose durations are known up front, under
-a simple scheduling policy (``"fcfs"`` strict First-Come-First-Served on a flat pool, or
-``"backfill"`` node-aware best-effort FIFO with backfill). Returns per-job metrics (queue wait,
-start/end, runtime, energy) and per-cluster metrics (makespan, utilisation, goodput, peak GPUs/queue)
-plus a step-series timeline of GPUs-in-use and queue depth.
+Simulates a fixed-size GPU cluster running jobs of known duration under a scheduling policy (``"fcfs"``
+or ``"backfill"``) and returns per-job metrics (wait, start/end, runtime, energy), per-cluster metrics
+(makespan, utilisation, goodput, peaks), and a GPUs-in-use / queue-depth timeline.
 
-The scheduling kernels live in :mod:`kavier.sdk.cluster.core.engine` (stdlib-only). This facade adds
-input normalisation, energy, and metrics; it imports ``pandas`` lazily (only when a DataFrame is
-passed) so a bare import stays light.
+The scheduling kernels live in :mod:`kavier.sdk.cluster.core.engine`; this facade adds input
+normalisation, energy, and metrics. ``pandas`` is imported lazily (only for a DataFrame input) so a
+bare import stays light.
 """
 
 from __future__ import annotations
@@ -76,7 +74,7 @@ class ClusterMetrics:
     avg_wait_s: float
     avg_run_s: float
     avg_turnaround_s: float
-    utilization: float  # GPU·s used / (capacity × makespan) — the ASU / average system utilisation
+    utilization: float  # GPU·s used / (capacity × makespan)
     goodput_jobs_per_s: float
     total_energy_kwh: float | None
     peak_gpus: int
@@ -129,7 +127,7 @@ def _normalise(jobs: Any) -> list[dict[str, Any]]:
     Canonical keys: ``submit_s``, ``gpus``, ``duration_s`` (required); ``nodes`` (default 1),
     ``power_w_per_gpu`` (default None), ``job_id`` (default the row index).
     """
-    if hasattr(jobs, "to_dict") and hasattr(jobs, "columns"):  # a pandas DataFrame
+    if hasattr(jobs, "to_dict") and hasattr(jobs, "columns"):  # duck-typed pandas DataFrame
         rows: list[Mapping[str, Any]] = jobs.to_dict(orient="records")
     else:
         rows = list(jobs)
@@ -156,7 +154,7 @@ def _normalise(jobs: Any) -> list[dict[str, Any]]:
         duration_f = float(duration_s)
         if math.isnan(submit_f) or math.isnan(duration_f):
             raise ValueError(f"job {index}: submit_s and duration_s must be finite numbers")
-        # A blank/NaN per-GPU power is UNKNOWN (energy left None), never a poisoned NaN in the total.
+        # A blank/NaN power means "unknown" (energy stays None), not a NaN poisoning the total.
         power_f = None if power is None else float(power)
         if power_f is not None and math.isnan(power_f):
             power_f = None
@@ -178,7 +176,7 @@ def _resolve_nodes(num_gpus: int | None, num_nodes: int | None, node_gpus: int |
     """(num_nodes, node_gpus) for the node-aware backfill policy."""
     if num_nodes is not None and node_gpus is not None:
         return int(num_nodes), int(node_gpus)
-    if num_gpus is not None:  # single node holding the whole flat budget
+    if num_gpus is not None:  # treat the flat budget as one big node
         return 1, int(num_gpus)
     raise ValueError("backfill policy needs (num_nodes and node_gpus) or num_gpus")
 
@@ -209,8 +207,8 @@ def schedule(
     ``jobs`` is a ``list[dict]`` / ``list[tuple]`` / ``pandas.DataFrame`` of
     ``submit_s, gpus, duration_s[, nodes, power_w_per_gpu, job_id]``. ``policy="fcfs"`` uses a flat
     ``num_gpus`` pool; ``policy="backfill"`` uses a ``num_nodes × node_gpus`` cluster. ``oversized``
-    is ``"cap"`` (clamp a too-big job) or ``"drop"`` (skip it). Energy per job is
-    ``(power_w_per_gpu or default_watts_per_gpu) × gpus × runtime_s / 3.6e6`` kWh (``None`` if no power).
+    clamps (``"cap"``) or skips (``"drop"``) a job bigger than the cluster. Per-job energy is
+    ``(power_w_per_gpu or default_watts_per_gpu) × gpus × runtime_s / 3.6e6`` kWh, or ``None`` if no power.
     """
     if policy not in _POLICIES:
         raise ValueError(f"policy must be one of {_POLICIES}, got {policy!r}")
@@ -281,21 +279,21 @@ def _summarise(records: list[JobRecord], capacity_gpus: int) -> tuple[ClusterMet
     avg_wait_s = sum(r.wait_s for r in records) / n
     avg_run_s = sum(r.runtime_s for r in records) / n
     avg_turnaround_s = sum(r.turnaround_s for r in records) / n
-    gpu_seconds = sum(r.gpus * r.runtime_s for r in records)  # = ∫ GPUs-in-use dt (area under the curve)
+    gpu_seconds = sum(r.gpus * r.runtime_s for r in records)  # area under the GPUs-in-use curve
     utilization = gpu_seconds / (capacity_gpus * makespan_s) if capacity_gpus > 0 and makespan_s > 0 else 0.0
     goodput = n / makespan_s if makespan_s > 0 else 0.0
     energies = [r.energy_kwh for r in records if r.energy_kwh is not None]
     total_energy = sum(energies) if energies else None
 
-    # Timeline events, normalised so the axis starts at the first arrival.
+    # Timeline events, shifted so the axis starts at the first arrival.
     t0 = min(r.submit_s for r in records)
     gpu_events: list[tuple[float, float]] = []
     queue_events: list[tuple[float, float]] = []
     for r in records:
-        gpu_events.append((r.start_s - t0, float(r.gpus)))
-        gpu_events.append((r.end_s - t0, -float(r.gpus)))
-        queue_events.append((r.submit_s - t0, 1.0))  # +1 when submitted
-        queue_events.append((r.start_s - t0, -1.0))  # -1 when it starts running
+        gpu_events.append((r.start_s - t0, float(r.gpus)))  # claim GPUs at start
+        gpu_events.append((r.end_s - t0, -float(r.gpus)))  # release them at end
+        queue_events.append((r.submit_s - t0, 1.0))  # enter the queue at submit
+        queue_events.append((r.start_s - t0, -1.0))  # leave it at start
     t_end = max(r.end_s for r in records) - t0
     times, gpus_series, queue_series = _metrics.build_timeline(gpu_events, queue_events, t_end)
     peak_gpus = int(max(gpus_series)) if gpus_series else 0

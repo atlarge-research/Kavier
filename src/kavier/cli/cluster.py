@@ -19,7 +19,7 @@ from kavier.cli._shared import FriendlyParser, apply_config
 from kavier.sdk.cluster import schedule
 from kavier.sdk.cluster.facade import ClusterSimResult
 
-_EXAMPLE_CMD = "kavier cluster --jobs jobs.csv --policy fcfs --num-gpus 64"
+_EXAMPLE_CMD = "kavier cluster --jobs jobs.csv --policy fcfs --num-nodes 4 --node-gpus 8"
 
 _PER_JOB_FIELDS = (
     "job_id",
@@ -30,6 +30,18 @@ _PER_JOB_FIELDS = (
     "wait_s",
     "runtime_s",
     "turnaround_s",
+    "energy_kwh",
+    "nodes",
+)
+
+_PER_NODE_FIELDS = (
+    "node_id",
+    "gpus",
+    "jobs_hosted",
+    "busy_gpu_s",
+    "utilization",
+    "peak_gpus_used",
+    "idle_s",
     "energy_kwh",
 )
 
@@ -42,9 +54,8 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     parser.add_argument(
         "--policy", choices=("fcfs", "backfill"), default="fcfs", help="Scheduling policy (default: fcfs)"
     )
-    parser.add_argument("--num-gpus", type=int, default=None, help="Flat GPU pool size (fcfs; or single-node backfill)")
-    parser.add_argument("--num-nodes", type=int, default=None, help="Number of nodes (backfill)")
-    parser.add_argument("--node-gpus", type=int, default=None, help="GPUs per node (backfill)")
+    parser.add_argument("--num-nodes", type=int, default=None, help="Number of nodes in the datacenter")
+    parser.add_argument("--node-gpus", type=int, default=None, help="GPUs per node")
     parser.add_argument(
         "--oversized",
         choices=("cap", "drop"),
@@ -55,6 +66,7 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "--watts-per-gpu", type=float, default=None, help="Fallback per-GPU power (W) for the energy estimate"
     )
     parser.add_argument("--out", default=None, help="Optional path to write the per-job schedule CSV")
+    parser.add_argument("--out-nodes", default=None, help="Optional path to write the per-node CSV")
     parser.add_argument(
         "--plot",
         default=None,
@@ -109,13 +121,29 @@ def _summary(result: ClusterSimResult) -> dict[str, Any]:
     }
 
 
+def _format_nodes(nodes: tuple[tuple[int, int], ...]) -> str:
+    """Render a node assignment as ``"0:8;1:2"`` (node_id:gpus, semicolon-separated)."""
+    return ";".join(f"{node_id}:{gpus}" for node_id, gpus in nodes)
+
+
 def _write_per_job(result: ClusterSimResult, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(_PER_JOB_FIELDS))
         writer.writeheader()
         for job in result.jobs:
-            writer.writerow({field: getattr(job, field) for field in _PER_JOB_FIELDS})
+            row = {field: getattr(job, field) for field in _PER_JOB_FIELDS if field != "nodes"}
+            row["nodes"] = _format_nodes(job.nodes)
+            writer.writerow(row)
+
+
+def _write_per_node(result: ClusterSimResult, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(_PER_NODE_FIELDS))
+        writer.writeheader()
+        for node in result.nodes:
+            writer.writerow({field: getattr(node, field) for field in _PER_NODE_FIELDS})
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -133,7 +161,6 @@ def main(argv: Sequence[str] | None = None) -> None:
         result = schedule(
             jobs,
             policy=args.policy,
-            num_gpus=args.num_gpus,
             num_nodes=args.num_nodes,
             node_gpus=args.node_gpus,
             oversized=args.oversized,
@@ -147,6 +174,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         out_path = Path(args.out).expanduser()
         _write_per_job(result, out_path)
         print(f"Per-job schedule → {out_path}", file=sys.stderr)
+    if args.out_nodes:
+        out_nodes_path = Path(args.out_nodes).expanduser()
+        _write_per_node(result, out_nodes_path)
+        print(f"Per-node schedule → {out_nodes_path}", file=sys.stderr)
     if args.plot:
         from kavier.sdk.cluster import plot_timeline
 

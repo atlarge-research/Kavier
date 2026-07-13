@@ -83,7 +83,14 @@ def test_per_node_csv_is_written(tmp_path: Path) -> None:
     assert proc.returncode == 0
     lines = out_nodes.read_text().splitlines()
     assert lines[0].split(",") == [
-        "node_id", "gpus", "jobs_hosted", "busy_gpu_s", "utilization", "peak_gpus_used", "idle_s", "energy_kwh"
+        "node_id",
+        "gpus",
+        "jobs_hosted",
+        "busy_gpu_s",
+        "utilization",
+        "peak_gpus_used",
+        "idle_s",
+        "energy_kwh",
     ]
     assert len(lines) == 1 + 2  # header + 2 node rows
 

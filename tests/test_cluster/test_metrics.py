@@ -16,7 +16,8 @@ def test_energy_per_job_is_power_times_gpus_times_runtime() -> None:
     res = schedule(
         [{"job_id": "a", "submit_s": 0, "gpus": 2, "duration_s": 10, "power_w_per_gpu": 350}],
         policy="fcfs",
-        num_nodes=1, node_gpus=8,
+        num_nodes=1,
+        node_gpus=8,
     )
     assert res.jobs[0].energy_kwh == pytest.approx(7000 / 3.6e6)
 
@@ -26,7 +27,8 @@ def test_energy_falls_back_to_default_watts_when_job_has_no_power() -> None:
     res = schedule(
         [{"job_id": "a", "submit_s": 0, "gpus": 2, "duration_s": 10}],
         policy="fcfs",
-        num_nodes=1, node_gpus=8,
+        num_nodes=1,
+        node_gpus=8,
         default_watts_per_gpu=350,
     )
     assert res.jobs[0].energy_kwh == pytest.approx(350 * 2 * 10 / 3.6e6)

@@ -72,16 +72,20 @@ reports per-job timings (wait, start/end, runtime, energy) plus cluster metrics 
 utilization, goodput, peak queue). A tiny example trace ships with Kavier — swap in your own:
 
 ```bash
-# trace columns: submit_s,gpus,duration_s[,nodes,power_w_per_gpu]
+# trace columns: submit_s,gpus,duration_s[,power_w_per_gpu]  (a `nodes` column is accepted but ignored)
 uv run kavier cluster --jobs src/kavier/sdk/cluster/data/input/trace_example.csv \
-  --policy fcfs --num-gpus 32 --out per_job.csv --plot timeline.pdf
+  --policy backfill --num-nodes 4 --node-gpus 8 \
+  --out per_jobs.csv --out-nodes per_nodes.csv --plot timeline.pdf
 ```
 
-Per-job results go to `--out` (CSV); the cluster summary prints as JSON. `--plot timeline.pdf`
-renders the operational timeline (GPUs-in-use + jobs-queued over time) — needs the `[plot]` extra
-(`uv sync --extra plot`). Programmatic use: `from kavier.sdk.cluster import schedule` — call
-`schedule(pd.read_csv("trace.csv"), policy="fcfs", num_gpus=32)`, read `result.jobs` /
-`result.cluster`, and optionally `plot_timeline(result, "timeline.pdf")`.
+The cluster is a homogeneous `--num-nodes × --node-gpus` datacenter (both required). Per-job results go
+to `--out` (CSV) — including a `nodes` column naming the node(s) each job was placed on, e.g. `0:8;1:2`.
+Per-node results go to `--out-nodes` (utilisation, jobs hosted, peak GPUs, idle time, energy). The
+cluster summary prints as JSON. Jobs are placed **tight-packed** (a 10-GPU job on 8-GPU nodes runs 8+2).
+`--plot timeline.pdf` renders the operational timeline — needs the `[plot]` extra (`uv sync --extra
+plot`). Programmatic use: `from kavier.sdk.cluster import schedule` — call
+`schedule(pd.read_csv("trace.csv"), policy="backfill", num_nodes=4, node_gpus=8)`, read `result.jobs` /
+`result.cluster` / `result.nodes`, and optionally `plot_timeline(result, "timeline.pdf")`.
 
 ## Structure
 

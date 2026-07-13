@@ -94,7 +94,7 @@ functions over two DataFrames; the `kavier energy` CLI (`calculator.py`) glues t
 
 ```mermaid
 flowchart TD
-    power["power model (engine.py)<br/>mse_power(compute_u, mem_u, gpu) returns W<br/>empirical_power(...) returns NotImplemented"]
+    power["power model (engine.py)<br/>mse_power(compute_u, mem_u, gpu) returns W"]
     eff["efficiency (metrics.py)<br/>sustainability_efficiency returns Wh/Mtoken<br/>sustainability_efficiency_CO2 returns g/Mtoken<br/>financial_efficiency returns $/Mtoken<br/>efficiency_summary(tasks, power, tokens, price?)"]
     cli["kavier energy CLI (calculator.py)<br/>main(argv); reads tasks.parquet + powerSource.parquet; prints/writes efficiency_summary"]
     gpuspec["GPUSpec (library)<br/>idle_power_w, max_power_w, mse_calib_factor = r = 1.0"]
@@ -168,8 +168,8 @@ Financial efficiency is the [derived cost verb](efficiency.md).
 ## How to contribute to it {#contribute}
 
 - **Power model:** edit `sdk/energy/engine.py`. The invariant to preserve is `P(u)` in
-  `[idle, max]` and monotonic in `u`. `empirical_power` is a stub awaiting a measured
-  utilisation-to-watts table per GPU — wiring one up is a good contribution.
+  `[idle, max]` and monotonic in `u`. A measured utilisation-to-watts table per GPU (an
+  empirical alternative to `mse_power`) would be a good contribution.
 - **Efficiency metrics:** edit `sdk/energy/metrics.py`. Unit conversions are load-bearing (joules to
   Wh, ms to h) — see the regression tests
   `tests/test_inference/test_energy_unit_regressions.py` and `test_sustainability_efficiency.py` /

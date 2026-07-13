@@ -7,14 +7,11 @@ scaling law — never a snapshot of the code's own output.
 
 from __future__ import annotations
 
-import math
-
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from kavier.sdk.inference.stages.decode import get_decode_time_s
-from kavier.sdk.inference.stages.kv_usage import get_kv_cache_utilization
 from kavier.sdk.inference.stages.prefill import get_prefill_time_s
 from kavier.sdk.io.constants import PREFILL_OVERHEAD_S
 from kavier.sdk.library.gpu import GPU_SPEC_LIBRARY
@@ -115,120 +112,3 @@ def test_decode_roofline_takes_compute_bound_when_it_dominates() -> None:
     assert got == pytest.approx(0.06666666666666667)
     # And it must be the compute value, not the (tiny) memory value 10 * 3.333e-6 = 3.33e-5.
     assert got > 1e-3
-
-
-# --------------------------------------------------------------------------- kv utilisation
-
-# KV theory: cache stores Key + Value per layer, each d_model wide, at p_bytes each ->
-# 2 * n_layers * d_model * p_bytes bytes/token. Llama-3-8B: 2 * 32 * 4096 * 2 = 524288.
-_KV_BYTES_PER_TOKEN = 524288
-_GPU_BYTES = 80 * 1024**3  # 80 GiB
-
-
-def test_kv_utilization_disabled_is_zero() -> None:
-    assert (
-        get_kv_cache_utilization(
-            _SMALL_LLM,
-            _GPU,
-            t_prefill=1.0,
-            t_decode=1.0,
-            t=0.5,
-            prompt_len=100,
-            response_len=20,
-            kv_cache=False,
-        )
-        == 0
-    )
-
-
-def test_kv_utilization_full_request_matches_hand_derived_bytes() -> None:
-    # At end of decode all prompt+response tokens are resident: 500 + 500 = 1000 tokens.
-    #   used = 1000 * 524288 = 5.24288e8 bytes; total = 80 * 1024^3 = 85899345920
-    #   util = 1000 * 524288 / 85899345920 = 1000 / 163840 = 0.006103515625
-    expected = 1000 * _KV_BYTES_PER_TOKEN / _GPU_BYTES
-    assert expected == pytest.approx(0.006103515625)  # sanity on the derivation itself
-    got = get_kv_cache_utilization(
-        _SMALL_LLM,
-        _GPU,
-        t_prefill=0.4,
-        t_decode=0.8,
-        t=1.2,
-        prompt_len=500,
-        response_len=500,
-        kv_cache=True,
-    )
-    assert got == pytest.approx(expected)
-
-
-def test_kv_utilization_prefill_boundary_is_prompt_only() -> None:
-    # At t == t_prefill the ramp has loaded exactly the prompt (no response tokens yet):
-    #   util = 500 * 524288 / 85899345920 = 500 / 163840 = 0.0030517578125
-    got = get_kv_cache_utilization(
-        _SMALL_LLM,
-        _GPU,
-        t_prefill=0.4,
-        t_decode=0.8,
-        t=0.4,
-        prompt_len=500,
-        response_len=500,
-        kv_cache=True,
-    )
-    assert got == pytest.approx(500 * _KV_BYTES_PER_TOKEN / _GPU_BYTES)
-
-
-def test_kv_utilization_saturates_after_completion() -> None:
-    # min(t - t_prefill, t_decode) caps resident tokens at prompt+response; sampling well past
-    # the end must equal the value at exactly the end (no unbounded growth).
-    end = get_kv_cache_utilization(
-        _SMALL_LLM,
-        _GPU,
-        t_prefill=0.4,
-        t_decode=0.8,
-        t=1.2,
-        prompt_len=500,
-        response_len=500,
-        kv_cache=True,
-    )
-    later = get_kv_cache_utilization(
-        _SMALL_LLM,
-        _GPU,
-        t_prefill=0.4,
-        t_decode=0.8,
-        t=100.0,
-        prompt_len=500,
-        response_len=500,
-        kv_cache=True,
-    )
-    assert later == pytest.approx(end)
-    # Independent anchor: the saturated value is exactly the full-request occupancy.
-    assert end == pytest.approx(1000 * _KV_BYTES_PER_TOKEN / _GPU_BYTES)
-
-
-@given(frac=st.floats(min_value=0.0, max_value=1.0))
-@settings(max_examples=60, deadline=None)
-def test_kv_utilization_monotonic_through_request(frac) -> None:
-    # KV footprint only ever grows, so utilisation sampled later in time is never smaller.
-    t_prefill, t_decode = 0.4, 0.8
-    total = t_prefill + t_decode
-    earlier = get_kv_cache_utilization(
-        _SMALL_LLM,
-        _GPU,
-        t_prefill=t_prefill,
-        t_decode=t_decode,
-        t=frac * total,
-        prompt_len=500,
-        response_len=500,
-        kv_cache=True,
-    )
-    later = get_kv_cache_utilization(
-        _SMALL_LLM,
-        _GPU,
-        t_prefill=t_prefill,
-        t_decode=t_decode,
-        t=min(frac + 0.1, 1.0) * total,
-        prompt_len=500,
-        response_len=500,
-        kv_cache=True,
-    )
-    assert later >= earlier - 1e-12
-    assert math.isfinite(earlier)

@@ -45,7 +45,4 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
     # Single-config args below are required unless --input_csv given; enforced in the subcommand.
     parser.add_argument("--input_csv", default=None, help="Simulate every row of this CSV instead of a single config")
     add_training_job_args(parser)
-    parser.add_argument("--opendc_output_dir", default=None)
-    parser.add_argument("--opendc_task_id", type=int, default=0)
-    parser.add_argument("--opendc_submission_time_ms", type=int, default=0)
     return parser

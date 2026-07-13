@@ -237,7 +237,7 @@ def main() -> None:
         return
     console.print(banner())
     while True:
-        choices = [Choice(k, label, blurb) for k, label, _accent, blurb in DOMAINS if k in _MAIN_MENU]
+        choices = [Choice(k, label, blurb) for k, label, blurb in DOMAINS if k in _MAIN_MENU]
         choices.append(Choice("quit", "Quit", ""))
         try:
             pick = prompts.menu("Choose a simulator", choices, footer="↑↓ move · enter select · q quit")
@@ -254,11 +254,3 @@ def main() -> None:
         except Exception as exc:  # noqa: BLE001 — never let one bad run kill the REPL
             console.print(f"[red]  ✗ simulation error: {exc}[/]")
     console.print("\n[cyan]  thanks for using Kavier 👋[/]\n")
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except (KeyboardInterrupt, Abort):
-        console.print("\n[cyan]  bye 👋[/]\n")
-        sys.exit(0)

@@ -127,7 +127,6 @@ uv run kavier training --input_csv src/kavier/sdk/training/data/input/input_exam
 | `--number_gpus` | `int` | *required\** | GPUs per node. |
 | `--number_nodes` | `int` | *required\** | Nodes (total GPUs = `number_gpus x number_nodes`). |
 | `--total_tokens` | `int` | *(unset)* | Total tokens to train over — sets `train_runtime`. |
-| `--opendc_output_dir` | `path` | *(unset)* | If set, export an OpenDC-compatible workload here. |
 
 *\* Required for single-config runs; alternatively pass `--input_csv`.*
 

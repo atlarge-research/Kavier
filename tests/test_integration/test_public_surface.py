@@ -31,12 +31,6 @@ _PUBLIC_CALLABLES = [
         "prepare_opendc_input",
         ("tasks", "fragments", "dst_dir"),
     ),
-    (
-        "kavier.sdk.io.training_opendc",
-        "build_training_opendc_frames",
-        # The two engine functions are injected — that dependency-injection seam is public contract.
-        ("model_name", "simulate_full_training_fn", "simulate_training_step_fn"),
-    ),
 ]
 
 

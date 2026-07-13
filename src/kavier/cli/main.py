@@ -1,15 +1,14 @@
 """The unified ``kavier`` command-line interface: one entrypoint, six subcommands.
 
-    kavier inference ...   run the per-request inference simulator   (was kavier-perf)
-    kavier training ...    run the analytical training simulator      (was kavier-train)
+    kavier inference ...   run the per-request inference simulator
+    kavier training ...    run the analytical training simulator
     kavier cluster ...     simulate a FIFO/backfill GPU cluster of jobs with known durations
-    kavier energy ...      per-Mtoken energy/$ efficiency             (was kavier-energy)
-    kavier carbon ...      CO2 vs a carbon trace                      (was kavier-co2)
+    kavier energy ...      per-Mtoken energy/$ efficiency
+    kavier carbon ...      CO2 vs a carbon trace
     kavier calibrate ...   fit a training-calibration table from a profiling CSV ([calibration] extra)
 
 Each subcommand delegates to its engine's own parser, so ``kavier <cmd> --help`` shows that command's
-flags and ``kavier <cmd> ...`` behaves exactly as the old one-shot CLI did. The interactive REPL is a
-separate entrypoint (``kavier-ui`` / ``python -m kavier.ui``).
+flags. The interactive REPL is a separate entrypoint (``kavier-ui`` / ``python -m kavier.ui``).
 """
 
 from __future__ import annotations

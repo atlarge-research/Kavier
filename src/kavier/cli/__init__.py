@@ -1,4 +1,4 @@
-"""The unified ``kavier`` command-line interface (subcommands: inference / training / energy / carbon)."""
+"""The ``kavier`` command-line interface: argument parsing and dispatch for each subcommand."""
 
 from __future__ import annotations
 

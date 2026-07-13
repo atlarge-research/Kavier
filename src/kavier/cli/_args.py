@@ -1,8 +1,5 @@
-"""Shared argparse definitions for the training simulator.
-
-``add_training_job_args`` defines the model/method/GPU/sizing flags common to the ``kavier training``
-and ``kavier carbon --from-training`` subcommands; ``add_training_args`` layers the training-CLI-only
-flags (``--input_csv``, OpenDC export) on top.
+"""Shared argparse flag builders for the training model, used by ``kavier training`` and
+``kavier carbon --from-training``.
 """
 
 import argparse

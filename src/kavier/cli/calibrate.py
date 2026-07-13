@@ -1,33 +1,24 @@
-"""``kavier calibrate`` subcommand: fit a training-calibration table from a profiling data file.
+"""``kavier calibrate`` subcommand: fit a training-calibration table from a profiling CSV.
 
-This exposes the dev-only from-scratch calibration fit (the two-tier regularized-Powell + per-cell
-interaction_scale recipe that produces calibration.json) as a parameterized command, so it can be
-driven from an arbitrary profiling CSV rather than the fixed internal trace. It is the backend for
-Coastline's ``coastline-tune --method kavier``.
+Exposes the dev-only from-scratch calibration fit (the two-tier Powell recipe behind
+calibration.json) as a command, so it can run on an arbitrary profiling trace. This is the backend
+for Coastline's ``coastline-tune --method kavier``.
 
     kavier calibrate <input.csv> [--output PATH] [--models m1,m2,...]
 
-``<input.csv>`` is a profiling trace with the fms-hf-tuning columns (model_name, gpu_model, method,
-number_gpus, number_nodes, tokens_per_sample, batch_size, is_valid, dataset_tokens_per_second, ...).
-The fit keeps only ``is_valid == 1`` and ``dataset_tokens_per_second > 0`` rows at ANY GPU count
-(no <=8 cap) and targets ``dataset_tokens_per_second``. ``--models`` restricts the fit to a
-comma-separated set; by default every model with enough valid rows in the file is fit. Any >8-GPU rows
-in the input join the main fit directly (the multi-GPU correction is then fit jointly with everything
-else); a sibling ``raw_trace.csv`` is only consulted when the input itself has no >8-GPU rows.
+``<input.csv>`` carries the fms-hf-tuning columns (model_name, gpu_model, method, number_gpus,
+number_nodes, tokens_per_sample, batch_size, is_valid, dataset_tokens_per_second, ...). Unlike the
+shipped tables, the fit keeps valid rows at ANY GPU count (no <=8 cap), and if the input has no
+>8-GPU rows it falls back to a sibling ``raw_trace.csv`` for them. ``--models`` restricts the fit;
+by default every model with enough valid rows is fit.
 
-Output: the calibration JSON (same schema as calibration.json) is written to ``--output`` (default:
-stdout). A summary -- models fitted, per-model row counts, and the held-out test MdAPE overall AND
-broken down by model and by GPU-count -- goes to stderr, so ``kavier calibrate trace.csv > cal.json``
-yields a clean file. If the dataset falls short of the suitability properties, a headline warning is
-emitted first (the fit still runs on whatever the data supports).
+The JSON goes to ``--output`` (default stdout); the fit summary and held-out test MdAPE go to
+stderr, so ``kavier calibrate trace.csv > cal.json`` still yields a clean file. The fit needs the
+``[calibration]`` extra (scipy/scikit-learn), imported lazily; without it the command exits
+non-zero with an install hint.
 
-Because the fit needs scipy/scikit-learn (the ``[calibration]`` extra), the engine is imported
-lazily; without the extra the command prints an install hint and exits non-zero.
-
-How Coastline consumes the output: point Kavier at the produced file before predicting, either by
-env var ``KAVIER_CALIBRATION=<path>`` (read on first calibration access) or programmatically via
-``kavier.sdk.training.calibration.use_calibration("<path>")``; subsequent
-``kavier.training.performance(...)`` predictions then apply the fitted table.
+Coastline then points Kavier at the output before predicting, via ``KAVIER_CALIBRATION=<path>`` or
+``kavier.sdk.training.calibration.use_calibration("<path>")``.
 """
 
 from __future__ import annotations
@@ -68,11 +59,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _print_regime_breakdown(test: pd.DataFrame, cal: dict[str, Any], evaluate: Callable[..., float]) -> None:
-    """Print the held-out test MdAPE broken down by MODEL and by total-GPU count on the SAME seed-42
-    test rows (each line: ``MdAPE% (n=<test rows in that group>)``). ``evaluate`` is the engine's MdAPE
-    function (rows, grad_accum_steps, backward_factor, cal_dict) -> MdAPE %; ``test`` is the test
-    DataFrame (carrying model_name + the ``total`` = gpus*nodes column). Groups with no test rows never
-    appear; an all-zero-measured group shows nan (evaluate's contract)."""
+    """Print the held-out test MdAPE broken down by model and by total-GPU count over the same test
+    rows. ``evaluate`` is the engine's MdAPE function; ``test`` carries model_name and the ``total`` =
+    gpus*nodes column. An all-zero-measured group shows nan (evaluate's contract)."""
     print("  test MdAPE by model:", file=sys.stderr)
     for model in sorted(test["model_name"].astype(str).unique()):
         sub = test[test["model_name"].astype(str) == model]
@@ -106,9 +95,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     cal = calibrate(args.input, models)
     text = _dumps(cal)
 
-    # Summary (to stderr): which models were fit, their valid row counts, and an independently
-    # recomputed held-out test MdAPE of the produced table on the SAME seed-42 test split the fit used
-    # -- overall, then broken down by model and by total-GPU count (each as MdAPE% (n=<test rows>)).
+    # Summary to stderr: models fit + valid row counts, then the held-out test MdAPE recomputed on the
+    # same seed-42 test split the fit used (overall, then by model and by GPU count).
     import pandas as pd
 
     trace = pd.read_csv(args.input, low_memory=False)

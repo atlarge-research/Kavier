@@ -1,4 +1,4 @@
-"""``kavier inference`` subcommand: argument parsing, the validated ``PerfArgs`` model, and the run entry."""
+"""``kavier inference`` subcommand: parse and validate CLI args, then run the per-request simulator."""
 
 from __future__ import annotations
 

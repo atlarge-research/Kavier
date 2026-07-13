@@ -38,7 +38,8 @@ def simulate_one(
             t_decode = 0.0
 
     total_s = t_prefill + t_decode
-    # ms (fragments + kavier.sdk.energy treat as ms); floor 1 — raw s under-counted 1000x, int() truncated <1s to 0.
+    # Store duration in ms (fragments and kavier.sdk.energy expect ms); floor at 1 so a request that
+    # rounds below 1ms still gets a non-zero duration.
     total_ms = max(1, int(round(total_s * 1000)))
     gpu_capacity = float(gpu.core_max_mhz * gpu.cores)
     task = {

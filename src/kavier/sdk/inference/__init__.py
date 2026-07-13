@@ -1,10 +1,8 @@
 """Inference functionality: the per-request simulator engine plus the public batch-predictor verbs.
 
-The simulator core lives in ``core/`` and ``stages/`` (driven by the ``kavier inference`` CLI). The
-batch predictors (``performance`` / ``energy`` / ``efficiency`` / ``carbon``) and the run/energy/carbon
-helpers live in ``facade.py`` and are re-exported here **lazily** — the facade (pandas, numpy, the
-cross-engine chain) loads only on first verb access, so ``import kavier.sdk.inference`` and its
-subpackages stay cheap. ``kavier.inference`` is a convenience alias for this package.
+The simulator core lives in ``core/`` and ``stages/``. The batch predictors (``performance`` /
+``energy`` / ``efficiency`` / ``carbon``) live in ``facade.py`` and are re-exported here lazily, so
+importing this package stays cheap until a verb is first used. ``kavier.inference`` aliases this package.
 """
 
 from __future__ import annotations
@@ -12,7 +10,7 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:  # for type-checkers only — never imported at runtime (keeps import-time light)
+if TYPE_CHECKING:  # type-checkers only; never imported at runtime
     from kavier.sdk.inference.facade import (
         DEFAULT_GPU_HOUR_PRICE as DEFAULT_GPU_HOUR_PRICE,
     )

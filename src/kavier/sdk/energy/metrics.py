@@ -8,7 +8,7 @@ from kavier.sdk.units import SECONDS_PER_HOUR, TOKENS_PER_MTOKEN
 
 
 def _extract_energy_wh(powerSource: pd.DataFrame) -> float:
-    # OpenDC energy_usage is JOULES (W·s); 1 Wh = 3600 J -> /3600 (old /1000 was 3.6x high).
+    # OpenDC energy_usage is JOULES (W·s); 1 Wh = 3600 J, so divide by 3600.
     if "energy_usage" in powerSource.columns:
         return powerSource["energy_usage"].sum() / SECONDS_PER_HOUR
     raise ValueError("energy_usage not in the powerSource.parquet file")

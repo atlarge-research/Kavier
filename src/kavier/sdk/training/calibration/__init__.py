@@ -1,13 +1,12 @@
 """Accessors for the fitted calibration table (calibration.json), applied when calibrated=True.
 
-The shipped calibration.json is the 6-model default; the selectable from-scratch fits live in
-versions/ (calibration_4model.json, calibration_6model.json). Pick one with use_calibration(...)
-or the $KAVIER_CALIBRATION env var; available_calibrations() lists them; calibration_override(...)
-installs a table for a single with-block. The dev-only engine that regenerates these files lives
-in engine.py.
+The shipped calibration.json is the 6-model default; other from-scratch fits live in versions/.
+Pick one with use_calibration(...) or the $KAVIER_CALIBRATION env var (available_calibrations()
+lists them); calibration_override(...) swaps a table for a single with-block. The dev-only engine
+that regenerates these files lives in engine.py.
 
-This module is import-light by contract: importing it must not pull in scipy/sklearn/numpy/pandas,
-so keep it stdlib-only (the heavy deps live in engine.py)."""
+Import-light by contract: importing this module must not pull in scipy/sklearn/numpy/pandas, so keep
+it stdlib-only (the heavy deps live in engine.py)."""
 
 from __future__ import annotations
 
@@ -27,7 +26,7 @@ _VERSIONS_RESOURCE = ("calibration", "versions")
 _ENV_VAR = "KAVIER_CALIBRATION"  # name or path of the calibration loaded on first access (default: root file)
 
 # Module global by design: callers swap it (saved = cal._CAL; cal._CAL = ...; cal._CAL = saved).
-# calibration_override() below is the public, exception-safe form of that swap.
+# calibration_override() (in engine.py) is the public, exception-safe form of that swap.
 _CAL: dict[str, Any] | None = None
 
 

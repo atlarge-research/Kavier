@@ -11,6 +11,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
 from kavier.sdk.library import get_gpu, get_llm
+from kavier.sdk.units import SECONDS_PER_HOUR, TOKENS_PER_MTOKEN
 from kavier.ui.theme import console
 
 
@@ -42,7 +43,7 @@ def _fmt_secs(s: float) -> str:
         return f"{s:,.1f}s"
     if s < 5400:
         return f"{s / 60:,.1f}m"
-    return f"{s / 3600:,.2f}h"
+    return f"{s / SECONDS_PER_HOUR:,.2f}h"
 
 
 def specs_panel(model: str, gpu: str, accent: str = "cyan") -> Panel:
@@ -188,7 +189,7 @@ def energy_result(r: dict[str, Any]) -> Panel:
 
 def carbon_result(r: dict[str, Any]) -> Panel:
     """Rich Panel with gCO2/kgCO2/Mtoken results from a carbon billing dict."""
-    per_m = (r["total_co2_g"] / r["total_tokens"] * 1e6) if r["total_tokens"] else 0.0
+    per_m = (r["total_co2_g"] / r["total_tokens"] * TOKENS_PER_MTOKEN) if r["total_tokens"] else 0.0
     rows = [
         ("Source", r["source"], ""),
         ("Carbon intensity", f"{r['intensity']:,.0f}", "gCO2/kWh"),

@@ -20,6 +20,7 @@ from kavier.sdk.inference.core.config import CacheCfg, SimConfig
 from kavier.sdk.inference.core.metrics import Metrics
 from kavier.sdk.inference.core.runner import simulate_one
 from kavier.sdk.library import get_gpu, get_llm
+from kavier.sdk.units import SECONDS_PER_HOUR, WH_PER_KWH, per_mtoken
 
 # Defaults for workload keys a batch may omit. kv_cache / min_tokens mirror the UI prompt defaults;
 # prefix_policy defaults to "none": the facade's synthetic workload shares no prompt content unless a
@@ -158,7 +159,7 @@ def run_carbon_from_inference(infer: dict[str, Any], intensity_g_kwh: float) -> 
     runtime_s = float(infer["total_s"])
     power_w = float(gpu.max_power_w)
     start = pd.Timestamp("2026-01-01 00:00:00")
-    trace = _flat_trace(start, runtime_s / 3600.0, intensity_g_kwh)
+    trace = _flat_trace(start, runtime_s / SECONDS_PER_HOUR, intensity_g_kwh)
     frag = Fragment(start_time=start, duration_s=runtime_s, power_w=power_w)
     res = compute_emissions([frag], trace)
     return {
@@ -179,19 +180,18 @@ def energy_from_inference(infer: dict[str, Any], gpu_hour_price: float | None) -
     """$/Mtoken from GPU-hours, matching kavier.sdk.energy.metrics.financial_efficiency."""
     carbon = run_carbon_from_inference(infer, intensity_g_kwh=DEFAULT_INTENSITY_G_KWH)
     total_tokens = infer["total_tokens"]
-    energy_wh = carbon["total_energy_kwh"] * 1000.0
-    per_m = 1_000_000.0 / total_tokens if total_tokens else 0.0
-    gpu_hours = infer["total_s"] / 3600.0
+    energy_wh = carbon["total_energy_kwh"] * WH_PER_KWH
+    gpu_hours = infer["total_s"] / SECONDS_PER_HOUR
     return {
         "model": infer["model"],
         "gpu": infer["gpu"],
         "total_tokens": total_tokens,
         "energy_wh": energy_wh,
         "energy_kwh": carbon["total_energy_kwh"],
-        "energy_per_mtoken_wh": energy_wh * per_m,
-        "carbon_per_mtoken_g": carbon["total_co2_g"] * per_m,
+        "energy_per_mtoken_wh": per_mtoken(energy_wh, total_tokens),
+        "carbon_per_mtoken_g": per_mtoken(carbon["total_co2_g"], total_tokens),
         "gpu_hours": gpu_hours,
-        "financial_per_mtoken": (gpu_hours * gpu_hour_price * per_m) if gpu_hour_price else None,
+        "financial_per_mtoken": per_mtoken(gpu_hours * gpu_hour_price, total_tokens) if gpu_hour_price else None,
         "tokens_per_wh": total_tokens / energy_wh if energy_wh else 0.0,
     }
 
@@ -268,12 +268,11 @@ def carbon(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.Da
         infer = run_inference(_infer_params(row))
         c = run_carbon_from_inference(infer, intensity_g_kwh=intensity)
         total_tokens = c["total_tokens"]
-        per_m = 1_000_000.0 / total_tokens if total_tokens else 0.0
         predicted.append(
             {
                 "total_co2_g": c["total_co2_g"],
                 "total_co2_kg": c["total_co2_kg"],
-                "carbon_per_mtoken_g": c["total_co2_g"] * per_m,
+                "carbon_per_mtoken_g": per_mtoken(c["total_co2_g"], total_tokens),
                 "total_energy_kwh": c["total_energy_kwh"],
             }
         )

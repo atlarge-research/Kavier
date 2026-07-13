@@ -8,7 +8,7 @@ from typing import Any, Iterable, List
 
 import pandas as pd
 
-WS_PER_KWH = 3.6e6  # watt-seconds in one kilowatt-hour
+from kavier.sdk.units import WS_PER_KWH
 
 
 @dataclass(frozen=True)

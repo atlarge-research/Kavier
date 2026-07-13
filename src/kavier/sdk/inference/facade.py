@@ -15,8 +15,9 @@ import numpy as np
 import pandas as pd
 
 from kavier.sdk.co2.engine import CarbonTrace, Fragment, compute_emissions
+from kavier.sdk.domain import RESULT_SOURCE_KEY, Domain
 from kavier.sdk.inference.core.cache import PrefixCache
-from kavier.sdk.inference.core.config import CacheCfg, SimConfig
+from kavier.sdk.inference.core.config import CacheAction, CacheCfg, CacheScope, SimConfig
 from kavier.sdk.inference.core.metrics import Metrics
 from kavier.sdk.inference.core.runner import simulate_one
 from kavier.sdk.library import get_gpu, get_llm
@@ -80,7 +81,9 @@ def run_inference(p: dict[str, Any]) -> dict[str, Any]:
     cfg = SimConfig(
         export_rate=0.1,
         kv_cache=bool(p["kv_cache"]),
-        cache=CacheCfg(min_len=int(p["prefix_min_tokens"]), action=p["prefix_policy"], scope="session", max_entries=10),
+        cache=CacheCfg(
+            min_len=int(p["prefix_min_tokens"]), action=p["prefix_policy"], scope=CacheScope.SESSION, max_entries=10
+        ),
     )
 
     n = int(p["num_requests"])
@@ -89,7 +92,7 @@ def run_inference(p: dict[str, Any]) -> dict[str, Any]:
     # The workload is n IDENTICAL requests: under an active prefix policy, model them as sharing one
     # prompt (a synthetic token list, one session) so the cache can act — request 0 seeds it and the
     # rest hit. Policy "none" (the default) passes no tokens, keeping the cache inert as before.
-    shared_tokens = list(range(n_in)) if cfg.cache.action != "none" else None
+    shared_tokens = list(range(n_in)) if cfg.cache.action != CacheAction.NONE else None
     metrics = Metrics()
     t0 = int(time.time_ns() / 1e6)
     ttfts: list[float] = []
@@ -163,7 +166,7 @@ def run_carbon_from_inference(infer: dict[str, Any], intensity_g_kwh: float) -> 
     frag = Fragment(start_time=start, duration_s=runtime_s, power_w=power_w)
     res = compute_emissions([frag], trace)
     return {
-        "source": "inference",
+        RESULT_SOURCE_KEY: Domain.INFERENCE,
         "model": infer["model"],
         "gpu": infer["gpu"],
         "intensity": float(intensity_g_kwh),

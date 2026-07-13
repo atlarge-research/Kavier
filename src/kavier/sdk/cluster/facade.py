@@ -18,10 +18,13 @@ from typing import Any
 
 from kavier.sdk.cluster.core import engine
 from kavier.sdk.cluster.core import metrics as _metrics
+from kavier.sdk.cluster.vocab import Oversized, Policy
 from kavier.sdk.units import SECONDS_PER_HOUR, WS_PER_KWH
 
-_POLICIES = ("fcfs", "backfill")
-_OVERSIZED = ("cap", "drop")
+# Valid string values, derived from the enums (single home) — used for the membership guards and their
+# error messages, which render these tuples verbatim (e.g. ``('fcfs', 'backfill')``).
+_POLICIES = tuple(p.value for p in Policy)
+_OVERSIZED = tuple(o.value for o in Oversized)
 
 
 @dataclass(frozen=True)
@@ -221,7 +224,7 @@ def schedule(
     norm = _normalise(jobs)
     ejobs = [engine.Job(j["index"], j["submit_s"], j["gpus"], j["duration_s"], j["nodes"]) for j in norm]
 
-    if policy == "fcfs":
+    if policy == Policy.FCFS:
         placements = engine.run_fcfs(ejobs, num_nodes, node_gpus, oversized)
     else:
         placements = engine.run_backfill(ejobs, node_gpus, num_nodes, oversized)

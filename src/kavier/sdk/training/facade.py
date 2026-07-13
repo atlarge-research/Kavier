@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 
 from kavier.sdk.co2.engine import Fragment, compute_emissions
+from kavier.sdk.domain import RESULT_SOURCE_KEY, Domain
 from kavier.sdk.inference.facade import (
     DEFAULT_GPU_HOUR_PRICE,
     DEFAULT_INTENSITY_G_KWH,
@@ -70,7 +71,7 @@ def run_carbon_from_training(p: dict[str, Any]) -> dict[str, Any]:
     frag = Fragment(start_time=start, duration_s=runtime_s, power_w=power_w)
     res = compute_emissions([frag], trace)
     return {
-        "source": "training",
+        RESULT_SOURCE_KEY: Domain.TRAINING,
         "model": tr["model_name"],
         "gpu": tr["gpu_name"],
         "intensity": float(p["intensity"]),

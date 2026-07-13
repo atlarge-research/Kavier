@@ -13,6 +13,8 @@ import importlib
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
 
+from kavier.sdk.domain import Domain
+
 if TYPE_CHECKING:  # type-checkers only; never imported at runtime
     from kavier.sdk import cluster as cluster
     from kavier.sdk import inference as inference
@@ -39,8 +41,8 @@ __all__ = [
 # packages, where the actual functionality lives.
 _LAZY_ALIASES = {
     "cluster": "kavier.sdk.cluster",
-    "inference": "kavier.sdk.inference",
-    "training": "kavier.sdk.training",
+    Domain.INFERENCE: "kavier.sdk.inference",
+    Domain.TRAINING: "kavier.sdk.training",
 }
 _LAZY_ATTRS = {
     "GPU_SPEC_LIBRARY": "kavier.sdk.library",

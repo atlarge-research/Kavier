@@ -4,11 +4,13 @@
 
 import argparse
 
+from kavier.sdk.training.core.config import Method
+
 
 def add_training_job_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Add the model/method/GPU/sizing flags shared by the training and carbon (from-training) commands."""
     parser.add_argument("--model_name")
-    parser.add_argument("--method", choices=["full", "lora", "gptq-lora"])
+    parser.add_argument("--method", choices=[m.value for m in Method])
     parser.add_argument("--gpu_model")
     parser.add_argument("--tokens_per_sample", type=int)
     parser.add_argument("--batch_size", type=int)

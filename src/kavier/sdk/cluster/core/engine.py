@@ -1,7 +1,7 @@
 """Discrete-event cluster schedulers: strict FCFS (flat pool) and node-aware backfill.
 
-Stdlib only (``heapq``): this is the import-light simulation kernel, so keep pandas/numpy
-and the spec library out of it. Behaviour is parity-checked against frozen reference schedulers by
+Import-light (``heapq`` + the stdlib-only ``vocab`` enums): this is the simulation kernel, so keep
+pandas/numpy and the spec library out of it. Behaviour is parity-checked against frozen reference schedulers by
 ``tests/test_cluster/test_schedule_parity.py`` — don't change the scheduling logic.
 
 Both kernels take a list of :class:`Job`\\ s and return one :class:`Placement` per scheduled job
@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import heapq
 from typing import NamedTuple
+
+from kavier.sdk.cluster.vocab import Oversized
 
 
 class Job(NamedTuple):
@@ -74,7 +76,7 @@ def run_fcfs(jobs: list[Job], num_nodes: int, node_gpus: int, oversized: str = "
     for job in jobs:
         gpus = job.gpus
         if gpus > capacity_gpus:
-            if oversized == "drop":
+            if oversized == Oversized.DROP:
                 continue
             gpus = capacity_gpus  # cap
         active.append((job.idx, job.submit_s, gpus, job.duration_s))
@@ -144,7 +146,7 @@ def run_backfill(jobs: list[Job], node_gpus: int, num_nodes: int, oversized: str
     for job in jobs:
         gpus = job.gpus
         if gpus > total:
-            if oversized == "drop":
+            if oversized == Oversized.DROP:
                 continue
             gpus = total  # cap
         prepared.append((job.idx, job.submit_s, gpus, job.duration_s))

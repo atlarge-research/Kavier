@@ -18,7 +18,7 @@ from kavier.sdk.training.calibration import (
     get_multi_gpu_correction,
     get_training_overhead_s,
 )
-from kavier.sdk.training.core.config import INFINIBAND_GBPS
+from kavier.sdk.training.core.config import INFINIBAND_GBPS, Method
 
 # Adam moves ~20 bytes/param per optimizer step (fp32 weight + grad + 2 moments ~16 B, plus working copies).
 _OPTIMIZER_BYTES_PER_PARAM = 20
@@ -132,7 +132,7 @@ def simulate_training_step(
     backward_time = backward_factor * forward_time
     micro_step_time = forward_time + backward_time
 
-    if method in ("lora", "gptq-lora"):
+    if method in (Method.LORA, Method.GPTQ_LORA):
         trainable = _lora_trainable_params(llm.d_model, llm.n_layers)
     else:
         trainable = int(llm.m_params)

@@ -7,12 +7,14 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
+from kavier.sdk.domain import Domain
+
 console = Console()
 
 # (key, label, blurb)
 DOMAINS: list[tuple[str, str, str]] = [
-    ("inference", "Inference", "Prefill / decode latency, throughput, KV + prefix cache."),
-    ("training", "Training", "Step throughput, runtime, MFU and power for a fine-tune."),
+    (Domain.INFERENCE, "Inference", "Prefill / decode latency, throughput, KV + prefix cache."),
+    (Domain.TRAINING, "Training", "Step throughput, runtime, MFU and power for a fine-tune."),
     ("energy", "Energy", "Energy, carbon and $ efficiency per million tokens."),
     ("co2", "Carbon", "Grams of CO2 for a run against a carbon intensity."),
 ]

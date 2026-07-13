@@ -3,16 +3,33 @@
 from __future__ import annotations
 
 import sys
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Callable
 
+from kavier.sdk.domain import Domain
+from kavier.sdk.inference.core.config import CacheAction
 from kavier.sdk.library import GPU_SPEC_LIBRARY, LLM_SPEC_LIBRARY, UnknownSpecError
+from kavier.sdk.training.core.config import Method
 from kavier.ui import prompts, render, sims
 from kavier.ui.prompts import Abort, Choice
 from kavier.ui.theme import DOMAINS, banner, console
 
 _DEFAULT_MODEL = "Llama-3-8B"
 _DEFAULT_GPU = "A10"
+
+
+class Sizing(StrEnum):
+    """How the training REPL sizes a job: by epochs×dataset, by total tokens, or skip (throughput only)."""
+
+    EPOCHS = "epochs"
+    TOKENS = "tokens"
+    SKIP = "skip"
+
+
+def _default_index(choices: list[Choice], seeded: object) -> int:
+    """Index of the choice whose ``value`` equals ``seeded`` (0 if none) — replaces per-menu index maps."""
+    return next((i for i, c in enumerate(choices) if c.value == seeded), 0)
 
 
 def _param_hint(spec: Any) -> str:
@@ -55,15 +72,16 @@ def _inference_inputs(seed: dict[str, Any] | None = None) -> dict[str, Any]:
         "Output tokens / request:", default=s.get("output_tokens", 128), minimum=1, accent=accent
     )
     kv_cache = prompts.confirm("Enable KV cache?", default=s.get("kv_cache", True), accent=accent)
+    policy_choices = [
+        Choice(CacheAction.PREFILL, "prefill", "skip prefill on a cache hit"),
+        Choice(CacheAction.FULL, "full", "skip prefill + decode"),
+        Choice(CacheAction.NONE, "none", "disable prefix cache"),
+    ]
     policy = prompts.menu(
         "Prefix-cache policy",
-        [
-            Choice("prefill", "prefill", "skip prefill on a cache hit"),
-            Choice("full", "full", "skip prefill + decode"),
-            Choice("none", "none", "disable prefix cache"),
-        ],
+        policy_choices,
         accent=accent,
-        default={"prefill": 0, "full": 1, "none": 2}.get(s.get("prefix_policy", "prefill"), 0),
+        default=_default_index(policy_choices, s.get("prefix_policy", CacheAction.PREFILL)),
     )
     return {
         "model": model,
@@ -137,15 +155,16 @@ def _training_inputs(seed: dict[str, Any] | None = None) -> dict[str, Any]:
     model = _pick_model(accent, s.get("model", "mistral-7b-v0.1"))
     gpu = _pick_gpu(accent, s.get("gpu", "NVIDIA-A100-SXM4-80GB"))
     _show_specs(model, gpu, accent)
+    method_choices = [
+        Choice(Method.LORA, "lora", "low-rank adapters"),
+        Choice(Method.FULL, "full", "full fine-tune"),
+        Choice(Method.GPTQ_LORA, "gptq-lora", "quantised LoRA"),
+    ]
     method = prompts.menu(
         "Fine-tuning method",
-        [
-            Choice("lora", "lora", "low-rank adapters"),
-            Choice("full", "full", "full fine-tune"),
-            Choice("gptq-lora", "gptq-lora", "quantised LoRA"),
-        ],
+        method_choices,
         accent=accent,
-        default={"lora": 0, "full": 1, "gptq-lora": 2}.get(s.get("method", "lora"), 0),
+        default=_default_index(method_choices, s.get("method", Method.LORA)),
     )
     batch_size = prompts.number_prompt("Batch size:", default=s.get("batch_size", 4), minimum=1, accent=accent)
     seq_len = prompts.number_prompt(
@@ -156,20 +175,20 @@ def _training_inputs(seed: dict[str, Any] | None = None) -> dict[str, Any]:
     sizing = prompts.menu(
         "Size the job by",
         [
-            Choice("epochs", "Epochs × dataset", "N passes over a dataset of M tokens"),
-            Choice("tokens", "Total tokens", "set the token count directly"),
-            Choice("skip", "Skip (throughput only, no runtime)", ""),
+            Choice(Sizing.EPOCHS, "Epochs × dataset", "N passes over a dataset of M tokens"),
+            Choice(Sizing.TOKENS, "Total tokens", "set the token count directly"),
+            Choice(Sizing.SKIP, "Skip (throughput only, no runtime)", ""),
         ],
         accent=accent,
         default=1 if (s.get("total_tokens") and not s.get("epochs")) else 0,
     )
     epochs = dataset_tokens = total_tokens = None
-    if sizing == "epochs":
+    if sizing == Sizing.EPOCHS:
         epochs = prompts.number_prompt("Epochs:", default=s.get("epochs", 3), minimum=0, accent=accent, integer=False)
         dataset_tokens = prompts.number_prompt(
             "Dataset tokens (one epoch):", default=s.get("dataset_tokens", 5_000_000), minimum=0, accent=accent
         )
-    elif sizing == "tokens":
+    elif sizing == Sizing.TOKENS:
         total_tokens = prompts.number_prompt(
             "Total tokens to train:", default=s.get("total_tokens", 10_000_000), minimum=0, accent=accent
         )
@@ -221,10 +240,10 @@ def _flow_training(seed: dict[str, Any] | None = None) -> None:
 
 
 # Run-producing simulators only; energy/carbon are follow-up analyses.
-_MAIN_MENU = ("inference", "training")
+_MAIN_MENU = tuple(Domain)
 _FLOWS: dict[str, Callable[[], None]] = {
-    "inference": _flow_inference,
-    "training": _flow_training,
+    Domain.INFERENCE: _flow_inference,
+    Domain.TRAINING: _flow_training,
 }
 
 

@@ -17,6 +17,8 @@ import argparse
 import sys
 from collections.abc import Callable, Sequence
 
+from kavier.sdk.domain import Domain
+
 _Handler = Callable[[Sequence[str] | None], None]
 
 
@@ -59,8 +61,8 @@ def _run_calibrate(argv: Sequence[str] | None) -> None:
 # subcommand -> (one-line help, handler). Handlers import their subcommand module lazily, so `kavier --help`
 # and `kavier <cmd>` never pull a sibling command's heavy dependencies (pandas/numpy load only on the run path).
 _COMMANDS: dict[str, tuple[str, _Handler]] = {
-    "inference": ("Run the per-request inference simulator (latency/throughput + OpenDC export).", _run_inference),
-    "training": ("Run the analytical training simulator (throughput/runtime).", _run_training),
+    Domain.INFERENCE: ("Run the per-request inference simulator (latency/throughput + OpenDC export).", _run_inference),
+    Domain.TRAINING: ("Run the analytical training simulator (throughput/runtime).", _run_training),
     "cluster": ("Simulate a FIFO/backfill GPU cluster running jobs of known duration.", _run_cluster),
     "energy": ("Per-Mtoken energy/$ efficiency from Kavier + OpenDC output.", _run_energy),
     "carbon": ("Estimate CO2 from a training sim or OpenDC power against a carbon trace.", _run_carbon),
@@ -100,7 +102,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     command, rest = argv[0], argv[1:]
     entry = _COMMANDS.get(command)
     if entry is None:
-        parser.error(f"argument command: invalid choice: {command!r} (choose from {', '.join(map(repr, _COMMANDS))})")
+        # ``map(str, ...)`` renders the two Domain-enum keys as their plain values, so the choice list
+        # is repr'd identically to the all-string dict (``'inference'`` not ``<Domain.INFERENCE: ...>``).
+        valid = ", ".join(map(repr, map(str, _COMMANDS)))
+        parser.error(f"argument command: invalid choice: {command!r} (choose from {valid})")
     entry[1](rest)
 
 

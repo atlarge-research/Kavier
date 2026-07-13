@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
 
+from kavier.sdk.inference.core.config import CacheAction, CacheScope
 from kavier.sdk.inference.core.service import run_performance
 from kavier.sdk.library.lookup import UnknownSpecError
 
@@ -79,13 +80,13 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max_cached_prompts", type=int, default=10, help="Maximum prefixes kept (LRU).")
     parser.add_argument(
         "--cache_scope",
-        choices=["session", "global"],
+        choices=[s.value for s in CacheScope],
         default="session",
         help="Cache key includes session_id or not.",
     )
     parser.add_argument(
         "--prefix_cache_policy",
-        choices=["none", "prefill", "full"],
+        choices=[a.value for a in CacheAction],
         default="prefill",
         help="'prefill' skips prefill only, 'full' also skips decode.",
     )

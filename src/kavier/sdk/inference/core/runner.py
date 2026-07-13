@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, List
 
 from kavier.sdk.inference.core.cache import PrefixCache
-from kavier.sdk.inference.core.config import SimConfig
+from kavier.sdk.inference.core.config import CacheAction, SimConfig
 from kavier.sdk.inference.stages.decode import get_decode_time_s
 from kavier.sdk.inference.stages.gpu_usage import get_gpu_utilization
 from kavier.sdk.inference.stages.prefill import get_prefill_time_s
@@ -32,9 +32,9 @@ def simulate_one(
 
     if in_tokens and n_in_tokens >= cfg.cache.min_len:
         hit = cache.lookup(session_id, in_tokens)
-        if hit and cfg.cache.action in ("prefill", "full"):
+        if hit and cfg.cache.action in (CacheAction.PREFILL, CacheAction.FULL):
             t_prefill = 0.0
-        if hit and cfg.cache.action == "full":
+        if hit and cfg.cache.action == CacheAction.FULL:
             t_decode = 0.0
 
     total_s = t_prefill + t_decode

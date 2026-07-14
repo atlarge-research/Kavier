@@ -57,3 +57,4 @@ src/reader/
 # committed (size + dataset-license). See examples-local/README.md.
 examples-local/*.csv
 /kavier_output/
+plan.md

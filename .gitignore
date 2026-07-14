@@ -30,9 +30,7 @@ venv/
 .vscode/
 .idea/
 .bob/
-.claude/*
-# …but do version-control shared repo skills (agent guidance for the whole team)
-!.claude/skills/
+.claude/
 
 # ── MkDocs build output ──────────────────
 docs/site/
@@ -40,6 +38,7 @@ docs/site/
 
 # ── Simulator output ─────────────────────
 data/output_traces/
+kavier_output/
 **/tasks.parquet
 **/fragments.parquet
 _sim_results.txt

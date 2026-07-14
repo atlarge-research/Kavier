@@ -11,6 +11,7 @@ from kavier.sdk.inference.stages.gpu_usage import get_gpu_utilization
 from kavier.sdk.inference.stages.prefill import get_prefill_time_s
 from kavier.sdk.library.specs.GPUSpec import GPUSpec
 from kavier.sdk.library.specs.LLMSpec import LLMSpec
+from kavier.sdk.units import MS_PER_SECOND
 
 
 def simulate_one(
@@ -40,7 +41,7 @@ def simulate_one(
     total_s = t_prefill + t_decode
     # Store duration in ms (fragments and kavier.sdk.energy expect ms); floor at 1 so a request that
     # rounds below 1ms still gets a non-zero duration.
-    total_ms = max(1, int(round(total_s * 1000)))
+    total_ms = max(1, int(round(total_s * MS_PER_SECOND)))
     gpu_capacity = float(gpu.core_max_mhz * gpu.cores)
     task = {
         "id": int(idx),
@@ -56,7 +57,7 @@ def simulate_one(
 
     fragments: List[dict] = []
     num_snaps = max(1, int(total_s / export_rate_s))
-    fragment_duration_ms = max(1, int(round(export_rate_s * 1000)))
+    fragment_duration_ms = max(1, int(round(export_rate_s * MS_PER_SECOND)))
     t_sec = 0.0
     for i in range(num_snaps):
         gpu_use = get_gpu_utilization(t_sec, t_prefill, t_decode)

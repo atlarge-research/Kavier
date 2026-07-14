@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from kavier.sdk.co2.engine import CarbonTrace, Fragment, compute_emissions
+from kavier.sdk.co2.engine import TRACE_INTENSITY_COL, TRACE_TS_COL, CarbonTrace, Fragment, compute_emissions
 from kavier.sdk.defaults import (
     DEFAULT_CACHE_SCOPE,
     DEFAULT_EXPORT_RATE,
@@ -35,7 +35,7 @@ from kavier.sdk.inference.core.config import CacheAction, CacheCfg, SimConfig
 from kavier.sdk.inference.core.metrics import Metrics
 from kavier.sdk.inference.core.runner import simulate_one
 from kavier.sdk.library import get_gpu, get_llm
-from kavier.sdk.units import SECONDS_PER_HOUR, WH_PER_KWH, per_mtoken
+from kavier.sdk.units import MS_PER_SECOND, SECONDS_PER_HOUR, WH_PER_KWH, per_mtoken
 
 # Workload-key defaults a batch may omit; the shared homes live in kavier.sdk.defaults. kv_cache keeps
 # its own single home here (no other caller); DEFAULT_PREFIX_POLICY re-exports the facade default, which
@@ -122,8 +122,8 @@ def run_inference(p: dict[str, Any]) -> dict[str, Any]:
             export_rate_s=cfg.export_rate,
             t0_ms=t0,
         )
-        metrics.add(t_p, t_d, (t_p + t_d) * 1000.0)
-        ttfts.append(t_p * 1000.0)
+        metrics.add(t_p, t_d, (t_p + t_d) * MS_PER_SECOND)
+        ttfts.append(t_p * MS_PER_SECOND)
         tasks.append(task)
 
     total_s = metrics.sum_prefill + metrics.sum_decode
@@ -160,8 +160,8 @@ def _flat_trace(start: pd.Timestamp, hours: float, intensity_g_kwh: float) -> Ca
     rows = max(2, int(hours) + 2)
     df = pd.DataFrame(
         {
-            "timestamp": [start + dt.timedelta(hours=h) for h in range(rows)],
-            "carbon_intensity": [float(intensity_g_kwh)] * rows,
+            TRACE_TS_COL: [start + dt.timedelta(hours=h) for h in range(rows)],
+            TRACE_INTENSITY_COL: [float(intensity_g_kwh)] * rows,
         }
     )
     return CarbonTrace.from_dataframe(df)

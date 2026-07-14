@@ -6,6 +6,7 @@ import math
 from typing import Any, Dict
 
 from kavier.sdk.energy.engine import mse_power
+from kavier.sdk.io.constants import FLOPS_PER_PARAM_PER_TOKEN
 from kavier.sdk.library.lookup import get_gpu, get_llm
 from kavier.sdk.library.specs.GPUSpec import GPUSpec
 from kavier.sdk.training.calibration import (
@@ -18,12 +19,24 @@ from kavier.sdk.training.calibration import (
     get_multi_gpu_correction,
     get_training_overhead_s,
 )
-from kavier.sdk.training.core.config import INFINIBAND_GBPS, Method
+from kavier.sdk.training.core.config import (
+    BITS_PER_BYTE,
+    INFINIBAND_GBPS,
+    RING_ALLREDUCE_LATENCY_S,
+    RING_ALLREDUCE_OVERHEAD_PER_MSG_S,
+    Method,
+)
+from kavier.sdk.units import FLOPS_PER_TFLOP, MS_PER_SECOND
 
 # Adam moves ~20 bytes/param per optimizer step (fp32 weight + grad + 2 moments ~16 B, plus working copies).
 _OPTIMIZER_BYTES_PER_PARAM = 20
 # A step touches each weight ~5x in memory (weight read, grad read/write, 2 moments read/write).
 _MEMORY_PASSES_PER_STEP = 5
+# fp32 gradient width (bytes) sizing the all-reduce payload.
+_FP32_BYTES = 4
+# LoRA adapter shape: a rank-r update on `target_modules` projections per layer.
+_LORA_RANK = 8
+_LORA_TARGET_MODULES = 4
 
 
 def _compute_mfu(batch_size: int, gpu: GPUSpec, calibrated: bool = True) -> float:
@@ -42,10 +55,10 @@ def _estimate_memory_bandwidth_usage(
     batch_size: int,
     seq_length: int,
     step_time_s: float,
-    hidden_dim: int = 4096,
+    hidden_dim: int,
+    bytes_per_param: int,
 ) -> float:
     # Bytes use 1e9 (GB, not GiB) to match bandwidth_bps/1e9 in simulate_training_step; GiB understated util ~7%.
-    bytes_per_param = 2
     param_traffic = model_params * bytes_per_param * _MEMORY_PASSES_PER_STEP
     activation_traffic = batch_size * seq_length * hidden_dim * bytes_per_param
     return (param_traffic + activation_traffic) / 1e9 / step_time_s
@@ -54,8 +67,8 @@ def _estimate_memory_bandwidth_usage(
 def _lora_trainable_params(
     hidden_size: int,
     num_layers: int,
-    rank: int = 8,
-    target_modules: int = 4,
+    rank: int = _LORA_RANK,
+    target_modules: int = _LORA_TARGET_MODULES,
 ) -> int:
     return 2 * rank * hidden_size * target_modules * num_layers
 
@@ -64,12 +77,12 @@ def _ring_allreduce_time(
     gradient_bytes: float,
     num_participants: int,
     bandwidth_gbps: float,
-    latency_s: float = 5e-6,
-    overhead_per_msg_s: float = 2e-6,
+    latency_s: float = RING_ALLREDUCE_LATENCY_S,
+    overhead_per_msg_s: float = RING_ALLREDUCE_OVERHEAD_PER_MSG_S,
 ) -> float:
     if num_participants <= 1:
         return 0.0
-    bw = bandwidth_gbps * 1e9 / 8
+    bw: float = bandwidth_gbps * 1e9 / BITS_PER_BYTE
     chunk = gradient_bytes * (num_participants - 1) / num_participants
     return latency_s * math.log2(num_participants) + overhead_per_msg_s * (num_participants - 1) + chunk / bw
 
@@ -83,7 +96,7 @@ def _comm_time(
 ) -> float:
     if num_gpus <= 1:
         return 0.0
-    grad_bytes = trainable_params * 4
+    grad_bytes = trainable_params * _FP32_BYTES
     comm_scale = get_comm_scale() if calibrated else 1.0
     if num_nodes <= 1:
         return _ring_allreduce_time(grad_bytes, num_gpus, network_bandwidth_gbps) * comm_scale
@@ -122,9 +135,9 @@ def simulate_training_step(
 
     total_tokens = batch_size * tokens_per_sample
     # Compute uses ACTIVE params (MoE runs only active experts); optimizer/comm/memory below use total m_params.
-    flops = 2.0 * llm.active_params * total_tokens
+    flops = FLOPS_PER_PARAM_PER_TOKEN * llm.active_params * total_tokens
     mfu = _compute_mfu(batch_size, gpu, calibrated)
-    achieved_flops = gpu.fp_16_tensor_core_tflops * 1e12 * mfu
+    achieved_flops = gpu.fp_16_tensor_core_tflops * FLOPS_PER_TFLOP * mfu
     overhead = get_training_overhead_s() if calibrated else 0.0
     forward_time = flops / achieved_flops + overhead
 
@@ -163,12 +176,13 @@ def simulate_training_step(
         tokens_per_sample,
         step_time_s,
         hidden_dim=llm.d_model,
+        bytes_per_param=llm.p_bytes,
     )
     memory_util = _calculate_memory_utilization(bw_used, gpu.bandwidth_bps / 1e9)
     power = mse_power(mfu, memory_util, gpu)
 
     return {
-        "step_time_ms": step_time_s * 1000,
+        "step_time_ms": step_time_s * MS_PER_SECOND,
         "tokens_per_second": tokens_per_second,
         "tokens_per_step": tokens_per_step,
         "gpu_compute_utilization": mfu * 100,  # raw physical MFU, not throughput_scale-adjusted

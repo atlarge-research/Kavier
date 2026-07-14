@@ -8,7 +8,12 @@ from typing import Any, Iterable, List
 
 import pandas as pd
 
-from kavier.sdk.units import WS_PER_KWH
+from kavier.sdk.units import G_PER_KG, WS_PER_KWH
+
+# Column names of a carbon-intensity trace frame; shared by the CarbonTrace validator and the
+# inference facade's synthetic ``_flat_trace`` producer so the two never drift.
+TRACE_TS_COL = "timestamp"
+TRACE_INTENSITY_COL = "carbon_intensity"
 
 
 @dataclass(frozen=True)
@@ -35,12 +40,12 @@ class CarbonTrace:
         step: dt.timedelta | None = None,
     ) -> "CarbonTrace":
         """Build from a ``[timestamp, carbon_intensity]`` frame; ``step`` inferred from the first interval if unset."""
-        if "timestamp" not in df.columns or "carbon_intensity" not in df.columns:
+        if TRACE_TS_COL not in df.columns or TRACE_INTENSITY_COL not in df.columns:
             raise ValueError(
                 f"carbon trace must have columns ['timestamp', 'carbon_intensity']; got {list(df.columns)}"
             )
-        df = df[["timestamp", "carbon_intensity"]].sort_values("timestamp").reset_index(drop=True)
-        ts = pd.DatetimeIndex(df["timestamp"])
+        df = df[[TRACE_TS_COL, TRACE_INTENSITY_COL]].sort_values(TRACE_TS_COL).reset_index(drop=True)
+        ts = pd.DatetimeIndex(df[TRACE_TS_COL])
         if ts.tz is not None:
             raise ValueError("carbon trace timestamps must be timezone-naive")
         if len(ts) < 1:
@@ -49,7 +54,7 @@ class CarbonTrace:
             if len(ts) < 2:
                 raise ValueError("cannot infer step from a single-row trace; pass step explicitly")
             step = (ts[1] - ts[0]).to_pytimedelta()
-        return cls(timestamps=ts, intensities=df["carbon_intensity"].reset_index(drop=True), step=step)
+        return cls(timestamps=ts, intensities=df[TRACE_INTENSITY_COL].reset_index(drop=True), step=step)
 
     @property
     def coverage_start(self) -> pd.Timestamp:
@@ -76,7 +81,7 @@ class EmissionResult:
     @property
     def total_co2_kg(self) -> float:
         """Total emissions in kg (``total_co2_g / 1000``)."""
-        return self.total_co2_g / 1000.0
+        return self.total_co2_g / G_PER_KG
 
     @property
     def average_intensity(self) -> float:

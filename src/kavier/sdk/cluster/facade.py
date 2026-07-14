@@ -1,8 +1,10 @@
 """Public ``kavier.sdk.cluster`` verb: ``schedule(jobs, ...) -> ClusterSimResult``.
 
-Simulates a fixed-size GPU cluster running jobs of known duration under a scheduling policy (``"fcfs"``
-or ``"backfill"``) and returns per-job metrics (wait, start/end, runtime, energy), per-cluster metrics
-(makespan, utilisation, goodput, peaks), and a GPUs-in-use / queue-depth timeline.
+Simulates a fixed-size GPU cluster running jobs of known duration under a scheduling policy (``"fcfs"``,
+``"backfill"``, ``"fcfs-consolidated"``, or ``"backfill-consolidated"``) and returns per-job metrics
+(wait, start/end, runtime, energy), per-cluster metrics (makespan, utilisation, goodput, peaks), and a
+GPUs-in-use / queue-depth timeline. The ``*-consolidated`` policies honour each job's ``nodes`` request
+(gang placement: exactly ``nodes`` distinct co-located nodes); the plain policies ignore it (tight-pack).
 
 The scheduling kernels live in :mod:`kavier.sdk.cluster.core.engine`; this facade adds input
 normalisation, energy, and metrics. ``pandas`` is imported lazily (only for a DataFrame input) so a
@@ -21,7 +23,7 @@ from kavier.sdk.cluster.core import metrics as _metrics
 
 _SECONDS_PER_HOUR = 3600.0
 
-_POLICIES = ("fcfs", "backfill")
+_POLICIES = ("fcfs", "backfill", "fcfs-consolidated", "backfill-consolidated")
 _OVERSIZED = ("cap", "drop")
 
 
@@ -201,11 +203,14 @@ def schedule(
     per-cluster, and per-node metrics.
 
     ``jobs`` is a ``list[dict]`` / ``list[tuple]`` / ``pandas.DataFrame`` of
-    ``submit_s, gpus, duration_s[, power_w_per_gpu, job_id]`` (the ``nodes`` column is ignored;
-    placement is automatic tight-pack). ``policy="fcfs"`` is strict FCFS timing; ``policy="backfill"``
-    is FIFO+backfill. ``oversized`` is ``"cap"`` (clamp a too-big job to the cluster) or ``"drop"``
-    (skip it). Energy per job is ``(power_w_per_gpu or default_watts_per_gpu) × gpus × runtime_s /
-    3.6e6`` kWh (``None`` if no power).
+    ``submit_s, gpus, duration_s[, nodes, power_w_per_gpu, job_id]``. ``policy="fcfs"`` is strict FCFS
+    timing and ``policy="backfill"`` is FIFO+backfill, both tight-pack (the ``nodes`` column is
+    ignored); ``policy="fcfs-consolidated"`` / ``"backfill-consolidated"`` add consolidated (gang)
+    placement that honours ``nodes`` — a ``gpus``/``nodes`` job lands on exactly ``nodes`` distinct
+    co-located nodes, never scattered wider. ``oversized`` is ``"cap"`` (clamp a too-big job to the
+    cluster) or ``"drop"`` (skip it; for the consolidated policies a job whose per-node share exceeds
+    ``node_gpus`` is the too-big case). Energy per job is ``(power_w_per_gpu or default_watts_per_gpu)
+    × gpus × runtime_s / 3.6e6`` kWh (``None`` if no power).
     """
     if policy not in _POLICIES:
         raise ValueError(f"policy must be one of {_POLICIES}, got {policy!r}")
@@ -224,8 +229,12 @@ def schedule(
 
     if policy == "fcfs":
         placements = engine.run_fcfs(ejobs, num_nodes, node_gpus, oversized)
-    else:
+    elif policy == "backfill":
         placements = engine.run_backfill(ejobs, node_gpus, num_nodes, oversized)
+    elif policy == "fcfs-consolidated":
+        placements = engine.run_fcfs_consolidated(ejobs, num_nodes, node_gpus, oversized)
+    else:  # backfill-consolidated
+        placements = engine.run_backfill_consolidated(ejobs, node_gpus, num_nodes, oversized)
 
     placed = {p.idx: p for p in placements}
     records: list[JobRecord] = []

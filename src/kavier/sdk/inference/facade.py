@@ -33,7 +33,7 @@ from kavier.sdk.domain import RESULT_SOURCE_KEY, Domain
 from kavier.sdk.inference.core.cache import PrefixCache
 from kavier.sdk.inference.core.config import CacheAction, CacheCfg, SimConfig
 from kavier.sdk.inference.core.metrics import Metrics
-from kavier.sdk.inference.core.runner import simulate_one
+from kavier.sdk.inference.core.runner import RequestInput, run_request_loop
 from kavier.sdk.library import get_gpu, get_llm
 from kavier.sdk.units import MS_PER_SECOND, SECONDS_PER_HOUR, WH_PER_KWH, per_mtoken
 
@@ -108,21 +108,10 @@ def run_inference(p: dict[str, Any]) -> dict[str, Any]:
     t0 = int(time.time_ns() / 1e6)
     ttfts: list[float] = []
     tasks: list[dict[str, Any]] = []
-    for i in range(n):
-        task, _frags, t_p, t_d = simulate_one(
-            idx=i,
-            session_id=None,
-            n_in_tokens=n_in,
-            n_out_tokens=n_out,
-            in_tokens=shared_tokens,
-            llm=llm,
-            gpu=gpu,
-            cache=cache,
-            cfg=cfg,
-            export_rate_s=cfg.export_rate,
-            t0_ms=t0,
-        )
-        metrics.add(t_p, t_d, (t_p + t_d) * MS_PER_SECOND)
+    requests = (RequestInput(None, n_in, n_out, shared_tokens) for _ in range(n))
+    for _i, task, _frags, t_p, _t_d in run_request_loop(
+        requests, llm=llm, gpu=gpu, cache=cache, cfg=cfg, metrics=metrics, t0_ms=t0
+    ):
         ttfts.append(t_p * MS_PER_SECOND)
         tasks.append(task)
 

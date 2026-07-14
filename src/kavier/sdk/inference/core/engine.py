@@ -6,12 +6,11 @@ import time
 
 import numpy as np
 import pandas as pd
-from tqdm.auto import tqdm
 
 from kavier.sdk.inference.core.cache import PrefixCache
 from kavier.sdk.inference.core.config import SimConfig
 from kavier.sdk.inference.core.metrics import Metrics
-from kavier.sdk.inference.core.runner import simulate_one
+from kavier.sdk.inference.core.runner import RequestInput, run_request_loop
 from kavier.sdk.io.input_spec import InputSpec
 from kavier.sdk.io.stream_writer import StreamingParquetWriter
 from kavier.sdk.library.specs.GPUSpec import GPUSpec
@@ -48,24 +47,28 @@ def simulate(
             frags_writer.write(pd.DataFrame(FRAGS))
             FRAGS.clear()
 
-    for i in tqdm(range(total), desc="Simulating", unit="req"):
-        task, frags, t_p, t_d = simulate_one(
-            idx=i,
+    requests = (
+        RequestInput(
             session_id=None if sessions is None else sessions[i],
             n_in_tokens=int(num_in[i]),
             n_out_tokens=int(num_out[i]),
             in_tokens=None if in_tokens is None else in_tokens[i],
-            llm=llm,
-            gpu=gpu,
-            cache=cache,
-            cfg=cfg,
-            export_rate_s=cfg.export_rate,
-            t0_ms=t0_ms,
         )
+        for i in range(total)
+    )
+    for i, task, frags, _t_p, _t_d in run_request_loop(
+        requests,
+        llm=llm,
+        gpu=gpu,
+        cache=cache,
+        cfg=cfg,
+        metrics=metrics,
+        t0_ms=t0_ms,
+        total=total,
+        progress_desc="Simulating",
+    ):
         TASKS.append(task)
         FRAGS.extend(frags)
-        metrics.add(t_p, t_d, (t_p + t_d) * 1_000)
-
         if flush_size and (i + 1) % flush_size == 0:
             _flush()
 

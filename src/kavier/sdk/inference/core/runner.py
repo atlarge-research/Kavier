@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
 from typing import Any, List
+
+from tqdm.auto import tqdm
 
 from kavier.sdk.inference.core.cache import PrefixCache
 from kavier.sdk.inference.core.config import CacheAction, SimConfig
+from kavier.sdk.inference.core.metrics import Metrics
 from kavier.sdk.inference.stages.decode import get_decode_time_s
 from kavier.sdk.inference.stages.gpu_usage import get_gpu_utilization
 from kavier.sdk.inference.stages.prefill import get_prefill_time_s
@@ -79,3 +84,52 @@ def simulate_one(
         t_sec += export_rate_s
 
     return task, fragments, t_prefill, t_decode
+
+
+@dataclass(frozen=True)
+class RequestInput:
+    """One request's varying inputs for the simulation loop (per-request session/token counts)."""
+
+    session_id: Any
+    n_in_tokens: int
+    n_out_tokens: int
+    in_tokens: list[int] | None
+
+
+def run_request_loop(
+    requests: Iterable[RequestInput],
+    *,
+    llm: LLMSpec,
+    gpu: GPUSpec,
+    cache: PrefixCache,
+    cfg: SimConfig,
+    metrics: Metrics,
+    t0_ms: int,
+    total: int | None = None,
+    progress_desc: str | None = None,
+) -> Iterator[tuple[int, dict, list[dict], float, float]]:
+    """Drive ``simulate_one`` over ``requests``, accumulating into ``metrics`` and yielding each result.
+
+    Shared by the CLI/service streaming path (``core.engine.simulate``) and the in-memory facade
+    (``facade.run_inference``); each caller consumes the yielded
+    ``(idx, task, fragments, t_prefill_s, t_decode_s)`` for its own I/O (streaming vs. list-building).
+    """
+    seq: Iterable[RequestInput] = requests
+    if progress_desc is not None:
+        seq = tqdm(requests, total=total, desc=progress_desc, unit="req")
+    for i, req in enumerate(seq):
+        task, fragments, t_p, t_d = simulate_one(
+            idx=i,
+            session_id=req.session_id,
+            n_in_tokens=req.n_in_tokens,
+            n_out_tokens=req.n_out_tokens,
+            in_tokens=req.in_tokens,
+            llm=llm,
+            gpu=gpu,
+            cache=cache,
+            cfg=cfg,
+            export_rate_s=cfg.export_rate,
+            t0_ms=t0_ms,
+        )
+        metrics.add(t_p, t_d, (t_p + t_d) * MS_PER_SECOND)
+        yield i, task, fragments, t_p, t_d

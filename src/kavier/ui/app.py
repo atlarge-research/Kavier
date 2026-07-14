@@ -7,6 +7,16 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Callable
 
+from kavier.sdk.defaults import (
+    DEFAULT_CLI_PREFIX_POLICY,
+    DEFAULT_GPU_HOUR_PRICE,
+    DEFAULT_INFERENCE_GPU,
+    DEFAULT_INFERENCE_MODEL,
+    DEFAULT_INTENSITY_G_KWH,
+    DEFAULT_PREFIX_MIN_TOKENS,
+    DEFAULT_TRAINING_GPU,
+    DEFAULT_TRAINING_MODEL,
+)
 from kavier.sdk.domain import Domain
 from kavier.sdk.inference.core.config import CacheAction
 from kavier.sdk.library import GPU_SPEC_LIBRARY, LLM_SPEC_LIBRARY, UnknownSpecError
@@ -15,8 +25,8 @@ from kavier.ui import prompts, render, sims
 from kavier.ui.prompts import Abort, Choice
 from kavier.ui.theme import DOMAINS, banner, console
 
-_DEFAULT_MODEL = "Llama-3-8B"
-_DEFAULT_GPU = "A10"
+_DEFAULT_MODEL = DEFAULT_INFERENCE_MODEL
+_DEFAULT_GPU = DEFAULT_INFERENCE_GPU
 
 
 class Sizing(StrEnum):
@@ -81,7 +91,7 @@ def _inference_inputs(seed: dict[str, Any] | None = None) -> dict[str, Any]:
         "Prefix-cache policy",
         policy_choices,
         accent=accent,
-        default=_default_index(policy_choices, s.get("prefix_policy", CacheAction.PREFILL)),
+        default=_default_index(policy_choices, s.get("prefix_policy", DEFAULT_CLI_PREFIX_POLICY)),
     )
     return {
         "model": model,
@@ -91,7 +101,7 @@ def _inference_inputs(seed: dict[str, Any] | None = None) -> dict[str, Any]:
         "output_tokens": output_tokens,
         "kv_cache": kv_cache,
         "prefix_policy": policy,
-        "prefix_min_tokens": s.get("prefix_min_tokens", 1024),
+        "prefix_min_tokens": s.get("prefix_min_tokens", DEFAULT_PREFIX_MIN_TOKENS),
     }
 
 
@@ -127,13 +137,19 @@ def _inference_followups(result: dict[str, Any], inputs: dict[str, Any]) -> None
             return
         if action == "energy":
             price = prompts.number_prompt(
-                "GPU $/hour (0 to skip cost):", default=2.5, minimum=0.0, accent="green", integer=False
+                "GPU $/hour (0 to skip cost):",
+                default=DEFAULT_GPU_HOUR_PRICE,
+                minimum=0.0,
+                accent="green",
+                integer=False,
             )
             with render.spinner("Computing efficiency…", "green"):
                 e = sims.energy_from_inference(result, price if price > 0 else None)
             console.print(render.energy_result(e))
         elif action == "co2":
-            intensity = prompts.number_prompt("Carbon intensity (gCO2/kWh):", default=400, minimum=1, accent="yellow")
+            intensity = prompts.number_prompt(
+                "Carbon intensity (gCO2/kWh):", default=int(DEFAULT_INTENSITY_G_KWH), minimum=1, accent="yellow"
+            )
             with render.spinner("Billing carbon…", "yellow"):
                 c = sims.run_carbon_from_inference(result, float(intensity))
             console.print(render.carbon_result(c))
@@ -152,8 +168,8 @@ def _inference_followups(result: dict[str, Any], inputs: dict[str, Any]) -> None
 def _training_inputs(seed: dict[str, Any] | None = None) -> dict[str, Any]:
     s = seed or {}
     accent = "magenta"
-    model = _pick_model(accent, s.get("model", "mistral-7b-v0.1"))
-    gpu = _pick_gpu(accent, s.get("gpu", "NVIDIA-A100-SXM4-80GB"))
+    model = _pick_model(accent, s.get("model", DEFAULT_TRAINING_MODEL))
+    gpu = _pick_gpu(accent, s.get("gpu", DEFAULT_TRAINING_GPU))
     _show_specs(model, gpu, accent)
     method_choices = [
         Choice(Method.LORA, "lora", "low-rank adapters"),
@@ -233,7 +249,9 @@ def _flow_training(seed: dict[str, Any] | None = None) -> None:
             if not inputs.get("total_tokens") and not inputs.get("epochs"):
                 console.print("[yellow]  set a job size (total tokens or epochs) to bill carbon — re-run first.[/]")
                 continue
-            intensity = prompts.number_prompt("Carbon intensity (gCO2/kWh):", default=400, minimum=1, accent="yellow")
+            intensity = prompts.number_prompt(
+                "Carbon intensity (gCO2/kWh):", default=int(DEFAULT_INTENSITY_G_KWH), minimum=1, accent="yellow"
+            )
             with render.spinner("Billing carbon…", "yellow"):
                 c = sims.run_carbon_from_training({**inputs, "intensity": float(intensity)})
             console.print(render.carbon_result(c))

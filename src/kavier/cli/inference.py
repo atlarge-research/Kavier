@@ -10,6 +10,14 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
 
+from kavier.sdk.defaults import (
+    DEFAULT_CACHE_SCOPE,
+    DEFAULT_CLI_PREFIX_POLICY,
+    DEFAULT_EXPORT_RATE,
+    DEFAULT_INFERENCE_GPU,
+    DEFAULT_INFERENCE_MODEL,
+    DEFAULT_PREFIX_MIN_TOKENS,
+)
 from kavier.sdk.inference.core.config import CacheAction, CacheScope
 from kavier.sdk.inference.core.service import run_performance
 from kavier.sdk.library.lookup import UnknownSpecError
@@ -45,8 +53,12 @@ class PerfArgs(BaseModel):
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="kavier inference")
-    parser.add_argument("--llm", default="Llama-3-8B", help="Name of the LLM (must match a key in LLM_SPEC_LIBRARY)")
-    parser.add_argument("--gpu", default="A10", help="Name of the GPU (must match a key in GPU_SPEC_LIBRARY)")
+    parser.add_argument(
+        "--llm", default=DEFAULT_INFERENCE_MODEL, help="Name of the LLM (must match a key in LLM_SPEC_LIBRARY)"
+    )
+    parser.add_argument(
+        "--gpu", default=DEFAULT_INFERENCE_GPU, help="Name of the GPU (must match a key in GPU_SPEC_LIBRARY)"
+    )
     parser.add_argument(
         "--trace",
         default=DEFAULT_TRACE,
@@ -62,7 +74,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--export_rate",
         type=float,
-        default=0.1,
+        default=DEFAULT_EXPORT_RATE,
         help="Interval in seconds for snapshotting the simulation state (default: 0.1 seconds)",
     )
     parser.add_argument(
@@ -74,20 +86,20 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--prefix_cache_min_tokens",
         type=int,
-        default=1024,
+        default=DEFAULT_PREFIX_MIN_TOKENS,
         help="Prefix length (tokens) required to enter cache.",
     )
     parser.add_argument("--max_cached_prompts", type=int, default=10, help="Maximum prefixes kept (LRU).")
     parser.add_argument(
         "--cache_scope",
         choices=[s.value for s in CacheScope],
-        default="session",
+        default=DEFAULT_CACHE_SCOPE,
         help="Cache key includes session_id or not.",
     )
     parser.add_argument(
         "--prefix_cache_policy",
         choices=[a.value for a in CacheAction],
-        default="prefill",
+        default=DEFAULT_CLI_PREFIX_POLICY,
         help="'prefill' skips prefill only, 'full' also skips decode.",
     )
     return parser

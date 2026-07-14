@@ -54,14 +54,14 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "--jobs", required=True, help="Jobs CSV: submit_s,gpus,duration_s[,nodes,power_w_per_gpu,job_id]"
     )
     parser.add_argument(
-        "--policy", choices=[p.value for p in Policy], default="fcfs", help="Scheduling policy (default: fcfs)"
+        "--policy", choices=[p.value for p in Policy], default=Policy.FCFS, help="Scheduling policy (default: fcfs)"
     )
     parser.add_argument("--num-nodes", type=int, default=None, help="Number of nodes in the datacenter")
     parser.add_argument("--node-gpus", type=int, default=None, help="GPUs per node")
     parser.add_argument(
         "--oversized",
         choices=[o.value for o in Oversized],
-        default="cap",
+        default=Oversized.CAP,
         help="Clamp (cap) or skip (drop) a job that wants more GPUs than the cluster (default: cap)",
     )
     parser.add_argument(

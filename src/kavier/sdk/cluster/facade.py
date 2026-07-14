@@ -193,10 +193,10 @@ def _normalise(jobs: Any) -> list[dict[str, Any]]:
 def schedule(
     jobs: Any,
     *,
-    policy: str = "fcfs",
+    policy: str = Policy.FCFS,
     num_nodes: int | None = None,
     node_gpus: int | None = None,
-    oversized: str = "cap",
+    oversized: str = Oversized.CAP,
     default_watts_per_gpu: float | None = None,
 ) -> ClusterSimResult:
     """Simulate ``jobs`` on a homogeneous ``num_nodes × node_gpus`` datacenter and return per-job,

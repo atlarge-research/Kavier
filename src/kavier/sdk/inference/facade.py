@@ -15,22 +15,33 @@ import numpy as np
 import pandas as pd
 
 from kavier.sdk.co2.engine import CarbonTrace, Fragment, compute_emissions
+from kavier.sdk.defaults import (
+    DEFAULT_CACHE_SCOPE,
+    DEFAULT_EXPORT_RATE,
+    DEFAULT_FACADE_PREFIX_POLICY,
+)
+from kavier.sdk.defaults import (
+    DEFAULT_GPU_HOUR_PRICE as DEFAULT_GPU_HOUR_PRICE,
+)
+from kavier.sdk.defaults import (
+    DEFAULT_INTENSITY_G_KWH as DEFAULT_INTENSITY_G_KWH,
+)
+from kavier.sdk.defaults import (
+    DEFAULT_PREFIX_MIN_TOKENS as DEFAULT_PREFIX_MIN_TOKENS,
+)
 from kavier.sdk.domain import RESULT_SOURCE_KEY, Domain
 from kavier.sdk.inference.core.cache import PrefixCache
-from kavier.sdk.inference.core.config import CacheAction, CacheCfg, CacheScope, SimConfig
+from kavier.sdk.inference.core.config import CacheAction, CacheCfg, SimConfig
 from kavier.sdk.inference.core.metrics import Metrics
 from kavier.sdk.inference.core.runner import simulate_one
 from kavier.sdk.library import get_gpu, get_llm
 from kavier.sdk.units import SECONDS_PER_HOUR, WH_PER_KWH, per_mtoken
 
-# Defaults for workload keys a batch may omit. kv_cache / min_tokens mirror the UI prompt defaults;
-# prefix_policy defaults to "none": the facade's synthetic workload shares no prompt content unless a
-# policy is opted into, which keeps default outputs identical to when the cache was never consulted.
+# Workload-key defaults a batch may omit; the shared homes live in kavier.sdk.defaults. kv_cache keeps
+# its own single home here (no other caller); DEFAULT_PREFIX_POLICY re-exports the facade default, which
+# is "none" ON PURPOSE — the synthetic workload shares no prompt content, so the cache stays inert.
 DEFAULT_KV_CACHE = True
-DEFAULT_PREFIX_POLICY = "none"
-DEFAULT_PREFIX_MIN_TOKENS = 1024
-DEFAULT_INTENSITY_G_KWH = 400.0
-DEFAULT_GPU_HOUR_PRICE = 2.5
+DEFAULT_PREFIX_POLICY = DEFAULT_FACADE_PREFIX_POLICY
 
 Batch = "pd.DataFrame | list[dict[str, Any]] | dict[str, Any]"
 
@@ -79,10 +90,10 @@ def run_inference(p: dict[str, Any]) -> dict[str, Any]:
     llm = get_llm(p["model"])
     gpu = get_gpu(p["gpu"])
     cfg = SimConfig(
-        export_rate=0.1,
+        export_rate=DEFAULT_EXPORT_RATE,
         kv_cache=bool(p["kv_cache"]),
         cache=CacheCfg(
-            min_len=int(p["prefix_min_tokens"]), action=p["prefix_policy"], scope=CacheScope.SESSION, max_entries=10
+            min_len=int(p["prefix_min_tokens"]), action=p["prefix_policy"], scope=DEFAULT_CACHE_SCOPE, max_entries=10
         ),
     )
 

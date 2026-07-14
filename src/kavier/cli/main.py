@@ -14,60 +14,28 @@ flags. The interactive REPL is a separate entrypoint (``kavier-ui`` / ``python -
 from __future__ import annotations
 
 import argparse
+import importlib
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 
 from kavier.sdk.domain import Domain
 
-_Handler = Callable[[Sequence[str] | None], None]
-
-
-def _run_inference(argv: Sequence[str] | None) -> None:
-    from kavier.cli.inference import main
-
-    main(argv)
-
-
-def _run_training(argv: Sequence[str] | None) -> None:
-    from kavier.cli.training import main
-
-    main(argv)
-
-
-def _run_cluster(argv: Sequence[str] | None) -> None:
-    from kavier.cli.cluster import main
-
-    main(argv)
-
-
-def _run_energy(argv: Sequence[str] | None) -> None:
-    from kavier.cli.energy import main
-
-    main(argv)
-
-
-def _run_carbon(argv: Sequence[str] | None) -> None:
-    from kavier.cli.carbon import main
-
-    main(argv)
-
-
-def _run_calibrate(argv: Sequence[str] | None) -> None:
-    from kavier.cli.calibrate import main
-
-    main(argv)
-
-
-# subcommand -> (one-line help, handler). Handlers import their subcommand module lazily, so `kavier --help`
-# and `kavier <cmd>` never pull a sibling command's heavy dependencies (pandas/numpy load only on the run path).
-_COMMANDS: dict[str, tuple[str, _Handler]] = {
-    Domain.INFERENCE: ("Run the per-request inference simulator (latency/throughput + OpenDC export).", _run_inference),
-    Domain.TRAINING: ("Run the analytical training simulator (throughput/runtime).", _run_training),
-    "cluster": ("Simulate a FIFO/backfill GPU cluster running jobs of known duration.", _run_cluster),
-    "energy": ("Per-Mtoken energy/$ efficiency from Kavier + OpenDC output.", _run_energy),
-    "carbon": ("Estimate CO2 from a training sim or OpenDC power against a carbon trace.", _run_carbon),
-    "calibrate": ("Fit a training-calibration table from a profiling CSV ([calibration] extra).", _run_calibrate),
+# subcommand -> (one-line help, submodule name under `kavier.cli`). The module is imported lazily at dispatch
+# time (see _run_subcommand), so `kavier --help` and `kavier <cmd>` never pull a sibling command's heavy
+# dependencies (pandas/numpy load only on the run path).
+_COMMANDS: dict[str, tuple[str, str]] = {
+    Domain.INFERENCE: ("Run the per-request inference simulator (latency/throughput + OpenDC export).", "inference"),
+    Domain.TRAINING: ("Run the analytical training simulator (throughput/runtime).", "training"),
+    "cluster": ("Simulate a FIFO/backfill GPU cluster running jobs of known duration.", "cluster"),
+    "energy": ("Per-Mtoken energy/$ efficiency from Kavier + OpenDC output.", "energy"),
+    "carbon": ("Estimate CO2 from a training sim or OpenDC power against a carbon trace.", "carbon"),
+    "calibrate": ("Fit a training-calibration table from a profiling CSV ([calibration] extra).", "calibrate"),
 }
+
+
+def _run_subcommand(module: str, argv: Sequence[str] | None) -> None:
+    """Import ``kavier.cli.<module>`` lazily and call its ``main`` — sibling deps stay off the load path."""
+    importlib.import_module(f"kavier.cli.{module}").main(argv)
 
 
 def _build_root_parser() -> argparse.ArgumentParser:
@@ -81,7 +49,7 @@ def _build_root_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("-V", "--version", action="version", version=f"kavier {__version__}")
     sub = parser.add_subparsers(dest="command", metavar="{" + ",".join(_COMMANDS) + "}")
-    for name, (help_text, _handler) in _COMMANDS.items():
+    for name, (help_text, _module) in _COMMANDS.items():
         # add_help=False: each command's real flags live in its engine parser (kavier <cmd> --help delegates there).
         sub.add_parser(name, help=help_text, add_help=False)
     return parser
@@ -106,7 +74,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         # is repr'd identically to the all-string dict (``'inference'`` not ``<Domain.INFERENCE: ...>``).
         valid = ", ".join(map(repr, map(str, _COMMANDS)))
         parser.error(f"argument command: invalid choice: {command!r} (choose from {valid})")
-    entry[1](rest)
+    _run_subcommand(entry[1], rest)
 
 
 if __name__ == "__main__":

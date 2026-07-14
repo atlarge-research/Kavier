@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 from collections.abc import Sequence
@@ -47,6 +48,58 @@ def _run_csv(path: str, total_tokens: int | None, epochs: float | None, dataset_
     print(f"\n{len(rows)} configurations simulated.")
 
 
+def _require_single_config_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    single_cfg_args = (
+        "model_name",
+        "method",
+        "gpu_model",
+        "tokens_per_sample",
+        "batch_size",
+        "number_gpus",
+        "number_nodes",
+    )
+    missing = [f"--{a}" for a in single_cfg_args if getattr(args, a) is None]
+    if missing:
+        parser.error(f"the following arguments are required: {', '.join(missing)} (or pass --input_csv)")
+
+
+def _print_config_banner(args: argparse.Namespace, total_gpus: int) -> None:
+    print("=" * 80)
+    print("Kavier Training Simulator")
+    print("=" * 80)
+    print(f"Model: {args.model_name}")
+    print(f"Method: {args.method}")
+    print(f"GPU: {args.gpu_model}")
+    print(f"Tokens per sample: {args.tokens_per_sample}")
+    print(f"Batch size: {args.batch_size}")
+    print(f"GPUs: {args.number_gpus} x {args.number_nodes} nodes = {total_gpus} total")
+    print("=" * 80)
+
+
+def _run_single_config(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Validate the single-config flags, simulate one config, and print the banner + JSON result."""
+    _require_single_config_args(parser, args)
+
+    total_gpus = args.number_gpus * args.number_nodes
+    _print_config_banner(args, total_gpus)
+
+    results = simulate_full_training(
+        model_name=args.model_name,
+        method=args.method,
+        gpu_model=args.gpu_model,
+        tokens_per_sample=args.tokens_per_sample,
+        batch_size=args.batch_size,
+        number_gpus=args.number_gpus,
+        number_nodes=args.number_nodes,
+        total_tokens=args.total_tokens,
+        epochs=args.epochs,
+        dataset_tokens=args.dataset_tokens,
+    )
+
+    print("\nSimulation complete!")
+    print(json.dumps(results, indent=2))
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     """Simulate a single config or all rows of a CSV."""
     parser = add_training_args(
@@ -68,47 +121,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             parser.error(str(exc))
         return
 
-    single_cfg_args = (
-        "model_name",
-        "method",
-        "gpu_model",
-        "tokens_per_sample",
-        "batch_size",
-        "number_gpus",
-        "number_nodes",
-    )
-    missing = [f"--{a}" for a in single_cfg_args if getattr(args, a) is None]
-    if missing:
-        parser.error(f"the following arguments are required: {', '.join(missing)} (or pass --input_csv)")
-
-    total_gpus = args.number_gpus * args.number_nodes
-
-    print("=" * 80)
-    print("Kavier Training Simulator")
-    print("=" * 80)
-    print(f"Model: {args.model_name}")
-    print(f"Method: {args.method}")
-    print(f"GPU: {args.gpu_model}")
-    print(f"Tokens per sample: {args.tokens_per_sample}")
-    print(f"Batch size: {args.batch_size}")
-    print(f"GPUs: {args.number_gpus} x {args.number_nodes} nodes = {total_gpus} total")
-    print("=" * 80)
-
-    results = simulate_full_training(
-        model_name=args.model_name,
-        method=args.method,
-        gpu_model=args.gpu_model,
-        tokens_per_sample=args.tokens_per_sample,
-        batch_size=args.batch_size,
-        number_gpus=args.number_gpus,
-        number_nodes=args.number_nodes,
-        total_tokens=args.total_tokens,
-        epochs=args.epochs,
-        dataset_tokens=args.dataset_tokens,
-    )
-
-    print("\nSimulation complete!")
-    print(json.dumps(results, indent=2))
+    _run_single_config(parser, args)
 
 
 if __name__ == "__main__":

@@ -48,7 +48,7 @@ _FCFS_EXPECTED = {
 
 @pytest.mark.parametrize("job_id, expected", _FCFS_EXPECTED.items())
 def test_fcfs_matches_frozen_capsule_schedule(job_id: str, expected: tuple[float, float, float]) -> None:
-    jobs = _by_id(schedule(_JOBS, policy="fcfs", num_nodes=2, node_gpus=8))
+    jobs = _by_id(schedule(_JOBS, policy="distributed-fcfs", num_nodes=2, node_gpus=8))
     wait_h, start_h, end_h = expected
     job = jobs[job_id]
     assert job.wait_h == pytest.approx(wait_h)
@@ -59,7 +59,7 @@ def test_fcfs_matches_frozen_capsule_schedule(job_id: str, expected: tuple[float
 def test_fcfs_cluster_metrics_match_frozen_capsule() -> None:
     # gen_exp2.schedule on the fixture: makespan = max(end)-min(start) = 6h;
     # avg wait = (0+2+3+4+4)/5 = 2.6h; avg run = (2+1+1+1+1)/5 = 1.2h.
-    res = schedule(_JOBS, policy="fcfs", num_nodes=2, node_gpus=8)
+    res = schedule(_JOBS, policy="distributed-fcfs", num_nodes=2, node_gpus=8)
     assert res.cluster.makespan_h == pytest.approx(6.0)
     assert res.cluster.avg_wait_h == pytest.approx(2.6)
     assert res.cluster.avg_run_h == pytest.approx(1.2)
@@ -80,7 +80,7 @@ _BACKFILL_EXPECTED = {
 
 @pytest.mark.parametrize("job_id, expected", _BACKFILL_EXPECTED.items())
 def test_backfill_matches_frozen_capsule_schedule(job_id: str, expected: tuple[float, float, float, int]) -> None:
-    jobs = _by_id(schedule(_JOBS, policy="backfill", num_nodes=2, node_gpus=8))
+    jobs = _by_id(schedule(_JOBS, policy="distributed-backfill", num_nodes=2, node_gpus=8))
     wait_h, start_h, end_h, gpus = expected
     job = jobs[job_id]
     assert job.wait_h == pytest.approx(wait_h)
@@ -91,7 +91,7 @@ def test_backfill_matches_frozen_capsule_schedule(job_id: str, expected: tuple[f
 
 def test_backfill_cluster_metrics_match_frozen_capsule() -> None:
     # gen_exp4.schedule_backfill on the fixture: makespan = 4h; avg wait = (0+2+0+3+0)/5 = 1.0h.
-    res = schedule(_JOBS, policy="backfill", num_nodes=2, node_gpus=8)
+    res = schedule(_JOBS, policy="distributed-backfill", num_nodes=2, node_gpus=8)
     assert res.cluster.makespan_h == pytest.approx(4.0)
     assert res.cluster.avg_wait_h == pytest.approx(1.0)
 
@@ -99,8 +99,8 @@ def test_backfill_cluster_metrics_match_frozen_capsule() -> None:
 def test_fcfs_and_backfill_diverge_on_the_blocked_small_job() -> None:
     # The discipline difference, pinned as a property: strict FCFS pins J2 behind the
     # head-of-line-blocked J1 (starts 3h); backfill lets J2 jump ahead (starts 0h).
-    fcfs = _by_id(schedule(_JOBS, policy="fcfs", num_nodes=2, node_gpus=8))
-    backfill = _by_id(schedule(_JOBS, policy="backfill", num_nodes=2, node_gpus=8))
+    fcfs = _by_id(schedule(_JOBS, policy="distributed-fcfs", num_nodes=2, node_gpus=8))
+    backfill = _by_id(schedule(_JOBS, policy="distributed-backfill", num_nodes=2, node_gpus=8))
     assert fcfs["J2"].start_h == pytest.approx(3.0)
     assert backfill["J2"].start_h == pytest.approx(0.0)
 
@@ -124,11 +124,11 @@ _BACKFILL_NODES = {
 
 @pytest.mark.parametrize("job_id, nodes", _FCFS_NODES.items())
 def test_fcfs_node_assignment_is_tight_packed(job_id: str, nodes: tuple[tuple[int, int], ...]) -> None:
-    jobs = _by_id(schedule(_JOBS, policy="fcfs", num_nodes=2, node_gpus=8))
+    jobs = _by_id(schedule(_JOBS, policy="distributed-fcfs", num_nodes=2, node_gpus=8))
     assert jobs[job_id].nodes == nodes
 
 
 @pytest.mark.parametrize("job_id, nodes", _BACKFILL_NODES.items())
 def test_backfill_node_assignment_is_tight_packed(job_id: str, nodes: tuple[tuple[int, int], ...]) -> None:
-    jobs = _by_id(schedule(_JOBS, policy="backfill", num_nodes=2, node_gpus=8))
+    jobs = _by_id(schedule(_JOBS, policy="distributed-backfill", num_nodes=2, node_gpus=8))
     assert jobs[job_id].nodes == nodes

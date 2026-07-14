@@ -172,7 +172,7 @@ def test_unknown_gpu_raises_key_error() -> None:
 
 def test_schedule_fcfs_shape_matches_coastline_workload_queue() -> None:
     # Mirrors coastline/src/coastline/ui/workload_queue.py::simulate_fifo exactly: rows keyed
-    # job_id/submit_s/gpus/duration_s/power_w_per_gpu, policy="fcfs", oversized="drop",
+    # job_id/submit_s/gpus/duration_s/power_w_per_gpu, policy="distributed-fcfs", oversized="drop",
     # default_watts_per_gpu set (that file's _AVG_WATTS_PER_GPU). "big" wants more GPUs (999) than the
     # 32-GPU pool -> dropped, matching the oversized="drop" contract (already physics-tested by
     # test_cluster/test_schedule_api.py::test_oversized_drop_excludes_the_job_and_reports_it; here we
@@ -182,7 +182,9 @@ def test_schedule_fcfs_shape_matches_coastline_workload_queue() -> None:
         {"job_id": "j1", "submit_s": 0.0, "gpus": 4, "duration_s": 10.0, "power_w_per_gpu": 300.0},
         {"job_id": "j2", "submit_s": 0.0, "gpus": 4, "duration_s": 10.0},  # no power -> default applies
     ]
-    result = schedule(rows, policy="fcfs", num_nodes=1, node_gpus=32, oversized="drop", default_watts_per_gpu=350.0)
+    result = schedule(
+        rows, policy="distributed-fcfs", num_nodes=1, node_gpus=32, oversized="drop", default_watts_per_gpu=350.0
+    )
 
     assert result.dropped == ["big"]
     assert len(result.jobs) == 2
@@ -224,13 +226,13 @@ def test_schedule_fcfs_shape_matches_coastline_workload_queue() -> None:
 def test_schedule_backfill_shape_matches_coastline_trace_plot() -> None:
     # Mirrors coastline/src/coastline/sdk/trace/plot.py exactly: rows keyed
     # submit_s/gpus/duration_s/nodes (nodes is accepted but IGNORED by the scheduler -- placement is
-    # automatic tight-pack, per facade.py::_normalise's own docstring), policy="backfill", no oversized/
+    # automatic tight-pack, per facade.py::_normalise's own docstring), policy="distributed-backfill", no oversized/
     # default_watts_per_gpu override (so the "cap"/None defaults apply).
     rows = [
         {"submit_s": 0.0, "gpus": 8, "duration_s": 20.0, "nodes": 1},
         {"submit_s": 5.0, "gpus": 4, "duration_s": 5.0, "nodes": 1},
     ]
-    result = schedule(rows, policy="backfill", num_nodes=2, node_gpus=8)
+    result = schedule(rows, policy="distributed-backfill", num_nodes=2, node_gpus=8)
 
     assert result.dropped == []
     assert len(result.jobs) == 2
@@ -239,7 +241,7 @@ def test_schedule_backfill_shape_matches_coastline_trace_plot() -> None:
         8, 0.0, 0.0, 20.0, 0.0, 20.0,
     )  # fmt: skip
     # job1 (4 GPUs) submits at t=5 while node 0 is full; node 1 is still free -> backfills immediately
-    # (this is the behaviour the name "backfill" is being relied on for): start=submit=5, wait=0.
+    # (this is the behaviour the distributed-backfill policy is being relied on for): start=submit=5, wait=0.
     assert (j1.gpus, j1.submit_s, j1.start_s, j1.end_s, j1.wait_s, j1.turnaround_s) == (
         4, 5.0, 5.0, 10.0, 0.0, 5.0,
     )  # fmt: skip

@@ -1,8 +1,11 @@
 """Public ``kavier.sdk.cluster`` verb: ``schedule(jobs, ...) -> ClusterSimResult``.
 
-Simulates a fixed-size GPU cluster running jobs of known duration under a scheduling policy (``"fcfs"``
-or ``"backfill"``) and returns per-job metrics (wait, start/end, runtime, energy), per-cluster metrics
-(makespan, utilisation, goodput, peaks), and a GPUs-in-use / queue-depth timeline.
+Simulates a fixed-size GPU cluster running jobs of known duration under a scheduling policy
+(``"distributed-fcfs"``, ``"distributed-backfill"``, ``"consolidated-fcfs"``, or
+``"consolidated-backfill"``) and returns per-job metrics (wait, start/end, runtime, energy),
+per-cluster metrics (makespan, utilisation, goodput, peaks), and a GPUs-in-use / queue-depth timeline.
+The ``consolidated-*`` policies honour each job's ``nodes`` request (gang placement: exactly ``nodes``
+distinct co-located nodes); the ``distributed-*`` policies ignore it (tight-pack).
 
 The scheduling kernels live in :mod:`kavier.sdk.cluster.core.engine`; this facade adds input
 normalisation, energy, and metrics. ``pandas`` is imported lazily (only for a DataFrame input) so a
@@ -22,7 +25,7 @@ from kavier.sdk.cluster.vocab import Oversized, Policy
 from kavier.sdk.units import SECONDS_PER_HOUR, WS_PER_KWH
 
 # Valid string values, derived from the enums (single home) — used for the membership guards and their
-# error messages, which render these tuples verbatim (e.g. ``('fcfs', 'backfill')``).
+# error messages, which render these tuples verbatim (e.g. ``('cap', 'drop')``).
 _POLICIES = tuple(p.value for p in Policy)
 _OVERSIZED = tuple(o.value for o in Oversized)
 
@@ -193,7 +196,7 @@ def _normalise(jobs: Any) -> list[dict[str, Any]]:
 def schedule(
     jobs: Any,
     *,
-    policy: str = Policy.FCFS,
+    policy: str = Policy.CONSOLIDATED_FCFS,
     num_nodes: int | None = None,
     node_gpus: int | None = None,
     oversized: str = Oversized.CAP,
@@ -203,11 +206,15 @@ def schedule(
     per-cluster, and per-node metrics.
 
     ``jobs`` is a ``list[dict]`` / ``list[tuple]`` / ``pandas.DataFrame`` of
-    ``submit_s, gpus, duration_s[, power_w_per_gpu, job_id]`` (the ``nodes`` column is ignored;
-    placement is automatic tight-pack). ``policy="fcfs"`` is strict FCFS timing; ``policy="backfill"``
-    is FIFO+backfill. ``oversized`` is ``"cap"`` (clamp a too-big job to the cluster) or ``"drop"``
-    (skip it). Energy per job is ``(power_w_per_gpu or default_watts_per_gpu) × gpus × runtime_s /
-    3.6e6`` kWh (``None`` if no power).
+    ``submit_s, gpus, duration_s[, nodes, power_w_per_gpu, job_id]``. ``policy="distributed-fcfs"`` is
+    strict FCFS timing and ``policy="distributed-backfill"`` is FIFO+backfill, both tight-pack (the
+    ``nodes`` column is ignored); ``policy="consolidated-fcfs"`` / ``"consolidated-backfill"`` add
+    consolidated (gang) placement that honours ``nodes`` — a ``gpus``/``nodes`` job lands on exactly
+    ``nodes`` distinct
+    co-located nodes, never scattered wider. ``oversized`` is ``"cap"`` (clamp a too-big job to the
+    cluster) or ``"drop"`` (skip it; for the consolidated policies a job whose per-node share exceeds
+    ``node_gpus`` is the too-big case). Energy per job is ``(power_w_per_gpu or default_watts_per_gpu)
+    × gpus × runtime_s / 3.6e6`` kWh (``None`` if no power).
     """
     if policy not in _POLICIES:
         raise ValueError(f"policy must be one of {_POLICIES}, got {policy!r}")
@@ -224,10 +231,14 @@ def schedule(
     norm = _normalise(jobs)
     ejobs = [engine.Job(j["index"], j["submit_s"], j["gpus"], j["duration_s"], j["nodes"]) for j in norm]
 
-    if policy == Policy.FCFS:
+    if policy == Policy.DISTRIBUTED_FCFS:
         placements = engine.run_fcfs(ejobs, num_nodes, node_gpus, oversized)
-    else:
+    elif policy == Policy.DISTRIBUTED_BACKFILL:
         placements = engine.run_backfill(ejobs, node_gpus, num_nodes, oversized)
+    elif policy == Policy.CONSOLIDATED_FCFS:
+        placements = engine.run_fcfs_consolidated(ejobs, num_nodes, node_gpus, oversized)
+    else:  # consolidated-backfill
+        placements = engine.run_backfill_consolidated(ejobs, node_gpus, num_nodes, oversized)
 
     placed = {p.idx: p for p in placements}
     records: list[JobRecord] = []

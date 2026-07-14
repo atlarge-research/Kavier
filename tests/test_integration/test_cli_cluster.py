@@ -26,7 +26,7 @@ def _write_jobs(tmp_path: Path) -> Path:
 
 def test_cluster_cli_prints_cluster_summary(tmp_path: Path) -> None:
     jobs = _write_jobs(tmp_path)
-    proc = _run(["--jobs", str(jobs), "--policy", "fcfs", "--num-nodes", "1", "--node-gpus", "4"])
+    proc = _run(["--jobs", str(jobs), "--policy", "distributed-fcfs", "--num-nodes", "1", "--node-gpus", "4"])
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout[proc.stdout.index("{") :])
     assert payload["n_jobs"] == 2
@@ -60,10 +60,10 @@ def test_cluster_cli_renders_timeline_plot(tmp_path: Path) -> None:
 
 def test_backfill_with_node_topology_runs(tmp_path: Path) -> None:
     jobs = _write_jobs(tmp_path)  # reuse the file-writing helper already in this module
-    proc = _run(["--jobs", str(jobs), "--policy", "backfill", "--num-nodes", "2", "--node-gpus", "8"])
+    proc = _run(["--jobs", str(jobs), "--policy", "distributed-backfill", "--num-nodes", "2", "--node-gpus", "8"])
     assert proc.returncode == 0
     summary = json.loads(proc.stdout)
-    assert summary["policy"] == "backfill"
+    assert summary["policy"] == "distributed-backfill"
     assert summary["capacity_gpus"] == 16
 
 

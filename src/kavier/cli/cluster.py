@@ -20,7 +20,7 @@ from kavier.sdk.cluster import schedule
 from kavier.sdk.cluster.facade import ClusterSimResult
 from kavier.sdk.cluster.vocab import Oversized, Policy
 
-_EXAMPLE_CMD = "kavier cluster --jobs jobs.csv --policy fcfs --num-nodes 4 --node-gpus 8"
+_EXAMPLE_CMD = "kavier cluster --jobs jobs.csv --policy consolidated-fcfs --num-nodes 4 --node-gpus 8"
 
 _PER_JOB_FIELDS = (
     "job_id",
@@ -54,7 +54,12 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "--jobs", required=True, help="Jobs CSV: submit_s,gpus,duration_s[,nodes,power_w_per_gpu,job_id]"
     )
     parser.add_argument(
-        "--policy", choices=[p.value for p in Policy], default=Policy.FCFS, help="Scheduling policy (default: fcfs)"
+        "--policy",
+        choices=[p.value for p in Policy],
+        default=Policy.CONSOLIDATED_FCFS,
+        help="Scheduling policy: distributed-fcfs/distributed-backfill tight-pack (ignore the nodes "
+        "column); the consolidated-* variants honour per-job nodes (gang placement) "
+        "(default: consolidated-fcfs)",
     )
     parser.add_argument("--num-nodes", type=int, default=None, help="Number of nodes in the datacenter")
     parser.add_argument("--node-gpus", type=int, default=None, help="GPUs per node")

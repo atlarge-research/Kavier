@@ -511,54 +511,19 @@ def _mgc_with_interpolated_gaps(mgc_fitted: dict[str, float], fit_counts: set[in
     return out
 
 
-# Rebuild the WHOLE calibration table from scratch from the measured runs (6 steps below).
-def _fit_calibration(
-    reference: dict,
+def _fit_multi_gpu_correction(
+    tier1: dict,
     rows: pd.DataFrame,
+    train: pd.DataFrame,
+    neutral: dict,
+    interaction: dict,
     raw_path: Path | None,
-    models: list[str] | None = None,
-    log: Callable[[str], None] = print,
-) -> tuple[dict, dict]:
-    """The from-scratch two-tier fit over already-loaded valid ``rows`` (steps 1-6 inline below).
-    Shared by regenerate() (fixed internal CSV, capped to <=8 GPU) and calibrate() (arbitrary
-    CSV/DataFrame, no cap), so an equivalent input reproduces the same numbers.
+    log: Callable[[str], None],
+) -> tuple[dict, str]:
+    """Step 5 of the from-scratch fit: the multi_gpu_correction table + its explanatory note.
 
-    The multi-GPU correction has two mutually-exclusive sources depending on whether ``rows`` already
-    carries >8-GPU data; Step 5 explains the choice and why the >8 rows are never double-counted.
-    Returns (calibration_dict, metrics), metrics being a small fit report (row counts, held-out MdAPE)."""
-    # Step 1: raw kavier = the reference's structure with every correction neutralised to 1.0
-    #         (model_scale restricted to the selected set).
-    neutral = _neutral_base(reference, models)
-
-    # Step 2: split the valid rows (selected models) into train / val / test (seed 42).
-    train, val, test = train_val_test_split(rows)
-    n_models = rows["model_name"].astype(str).nunique()
-    max_total = int(rows["total"].max()) if len(rows) else 0
-    log(
-        f"  rows: train={len(train)} val={len(val)} test={len(test)} "
-        f"(valid, tput>0, <={max_total} GPU, {n_models} models)"
-    )
-
-    # Step 3: Tier-1 -- regularized Powell joint fit of the global scales (comm_scale, per-GPU MFU,
-    #         per-method, per-model, multi-GPU 2/4/8) from the neutral prior; lambda picked on val,
-    #         skipping any physically-degenerate (non-identifiable comm_scale) candidate (see _is_physical).
-    tier1, info = select_calibration(
-        train, val, grad_accum_steps=1, backward_factor=2.0, base_cal=neutral, accept=_is_physical
-    )
-    log(
-        f"  Tier-1 fit: regularisation choice={info['choice']!r} val_mdape={info['val_mdape']:.2f}% "
-        f"(comm_scale={tier1['comm_scale']:.3f})"
-    )
-
-    # Step 4: Tier-2 -- the leftover per-cell residual (interaction_scale): median(measured / pred)
-    #         on train+val, with the Tier-1 scales applied and interaction itself empty.
-    base = copy.deepcopy(tier1)
-    base["interaction_scale"] = {}
-    train_val = pd.concat([train, val], ignore_index=True)
-    interaction = _build_interaction(train_val, base)
-
-    # Step 5: the multi-GPU correction. Its source depends on whether >8-GPU rows are already in the
-    #         main fit -- and the two sources are MUTUALLY EXCLUSIVE, so a >8 row is never counted twice.
+    The source depends on whether >8-GPU rows are already in the main fit -- and the two sources are
+    MUTUALLY EXCLUSIVE, so a >8 row is never counted twice. Returns (mgc, mgc_note)."""
     mgc_lo = tier1["multi_gpu_correction"]["by_num_gpus"]
     high_totals = sorted({int(t) for t in rows["total"].unique() if t > 8})
     if high_totals:
@@ -607,6 +572,58 @@ def _fit_calibration(
             "the recommender restricts to <=8."
         )
         log(f"  WARNING: raw multi-node trace not found at {raw_path}; mgc >8 left neutral (1.0)")
+    return mgc, mgc_note
+
+
+# Rebuild the WHOLE calibration table from scratch from the measured runs (6 steps below).
+def _fit_calibration(
+    reference: dict,
+    rows: pd.DataFrame,
+    raw_path: Path | None,
+    models: list[str] | None = None,
+    log: Callable[[str], None] = print,
+) -> tuple[dict, dict]:
+    """The from-scratch two-tier fit over already-loaded valid ``rows`` (steps 1-6 inline below).
+    Shared by regenerate() (fixed internal CSV, capped to <=8 GPU) and calibrate() (arbitrary
+    CSV/DataFrame, no cap), so an equivalent input reproduces the same numbers.
+
+    The multi-GPU correction has two mutually-exclusive sources depending on whether ``rows`` already
+    carries >8-GPU data; Step 5 explains the choice and why the >8 rows are never double-counted.
+    Returns (calibration_dict, metrics), metrics being a small fit report (row counts, held-out MdAPE)."""
+    # Step 1: raw kavier = the reference's structure with every correction neutralised to 1.0
+    #         (model_scale restricted to the selected set).
+    neutral = _neutral_base(reference, models)
+
+    # Step 2: split the valid rows (selected models) into train / val / test (seed 42).
+    train, val, test = train_val_test_split(rows)
+    n_models = rows["model_name"].astype(str).nunique()
+    max_total = int(rows["total"].max()) if len(rows) else 0
+    log(
+        f"  rows: train={len(train)} val={len(val)} test={len(test)} "
+        f"(valid, tput>0, <={max_total} GPU, {n_models} models)"
+    )
+
+    # Step 3: Tier-1 -- regularized Powell joint fit of the global scales (comm_scale, per-GPU MFU,
+    #         per-method, per-model, multi-GPU 2/4/8) from the neutral prior; lambda picked on val,
+    #         skipping any physically-degenerate (non-identifiable comm_scale) candidate (see _is_physical).
+    tier1, info = select_calibration(
+        train, val, grad_accum_steps=1, backward_factor=2.0, base_cal=neutral, accept=_is_physical
+    )
+    log(
+        f"  Tier-1 fit: regularisation choice={info['choice']!r} val_mdape={info['val_mdape']:.2f}% "
+        f"(comm_scale={tier1['comm_scale']:.3f})"
+    )
+
+    # Step 4: Tier-2 -- the leftover per-cell residual (interaction_scale): median(measured / pred)
+    #         on train+val, with the Tier-1 scales applied and interaction itself empty.
+    base = copy.deepcopy(tier1)
+    base["interaction_scale"] = {}
+    train_val = pd.concat([train, val], ignore_index=True)
+    interaction = _build_interaction(train_val, base)
+
+    # Step 5: the multi-GPU correction. Its source depends on whether >8-GPU rows are already in the
+    #         main fit -- and the two sources are MUTUALLY EXCLUSIVE, so a >8 row is never counted twice.
+    mgc, mgc_note = _fit_multi_gpu_correction(tier1, rows, train, neutral, interaction, raw_path, log)
 
     # Step 6: assemble in the shipped key order + format. Physics constants + schema/version are kept
     #         from the reference template; every scale below was fit from the data in steps 3-5.
@@ -742,6 +759,43 @@ def _suitability_report(valid: pd.DataFrame, models: list[str]) -> str | None:
     )
 
 
+def _resolve_fit_models(valid: pd.DataFrame, models: list[str] | None) -> list[str]:
+    """The final model list calibrate() fits: the requested ``models`` (or the auto-selected set when
+    None), with any model too thin for the 3-way split dropped (with a warning) and a one-shot
+    suitability report emitted. Raises SystemExit if nothing is left to fit. Advisory warnings only --
+    the suitability check never changes which models are returned."""
+    models_final = list(models) if models is not None else _select_models(valid)
+    if not models_final:
+        raise SystemExit(
+            f"no model has >= {_MIN_ROWS_TO_AUTOSELECT} valid rows to auto-fit; pass models= to fit a specific set"
+        )
+
+    # A requested model too thin to fit (below the 3-way split floor) is skipped with a warning, not an
+    # error -- the remaining models still fit. (Auto-selected models already clear _MIN_ROWS_TO_AUTOSELECT.)
+    counts_all = valid["model_name"].astype(str).value_counts()
+    fittable = [m for m in models_final if int(counts_all.get(m, 0)) >= _MIN_ROWS_TO_FIT]
+    skipped = [m for m in models_final if m not in fittable]
+    if skipped:
+        warnings.warn(
+            f"skipping model(s) with fewer than {_MIN_ROWS_TO_FIT} valid rows (too few to fit): "
+            + ", ".join(f"{m} (n={int(counts_all.get(m, 0))})" for m in skipped),
+            UserWarning,
+            stacklevel=3,
+        )
+    models_final = fittable
+    if not models_final:
+        raise SystemExit(f"no requested model has >= {_MIN_ROWS_TO_FIT} valid rows to fit (all skipped as too thin)")
+
+    # Headline suitability warning: emitted once, naming only the checks that fail; silent (one info
+    # line) when the data looks fine. Advisory -- it never changes what is fit.
+    report = _suitability_report(valid, models_final)
+    if report is not None:
+        warnings.warn(report, UserWarning, stacklevel=3)
+    else:
+        _eprint("dataset looks suitable")
+    return models_final
+
+
 def calibrate(source: str | Path | pd.DataFrame, models: list[str] | None = None) -> dict:
     """Fit a calibration table from scratch on ``source`` (a profiling CSV path or an in-memory
     DataFrame with the profiling columns), using the SAME two-tier recipe as regenerate() but
@@ -778,35 +832,7 @@ def calibrate(source: str | Path | pd.DataFrame, models: list[str] | None = None
     if valid.empty:
         raise SystemExit("no valid rows (is_valid==1, dataset_tokens_per_second>0) in the input")
 
-    models_final = list(models) if models is not None else _select_models(valid)
-    if not models_final:
-        raise SystemExit(
-            f"no model has >= {_MIN_ROWS_TO_AUTOSELECT} valid rows to auto-fit; pass models= to fit a specific set"
-        )
-
-    # A requested model too thin to fit (below the 3-way split floor) is skipped with a warning, not an
-    # error -- the remaining models still fit. (Auto-selected models already clear _MIN_ROWS_TO_AUTOSELECT.)
-    counts_all = valid["model_name"].astype(str).value_counts()
-    fittable = [m for m in models_final if int(counts_all.get(m, 0)) >= _MIN_ROWS_TO_FIT]
-    skipped = [m for m in models_final if m not in fittable]
-    if skipped:
-        warnings.warn(
-            f"skipping model(s) with fewer than {_MIN_ROWS_TO_FIT} valid rows (too few to fit): "
-            + ", ".join(f"{m} (n={int(counts_all.get(m, 0))})" for m in skipped),
-            UserWarning,
-            stacklevel=2,
-        )
-    models_final = fittable
-    if not models_final:
-        raise SystemExit(f"no requested model has >= {_MIN_ROWS_TO_FIT} valid rows to fit (all skipped as too thin)")
-
-    # Headline suitability warning: emitted once, naming only the checks that fail; silent (one info
-    # line) when the data looks fine. Advisory -- it never changes what is fit.
-    report = _suitability_report(valid, models_final)
-    if report is not None:
-        warnings.warn(report, UserWarning, stacklevel=2)
-    else:
-        _eprint("dataset looks suitable")
+    models_final = _resolve_fit_models(valid, models)
 
     rows = _filter_valid_rows(trace, models_final, max_total_gpus=None)
     if rows.empty:

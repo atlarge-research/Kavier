@@ -4,7 +4,7 @@ from typing import Any, Tuple
 
 from cachetools import LRUCache
 
-from kavier.sdk.inference.core.config import CacheCfg
+from kavier.sdk.inference.core.config import CacheCfg, CacheScope
 
 
 class PrefixCache:
@@ -22,7 +22,7 @@ class PrefixCache:
 
     def _key(self, sid, tokens):
         core = tuple(tokens[: self.cfg.min_len])
-        return (sid, core) if self.cfg.scope == "session" else core
+        return (sid, core) if self.cfg.scope == CacheScope.SESSION else core
 
     def lookup(self, sid, tokens) -> bool:
         """True on a prefix hit; else insert the key (evicting LRU if full) and return False."""

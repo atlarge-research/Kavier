@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
 from typing import Any, List
 
+from tqdm.auto import tqdm
+
 from kavier.sdk.inference.core.cache import PrefixCache
-from kavier.sdk.inference.core.config import SimConfig
+from kavier.sdk.inference.core.config import CacheAction, SimConfig
+from kavier.sdk.inference.core.metrics import Metrics
 from kavier.sdk.inference.stages.decode import get_decode_time_s
 from kavier.sdk.inference.stages.gpu_usage import get_gpu_utilization
 from kavier.sdk.inference.stages.prefill import get_prefill_time_s
 from kavier.sdk.library.specs.GPUSpec import GPUSpec
 from kavier.sdk.library.specs.LLMSpec import LLMSpec
+from kavier.sdk.units import MS_PER_SECOND
 
 
 def simulate_one(
@@ -32,14 +38,15 @@ def simulate_one(
 
     if in_tokens and n_in_tokens >= cfg.cache.min_len:
         hit = cache.lookup(session_id, in_tokens)
-        if hit and cfg.cache.action in ("prefill", "full"):
+        if hit and cfg.cache.action in (CacheAction.PREFILL, CacheAction.FULL):
             t_prefill = 0.0
-        if hit and cfg.cache.action == "full":
+        if hit and cfg.cache.action == CacheAction.FULL:
             t_decode = 0.0
 
     total_s = t_prefill + t_decode
-    # ms (fragments + kavier.sdk.energy treat as ms); floor 1 — raw s under-counted 1000x, int() truncated <1s to 0.
-    total_ms = max(1, int(round(total_s * 1000)))
+    # Store duration in ms (fragments and kavier.sdk.energy expect ms); floor at 1 so a request that
+    # rounds below 1ms still gets a non-zero duration.
+    total_ms = max(1, int(round(total_s * MS_PER_SECOND)))
     gpu_capacity = float(gpu.core_max_mhz * gpu.cores)
     task = {
         "id": int(idx),
@@ -55,7 +62,7 @@ def simulate_one(
 
     fragments: List[dict] = []
     num_snaps = max(1, int(total_s / export_rate_s))
-    fragment_duration_ms = max(1, int(round(export_rate_s * 1000)))
+    fragment_duration_ms = max(1, int(round(export_rate_s * MS_PER_SECOND)))
     t_sec = 0.0
     for i in range(num_snaps):
         gpu_use = get_gpu_utilization(t_sec, t_prefill, t_decode)
@@ -77,3 +84,52 @@ def simulate_one(
         t_sec += export_rate_s
 
     return task, fragments, t_prefill, t_decode
+
+
+@dataclass(frozen=True)
+class RequestInput:
+    """One request's varying inputs for the simulation loop (per-request session/token counts)."""
+
+    session_id: Any
+    n_in_tokens: int
+    n_out_tokens: int
+    in_tokens: list[int] | None
+
+
+def run_request_loop(
+    requests: Iterable[RequestInput],
+    *,
+    llm: LLMSpec,
+    gpu: GPUSpec,
+    cache: PrefixCache,
+    cfg: SimConfig,
+    metrics: Metrics,
+    t0_ms: int,
+    total: int | None = None,
+    progress_desc: str | None = None,
+) -> Iterator[tuple[int, dict, list[dict], float, float]]:
+    """Drive ``simulate_one`` over ``requests``, accumulating into ``metrics`` and yielding each result.
+
+    Shared by the CLI/service streaming path (``core.engine.simulate``) and the in-memory facade
+    (``facade.run_inference``); each caller consumes the yielded
+    ``(idx, task, fragments, t_prefill_s, t_decode_s)`` for its own I/O (streaming vs. list-building).
+    """
+    seq: Iterable[RequestInput] = requests
+    if progress_desc is not None:
+        seq = tqdm(requests, total=total, desc=progress_desc, unit="req")
+    for i, req in enumerate(seq):
+        task, fragments, t_p, t_d = simulate_one(
+            idx=i,
+            session_id=req.session_id,
+            n_in_tokens=req.n_in_tokens,
+            n_out_tokens=req.n_out_tokens,
+            in_tokens=req.in_tokens,
+            llm=llm,
+            gpu=gpu,
+            cache=cache,
+            cfg=cfg,
+            export_rate_s=cfg.export_rate,
+            t0_ms=t0_ms,
+        )
+        metrics.add(t_p, t_d, (t_p + t_d) * MS_PER_SECOND)
+        yield i, task, fragments, t_p, t_d

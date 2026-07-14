@@ -1,28 +1,21 @@
 """Kavier: predict performance, sustainability, and efficiency of LLM ecosystems.
 
-Public API (lazily loaded, so ``import kavier`` stays cheap and stdlib-light):
-
-* ``kavier.inference`` / ``kavier.training`` — the batch-predictor verbs
-  (``performance`` / ``energy`` / ``efficiency`` / ``carbon``). Each takes a workload batch
-  (a pandas DataFrame, a ``list[dict]``, or a single ``dict``) and returns the input rows plus the
-  predicted columns.
-* ``kavier.cluster`` — the cluster simulator (``schedule``): FIFO/backfill scheduling of jobs of
-  known duration onto a fixed GPU cluster, with per-job and per-cluster metrics.
-* ``GPU_SPEC_LIBRARY`` / ``LLM_SPEC_LIBRARY`` — the static GPU/LLM spec catalogues.
-* ``simulate_full_training`` / ``simulate_training_step`` — the low-level training engine.
-
-The simulation engines live under ``kavier.sdk`` (``kavier.sdk.inference``, ``kavier.sdk.training``,
-``kavier.sdk.energy``, ``kavier.sdk.co2``, ``kavier.sdk.io``, ``kavier.sdk.library``); the two verb
-packages above are thin facades over them.
+Public API is lazily loaded (PEP 562 ``__getattr__``) so a bare ``import kavier`` stays cheap and
+stdlib-light: the batch-predictor verbs ``kavier.inference`` / ``kavier.training``, the cluster
+simulator ``kavier.cluster``, the ``GPU_SPEC_LIBRARY`` / ``LLM_SPEC_LIBRARY`` catalogues, and the
+low-level training engine all resolve on first access. The engines themselves live under
+``kavier.sdk``; the two verb packages are thin facades over them.
 """
 
 from __future__ import annotations
 
-import importlib
 from importlib.metadata import PackageNotFoundError, version
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:  # for type-checkers only — never imported at runtime (keeps import-time light)
+from kavier._lazy import lazy_getattr
+from kavier.sdk.domain import Domain
+
+if TYPE_CHECKING:  # type-checkers only; never imported at runtime
     from kavier.sdk import cluster as cluster
     from kavier.sdk import inference as inference
     from kavier.sdk import training as training
@@ -41,38 +34,25 @@ __all__ = [
     "simulate_training_step",
 ]
 
-# Lazy attribute access (PEP 562). Importing ``kavier`` must NOT pull pandas/numpy or any engine: this
-# keeps ``import kavier`` cheap AND preserves the stdlib-only import contract of
-# ``kavier.sdk.training.calibration`` (a bare ``import kavier.sdk.training.calibration`` executes this
-# module first — see kavier/sdk/__init__.py). Heavy names resolve only on first access.
-#
-# ``kavier.inference`` / ``kavier.training`` are convenience aliases for the sdk verb packages: the
-# functionality (engine + the performance/energy/efficiency/carbon verbs) lives under ``kavier.sdk.*``.
+# Lazy attribute access (PEP 562): importing ``kavier`` must not pull in pandas/numpy or any engine,
+# and must preserve the stdlib-only import contract of ``kavier.sdk.training.calibration`` (a bare
+# ``import kavier.sdk.training.calibration`` executes this module first). Heavy names resolve only on
+# first access. ``kavier.inference`` / ``kavier.training`` / ``kavier.cluster`` are convenience aliases
+# for the sdk packages (``kavier.sdk.X``), where the actual functionality lives — see ``kavier._lazy``.
+# Targets are submodule paths relative to this ``kavier`` package.
 _LAZY_ALIASES = {
-    "cluster": "kavier.sdk.cluster",
-    "inference": "kavier.sdk.inference",
-    "training": "kavier.sdk.training",
+    "cluster": "sdk.cluster",
+    Domain.INFERENCE: "sdk.inference",
+    Domain.TRAINING: "sdk.training",
 }
 _LAZY_ATTRS = {
-    "GPU_SPEC_LIBRARY": "kavier.sdk.library",
-    "LLM_SPEC_LIBRARY": "kavier.sdk.library",
-    "simulate_full_training": "kavier.sdk.training.core.engine",
-    "simulate_training_step": "kavier.sdk.training.core.engine",
+    "GPU_SPEC_LIBRARY": "sdk.library",
+    "LLM_SPEC_LIBRARY": "sdk.library",
+    "simulate_full_training": "sdk.training.core.engine",
+    "simulate_training_step": "sdk.training.core.engine",
 }
 
-
-def __getattr__(name: str) -> Any:
-    target = _LAZY_ALIASES.get(name)
-    if target is not None:
-        module = importlib.import_module(target)
-        globals()[name] = module
-        return module
-    module_name = _LAZY_ATTRS.get(name)
-    if module_name is not None:
-        value = getattr(importlib.import_module(module_name), name)
-        globals()[name] = value
-        return value
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+__getattr__ = lazy_getattr(globals(), modules=_LAZY_ALIASES, attrs=_LAZY_ATTRS)
 
 
 def __dir__() -> list[str]:

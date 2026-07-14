@@ -102,6 +102,51 @@ def menu(
             live.update(render(), refresh=True)
 
 
+def _fuzzy_filter(items: list[Choice], query: str) -> list[Choice]:
+    """Case-insensitive substring filter over choice labels; an empty query keeps every item."""
+    if not query:
+        return items
+    q = query.lower()
+    return [c for c in items if q in c.label.lower()]
+
+
+def _render_fuzzy(
+    title: str,
+    accent: str,
+    items: list[Choice],
+    rows: list[Choice],
+    query: str,
+    idx: int,
+    max_rows: int,
+) -> Panel:
+    """Render the fuzzy-select panel: the query line, a scrolled window of ``rows`` around ``idx``, and a count."""
+    win_start = max(0, min(idx - max_rows // 2, max(0, len(rows) - max_rows)))
+    view = rows[win_start : win_start + max_rows]
+
+    table = Table(box=None, pad_edge=False, show_header=False)
+    table.add_column(width=3)
+    table.add_column()
+    table.add_column(justify="right", style="dim")
+    for i, c in enumerate(view, start=win_start):
+        sel = i == idx
+        table.add_row(
+            Text("❯" if sel else " ", style=f"bold {accent}"),
+            Text(c.label, style=f"bold {accent}" if sel else "white"),
+            Text(c.hint, style="dim"),
+        )
+    if not rows:
+        table.add_row(Text(" "), Text("(no match)", style="dim italic"), Text(""))
+
+    qline = Text.assemble(
+        ("  search ", "dim"),
+        (query or "type to filter…", "white" if query else "dim italic"),
+        ("▏", f"bold {accent}"),
+    )
+    count = Text(f"  {len(rows)}/{len(items)} · ↑↓ move · enter select · esc cancel", style="dim")
+    body = Group(qline, Text(), table, Text(), count)
+    return Panel(body, title=f"[bold {accent}]{title}[/]", border_style=accent, padding=(1, 2))
+
+
 def fuzzy_select(
     title: str,
     choices: Sequence[Choice | str],
@@ -120,48 +165,18 @@ def fuzzy_select(
                 idx = i
                 break
 
-    def filtered() -> list[Choice]:
-        if not query:
-            return items
-        q = query.lower()
-        return [c for c in items if q in c.label.lower()]
-
     def render() -> Panel:
-        rows = filtered()
         nonlocal idx
+        rows = _fuzzy_filter(items, query)
         idx = max(0, min(idx, len(rows) - 1)) if rows else 0
-        win_start = max(0, min(idx - max_rows // 2, max(0, len(rows) - max_rows)))
-        view = rows[win_start : win_start + max_rows]
-
-        table = Table(box=None, pad_edge=False, show_header=False)
-        table.add_column(width=3)
-        table.add_column()
-        table.add_column(justify="right", style="dim")
-        for i, c in enumerate(view, start=win_start):
-            sel = i == idx
-            table.add_row(
-                Text("❯" if sel else " ", style=f"bold {accent}"),
-                Text(c.label, style=f"bold {accent}" if sel else "white"),
-                Text(c.hint, style="dim"),
-            )
-        if not rows:
-            table.add_row(Text(" "), Text("(no match)", style="dim italic"), Text(""))
-
-        qline = Text.assemble(
-            ("  search ", "dim"),
-            (query or "type to filter…", "white" if query else "dim italic"),
-            ("▏", f"bold {accent}"),
-        )
-        count = Text(f"  {len(rows)}/{len(items)} · ↑↓ move · enter select · esc cancel", style="dim")
-        body = Group(qline, Text(), table, Text(), count)
-        return Panel(body, title=f"[bold {accent}]{title}[/]", border_style=accent, padding=(1, 2))
+        return _render_fuzzy(title, accent, items, rows, query, idx, max_rows)
 
     with Live(render(), console=console, auto_refresh=False, screen=False) as live:
         while True:
             key = read_key()
             if key == "esc":
                 raise Abort()
-            rows = filtered()
+            rows = _fuzzy_filter(items, query)
             if key == "up":
                 idx = (idx - 1) % len(rows) if rows else 0
             elif key == "down":

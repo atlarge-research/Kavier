@@ -1,9 +1,7 @@
-"""Shared argparse plumbing for the Kavier subcommands.
-
-De-duplicates what used to be copy-pasted across the per-engine CLIs: a ``FriendlyParser`` that appends
-a worked example to error messages, and the ``--config`` YAML peek/fold (so an explicit flag still
-overrides a config value). Lives under ``kavier.sdk.io`` — the shared I/O layer — so both the engine
-CLIs and the unified ``kavier`` CLI can import it without a layering inversion.
+"""Shared argparse plumbing for the Kavier subcommands: a ``FriendlyParser`` that appends a worked
+example to error messages, and the ``--config`` YAML peek/fold (an explicit flag still overrides a
+config value). The fold logic itself lives in ``kavier.sdk.io.config`` so both the engine CLIs and the
+unified ``kavier`` CLI can import it without a layering inversion.
 """
 
 from __future__ import annotations

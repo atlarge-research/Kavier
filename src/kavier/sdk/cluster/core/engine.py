@@ -1,12 +1,12 @@
 """Discrete-event cluster schedulers: strict FCFS / backfill, spread or consolidated placement.
 
-Stdlib only (``heapq`` + ``math``): this is the import-light simulation kernel, so keep pandas/numpy
-and the spec library out of it. The *spread* kernels (:func:`run_fcfs`, :func:`run_backfill`) are
-parity-checked against frozen reference schedulers by ``tests/test_cluster/test_schedule_parity.py``
-— don't change their scheduling logic. The *consolidated* kernels (:func:`run_fcfs_consolidated`,
-:func:`run_backfill_consolidated`) honour each job's ``nodes`` request via :func:`place_consolidated`
-(gang placement: a ``gpus`` job asking for ``nodes`` replicas lands on exactly ``nodes`` distinct
-nodes, evenly split, never scattered wider).
+Import-light (``heapq`` + ``math`` + the stdlib-only ``vocab`` enums): this is the simulation kernel,
+so keep pandas/numpy and the spec library out of it. The *spread* kernels (:func:`run_fcfs`,
+:func:`run_backfill`) are parity-checked against frozen reference schedulers by
+``tests/test_cluster/test_schedule_parity.py`` — don't change their scheduling logic. The
+*consolidated* kernels (:func:`run_fcfs_consolidated`, :func:`run_backfill_consolidated`) honour each
+job's ``nodes`` request via :func:`place_consolidated` (gang placement: a ``gpus`` job asking for
+``nodes`` replicas lands on exactly ``nodes`` distinct nodes, evenly split, never scattered wider).
 
 Both kernels take a list of :class:`Job`\\ s and return one :class:`Placement` per scheduled job
 (a job dropped for being oversized gets none). Times are in seconds; a started job runs to completion.
@@ -17,6 +17,8 @@ from __future__ import annotations
 import heapq
 import math
 from typing import NamedTuple
+
+from kavier.sdk.cluster.vocab import Oversized
 
 
 class Job(NamedTuple):
@@ -122,7 +124,7 @@ def run_fcfs(jobs: list[Job], num_nodes: int, node_gpus: int, oversized: str = "
     for job in jobs:
         gpus = job.gpus
         if gpus > capacity_gpus:
-            if oversized == "drop":
+            if oversized == Oversized.DROP:
                 continue
             gpus = capacity_gpus  # cap
         active.append((job.idx, job.submit_s, gpus, job.duration_s))
@@ -192,7 +194,7 @@ def run_backfill(jobs: list[Job], node_gpus: int, num_nodes: int, oversized: str
     for job in jobs:
         gpus = job.gpus
         if gpus > total:
-            if oversized == "drop":
+            if oversized == Oversized.DROP:
                 continue
             gpus = total  # cap
         prepared.append((job.idx, job.submit_s, gpus, job.duration_s))
@@ -258,7 +260,7 @@ def _prepare_consolidated(
         gpus = job.gpus
         nodes = max(1, int(job.nodes))
         if place_consolidated([node_gpus] * num_nodes, gpus, nodes, node_gpus) is None:
-            if oversized == "drop":
+            if oversized == Oversized.DROP:
                 continue
             gpus = min(gpus, capacity)  # cap: keep it as consolidated as it can be
             nodes = min(max(nodes, math.ceil(gpus / node_gpus)), num_nodes)

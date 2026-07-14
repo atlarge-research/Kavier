@@ -14,21 +14,34 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from kavier.sdk.co2.engine import CarbonTrace, Fragment, compute_emissions
+from kavier.sdk.co2.engine import TRACE_INTENSITY_COL, TRACE_TS_COL, CarbonTrace, Fragment, compute_emissions
+from kavier.sdk.defaults import (
+    DEFAULT_CACHE_SCOPE,
+    DEFAULT_EXPORT_RATE,
+    DEFAULT_FACADE_PREFIX_POLICY,
+)
+from kavier.sdk.defaults import (
+    DEFAULT_GPU_HOUR_PRICE as DEFAULT_GPU_HOUR_PRICE,
+)
+from kavier.sdk.defaults import (
+    DEFAULT_INTENSITY_G_KWH as DEFAULT_INTENSITY_G_KWH,
+)
+from kavier.sdk.defaults import (
+    DEFAULT_PREFIX_MIN_TOKENS as DEFAULT_PREFIX_MIN_TOKENS,
+)
+from kavier.sdk.domain import RESULT_SOURCE_KEY, Domain
 from kavier.sdk.inference.core.cache import PrefixCache
-from kavier.sdk.inference.core.config import CacheCfg, SimConfig
+from kavier.sdk.inference.core.config import CacheAction, CacheCfg, SimConfig
 from kavier.sdk.inference.core.metrics import Metrics
-from kavier.sdk.inference.core.runner import simulate_one
+from kavier.sdk.inference.core.runner import RequestInput, run_request_loop
 from kavier.sdk.library import get_gpu, get_llm
+from kavier.sdk.units import MS_PER_SECOND, SECONDS_PER_HOUR, WH_PER_KWH, per_mtoken
 
-# Defaults for workload keys a batch may omit. kv_cache / min_tokens mirror the UI prompt defaults;
-# prefix_policy defaults to "none": the facade's synthetic workload shares no prompt content unless a
-# policy is opted into, which keeps default outputs identical to when the cache was never consulted.
+# Workload-key defaults a batch may omit; the shared homes live in kavier.sdk.defaults. kv_cache keeps
+# its own single home here (no other caller); DEFAULT_PREFIX_POLICY re-exports the facade default, which
+# is "none" ON PURPOSE — the synthetic workload shares no prompt content, so the cache stays inert.
 DEFAULT_KV_CACHE = True
-DEFAULT_PREFIX_POLICY = "none"
-DEFAULT_PREFIX_MIN_TOKENS = 1024
-DEFAULT_INTENSITY_G_KWH = 400.0
-DEFAULT_GPU_HOUR_PRICE = 2.5
+DEFAULT_PREFIX_POLICY = DEFAULT_FACADE_PREFIX_POLICY
 
 Batch = "pd.DataFrame | list[dict[str, Any]] | dict[str, Any]"
 
@@ -77,9 +90,11 @@ def run_inference(p: dict[str, Any]) -> dict[str, Any]:
     llm = get_llm(p["model"])
     gpu = get_gpu(p["gpu"])
     cfg = SimConfig(
-        export_rate=0.1,
+        export_rate=DEFAULT_EXPORT_RATE,
         kv_cache=bool(p["kv_cache"]),
-        cache=CacheCfg(min_len=int(p["prefix_min_tokens"]), action=p["prefix_policy"], scope="session", max_entries=10),
+        cache=CacheCfg(
+            min_len=int(p["prefix_min_tokens"]), action=p["prefix_policy"], scope=DEFAULT_CACHE_SCOPE, max_entries=10
+        ),
     )
 
     n = int(p["num_requests"])
@@ -88,27 +103,16 @@ def run_inference(p: dict[str, Any]) -> dict[str, Any]:
     # The workload is n IDENTICAL requests: under an active prefix policy, model them as sharing one
     # prompt (a synthetic token list, one session) so the cache can act — request 0 seeds it and the
     # rest hit. Policy "none" (the default) passes no tokens, keeping the cache inert as before.
-    shared_tokens = list(range(n_in)) if cfg.cache.action != "none" else None
+    shared_tokens = list(range(n_in)) if cfg.cache.action != CacheAction.NONE else None
     metrics = Metrics()
     t0 = int(time.time_ns() / 1e6)
     ttfts: list[float] = []
     tasks: list[dict[str, Any]] = []
-    for i in range(n):
-        task, _frags, t_p, t_d = simulate_one(
-            idx=i,
-            session_id=None,
-            n_in_tokens=n_in,
-            n_out_tokens=n_out,
-            in_tokens=shared_tokens,
-            llm=llm,
-            gpu=gpu,
-            cache=cache,
-            cfg=cfg,
-            export_rate_s=cfg.export_rate,
-            t0_ms=t0,
-        )
-        metrics.add(t_p, t_d, (t_p + t_d) * 1000.0)
-        ttfts.append(t_p * 1000.0)
+    requests = (RequestInput(None, n_in, n_out, shared_tokens) for _ in range(n))
+    for _i, task, _frags, t_p, _t_d in run_request_loop(
+        requests, llm=llm, gpu=gpu, cache=cache, cfg=cfg, metrics=metrics, t0_ms=t0
+    ):
+        ttfts.append(t_p * MS_PER_SECOND)
         tasks.append(task)
 
     total_s = metrics.sum_prefill + metrics.sum_decode
@@ -145,8 +149,8 @@ def _flat_trace(start: pd.Timestamp, hours: float, intensity_g_kwh: float) -> Ca
     rows = max(2, int(hours) + 2)
     df = pd.DataFrame(
         {
-            "timestamp": [start + dt.timedelta(hours=h) for h in range(rows)],
-            "carbon_intensity": [float(intensity_g_kwh)] * rows,
+            TRACE_TS_COL: [start + dt.timedelta(hours=h) for h in range(rows)],
+            TRACE_INTENSITY_COL: [float(intensity_g_kwh)] * rows,
         }
     )
     return CarbonTrace.from_dataframe(df)
@@ -158,11 +162,11 @@ def run_carbon_from_inference(infer: dict[str, Any], intensity_g_kwh: float) -> 
     runtime_s = float(infer["total_s"])
     power_w = float(gpu.max_power_w)
     start = pd.Timestamp("2026-01-01 00:00:00")
-    trace = _flat_trace(start, runtime_s / 3600.0, intensity_g_kwh)
+    trace = _flat_trace(start, runtime_s / SECONDS_PER_HOUR, intensity_g_kwh)
     frag = Fragment(start_time=start, duration_s=runtime_s, power_w=power_w)
     res = compute_emissions([frag], trace)
     return {
-        "source": "inference",
+        RESULT_SOURCE_KEY: Domain.INFERENCE,
         "model": infer["model"],
         "gpu": infer["gpu"],
         "intensity": float(intensity_g_kwh),
@@ -179,19 +183,18 @@ def energy_from_inference(infer: dict[str, Any], gpu_hour_price: float | None) -
     """$/Mtoken from GPU-hours, matching kavier.sdk.energy.metrics.financial_efficiency."""
     carbon = run_carbon_from_inference(infer, intensity_g_kwh=DEFAULT_INTENSITY_G_KWH)
     total_tokens = infer["total_tokens"]
-    energy_wh = carbon["total_energy_kwh"] * 1000.0
-    per_m = 1_000_000.0 / total_tokens if total_tokens else 0.0
-    gpu_hours = infer["total_s"] / 3600.0
+    energy_wh = carbon["total_energy_kwh"] * WH_PER_KWH
+    gpu_hours = infer["total_s"] / SECONDS_PER_HOUR
     return {
         "model": infer["model"],
         "gpu": infer["gpu"],
         "total_tokens": total_tokens,
         "energy_wh": energy_wh,
         "energy_kwh": carbon["total_energy_kwh"],
-        "energy_per_mtoken_wh": energy_wh * per_m,
-        "carbon_per_mtoken_g": carbon["total_co2_g"] * per_m,
+        "energy_per_mtoken_wh": per_mtoken(energy_wh, total_tokens),
+        "carbon_per_mtoken_g": per_mtoken(carbon["total_co2_g"], total_tokens),
         "gpu_hours": gpu_hours,
-        "financial_per_mtoken": (gpu_hours * gpu_hour_price * per_m) if gpu_hour_price else None,
+        "financial_per_mtoken": per_mtoken(gpu_hours * gpu_hour_price, total_tokens) if gpu_hour_price else None,
         "tokens_per_wh": total_tokens / energy_wh if energy_wh else 0.0,
     }
 
@@ -268,12 +271,11 @@ def carbon(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.Da
         infer = run_inference(_infer_params(row))
         c = run_carbon_from_inference(infer, intensity_g_kwh=intensity)
         total_tokens = c["total_tokens"]
-        per_m = 1_000_000.0 / total_tokens if total_tokens else 0.0
         predicted.append(
             {
                 "total_co2_g": c["total_co2_g"],
                 "total_co2_kg": c["total_co2_kg"],
-                "carbon_per_mtoken_g": c["total_co2_g"] * per_m,
+                "carbon_per_mtoken_g": per_mtoken(c["total_co2_g"], total_tokens),
                 "total_energy_kwh": c["total_energy_kwh"],
             }
         )

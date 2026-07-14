@@ -1,17 +1,16 @@
-"""Shared argparse definitions for the training simulator.
-
-``add_training_job_args`` defines the model/method/GPU/sizing flags common to the ``kavier training``
-and ``kavier carbon --from-training`` subcommands; ``add_training_args`` layers the training-CLI-only
-flags (``--input_csv``, OpenDC export) on top.
+"""Shared argparse flag builders for the training model, used by ``kavier training`` and
+``kavier carbon --from-training``.
 """
 
 import argparse
+
+from kavier.sdk.training.core.config import Method
 
 
 def add_training_job_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Add the model/method/GPU/sizing flags shared by the training and carbon (from-training) commands."""
     parser.add_argument("--model_name")
-    parser.add_argument("--method", choices=["full", "lora", "gptq-lora"])
+    parser.add_argument("--method", choices=[m.value for m in Method])
     parser.add_argument("--gpu_model")
     parser.add_argument("--tokens_per_sample", type=int)
     parser.add_argument("--batch_size", type=int)
@@ -45,7 +44,4 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
     # Single-config args below are required unless --input_csv given; enforced in the subcommand.
     parser.add_argument("--input_csv", default=None, help="Simulate every row of this CSV instead of a single config")
     add_training_job_args(parser)
-    parser.add_argument("--opendc_output_dir", default=None)
-    parser.add_argument("--opendc_task_id", type=int, default=0)
-    parser.add_argument("--opendc_submission_time_ms", type=int, default=0)
     return parser

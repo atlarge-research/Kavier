@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import pandas as pd
 
-# Per MILLION tokens (industry-standard unit); raw per-token values are tiny.
-TOKENS_PER_UNIT = 1_000_000
+from kavier.sdk.units import SECONDS_PER_HOUR, TOKENS_PER_MTOKEN
 
 
 def _extract_energy_wh(powerSource: pd.DataFrame) -> float:
-    # OpenDC energy_usage is JOULES (W·s); 1 Wh = 3600 J -> /3600 (old /1000 was 3.6x high).
+    # OpenDC energy_usage is JOULES (W·s); 1 Wh = 3600 J, so divide by 3600.
     if "energy_usage" in powerSource.columns:
-        return powerSource["energy_usage"].sum() / 3_600
+        return powerSource["energy_usage"].sum() / SECONDS_PER_HOUR
     raise ValueError("energy_usage not in the powerSource.parquet file")
 
 
@@ -24,23 +23,23 @@ def _extract_co2_emission_g(powerSource: pd.DataFrame) -> float:
 
 def _total_gpu_hours(tasks: pd.DataFrame) -> float:
     # 1 GPU/task, ``duration`` per-task ms -> summed = total GPU-time, ms -> h.
-    return tasks["duration"].sum() / 1_000 / 3_600
+    return tasks["duration"].sum() / 1_000 / SECONDS_PER_HOUR
 
 
 def sustainability_efficiency(powerSource: pd.DataFrame, tasks: pd.DataFrame, total_tokens: int) -> float:
     """Energy efficiency: Wh per million tokens (lower is better)."""
     # ``tasks`` unused but kept for a stable signature alongside the CO2 variant.
-    return _extract_energy_wh(powerSource) / total_tokens * TOKENS_PER_UNIT
+    return _extract_energy_wh(powerSource) / total_tokens * TOKENS_PER_MTOKEN
 
 
 def sustainability_efficiency_CO2(powerSource: pd.DataFrame, tasks: pd.DataFrame, total_tokens: int) -> float:
     """Carbon efficiency: gCO2 per million tokens (lower is better)."""
-    return _extract_co2_emission_g(powerSource) / total_tokens * TOKENS_PER_UNIT
+    return _extract_co2_emission_g(powerSource) / total_tokens * TOKENS_PER_MTOKEN
 
 
 def financial_efficiency(tasks: pd.DataFrame, total_tokens: int, gpu_hour_price: float) -> float:
     """Cost efficiency: $/Mtoken based on GPU-hours × rate (electricity ~2-5% omitted)."""
-    return _total_gpu_hours(tasks) * gpu_hour_price / total_tokens * TOKENS_PER_UNIT
+    return _total_gpu_hours(tasks) * gpu_hour_price / total_tokens * TOKENS_PER_MTOKEN
 
 
 def efficiency_summary(

@@ -3,16 +3,43 @@
 from __future__ import annotations
 
 import sys
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Callable
 
+from kavier.sdk.defaults import (
+    DEFAULT_CLI_PREFIX_POLICY,
+    DEFAULT_GPU_HOUR_PRICE,
+    DEFAULT_INFERENCE_GPU,
+    DEFAULT_INFERENCE_MODEL,
+    DEFAULT_INTENSITY_G_KWH,
+    DEFAULT_PREFIX_MIN_TOKENS,
+    DEFAULT_TRAINING_GPU,
+    DEFAULT_TRAINING_MODEL,
+)
+from kavier.sdk.domain import Domain
+from kavier.sdk.inference.core.config import CacheAction
 from kavier.sdk.library import GPU_SPEC_LIBRARY, LLM_SPEC_LIBRARY, UnknownSpecError
+from kavier.sdk.training.core.config import Method
 from kavier.ui import prompts, render, sims
 from kavier.ui.prompts import Abort, Choice
 from kavier.ui.theme import DOMAINS, banner, console
 
-_DEFAULT_MODEL = "Llama-3-8B"
-_DEFAULT_GPU = "A10"
+_DEFAULT_MODEL = DEFAULT_INFERENCE_MODEL
+_DEFAULT_GPU = DEFAULT_INFERENCE_GPU
+
+
+class Sizing(StrEnum):
+    """How the training REPL sizes a job: by epochs×dataset, by total tokens, or skip (throughput only)."""
+
+    EPOCHS = "epochs"
+    TOKENS = "tokens"
+    SKIP = "skip"
+
+
+def _default_index(choices: list[Choice], seeded: object) -> int:
+    """Index of the choice whose ``value`` equals ``seeded`` (0 if none) — replaces per-menu index maps."""
+    return next((i for i, c in enumerate(choices) if c.value == seeded), 0)
 
 
 def _param_hint(spec: Any) -> str:
@@ -55,15 +82,16 @@ def _inference_inputs(seed: dict[str, Any] | None = None) -> dict[str, Any]:
         "Output tokens / request:", default=s.get("output_tokens", 128), minimum=1, accent=accent
     )
     kv_cache = prompts.confirm("Enable KV cache?", default=s.get("kv_cache", True), accent=accent)
+    policy_choices = [
+        Choice(CacheAction.PREFILL, "prefill", "skip prefill on a cache hit"),
+        Choice(CacheAction.FULL, "full", "skip prefill + decode"),
+        Choice(CacheAction.NONE, "none", "disable prefix cache"),
+    ]
     policy = prompts.menu(
         "Prefix-cache policy",
-        [
-            Choice("prefill", "prefill", "skip prefill on a cache hit"),
-            Choice("full", "full", "skip prefill + decode"),
-            Choice("none", "none", "disable prefix cache"),
-        ],
+        policy_choices,
         accent=accent,
-        default={"prefill": 0, "full": 1, "none": 2}.get(s.get("prefix_policy", "prefill"), 0),
+        default=_default_index(policy_choices, s.get("prefix_policy", DEFAULT_CLI_PREFIX_POLICY)),
     )
     return {
         "model": model,
@@ -73,7 +101,7 @@ def _inference_inputs(seed: dict[str, Any] | None = None) -> dict[str, Any]:
         "output_tokens": output_tokens,
         "kv_cache": kv_cache,
         "prefix_policy": policy,
-        "prefix_min_tokens": s.get("prefix_min_tokens", 1024),
+        "prefix_min_tokens": s.get("prefix_min_tokens", DEFAULT_PREFIX_MIN_TOKENS),
     }
 
 
@@ -109,13 +137,19 @@ def _inference_followups(result: dict[str, Any], inputs: dict[str, Any]) -> None
             return
         if action == "energy":
             price = prompts.number_prompt(
-                "GPU $/hour (0 to skip cost):", default=2.5, minimum=0.0, accent="green", integer=False
+                "GPU $/hour (0 to skip cost):",
+                default=DEFAULT_GPU_HOUR_PRICE,
+                minimum=0.0,
+                accent="green",
+                integer=False,
             )
             with render.spinner("Computing efficiency…", "green"):
                 e = sims.energy_from_inference(result, price if price > 0 else None)
             console.print(render.energy_result(e))
         elif action == "co2":
-            intensity = prompts.number_prompt("Carbon intensity (gCO2/kWh):", default=400, minimum=1, accent="yellow")
+            intensity = prompts.number_prompt(
+                "Carbon intensity (gCO2/kWh):", default=int(DEFAULT_INTENSITY_G_KWH), minimum=1, accent="yellow"
+            )
             with render.spinner("Billing carbon…", "yellow"):
                 c = sims.run_carbon_from_inference(result, float(intensity))
             console.print(render.carbon_result(c))
@@ -134,18 +168,19 @@ def _inference_followups(result: dict[str, Any], inputs: dict[str, Any]) -> None
 def _training_inputs(seed: dict[str, Any] | None = None) -> dict[str, Any]:
     s = seed or {}
     accent = "magenta"
-    model = _pick_model(accent, s.get("model", "mistral-7b-v0.1"))
-    gpu = _pick_gpu(accent, s.get("gpu", "NVIDIA-A100-SXM4-80GB"))
+    model = _pick_model(accent, s.get("model", DEFAULT_TRAINING_MODEL))
+    gpu = _pick_gpu(accent, s.get("gpu", DEFAULT_TRAINING_GPU))
     _show_specs(model, gpu, accent)
+    method_choices = [
+        Choice(Method.LORA, "lora", "low-rank adapters"),
+        Choice(Method.FULL, "full", "full fine-tune"),
+        Choice(Method.GPTQ_LORA, "gptq-lora", "quantised LoRA"),
+    ]
     method = prompts.menu(
         "Fine-tuning method",
-        [
-            Choice("lora", "lora", "low-rank adapters"),
-            Choice("full", "full", "full fine-tune"),
-            Choice("gptq-lora", "gptq-lora", "quantised LoRA"),
-        ],
+        method_choices,
         accent=accent,
-        default={"lora": 0, "full": 1, "gptq-lora": 2}.get(s.get("method", "lora"), 0),
+        default=_default_index(method_choices, s.get("method", Method.LORA)),
     )
     batch_size = prompts.number_prompt("Batch size:", default=s.get("batch_size", 4), minimum=1, accent=accent)
     seq_len = prompts.number_prompt(
@@ -156,20 +191,20 @@ def _training_inputs(seed: dict[str, Any] | None = None) -> dict[str, Any]:
     sizing = prompts.menu(
         "Size the job by",
         [
-            Choice("epochs", "Epochs × dataset", "N passes over a dataset of M tokens"),
-            Choice("tokens", "Total tokens", "set the token count directly"),
-            Choice("skip", "Skip (throughput only, no runtime)", ""),
+            Choice(Sizing.EPOCHS, "Epochs × dataset", "N passes over a dataset of M tokens"),
+            Choice(Sizing.TOKENS, "Total tokens", "set the token count directly"),
+            Choice(Sizing.SKIP, "Skip (throughput only, no runtime)", ""),
         ],
         accent=accent,
         default=1 if (s.get("total_tokens") and not s.get("epochs")) else 0,
     )
     epochs = dataset_tokens = total_tokens = None
-    if sizing == "epochs":
+    if sizing == Sizing.EPOCHS:
         epochs = prompts.number_prompt("Epochs:", default=s.get("epochs", 3), minimum=0, accent=accent, integer=False)
         dataset_tokens = prompts.number_prompt(
             "Dataset tokens (one epoch):", default=s.get("dataset_tokens", 5_000_000), minimum=0, accent=accent
         )
-    elif sizing == "tokens":
+    elif sizing == Sizing.TOKENS:
         total_tokens = prompts.number_prompt(
             "Total tokens to train:", default=s.get("total_tokens", 10_000_000), minimum=0, accent=accent
         )
@@ -214,17 +249,19 @@ def _flow_training(seed: dict[str, Any] | None = None) -> None:
             if not inputs.get("total_tokens") and not inputs.get("epochs"):
                 console.print("[yellow]  set a job size (total tokens or epochs) to bill carbon — re-run first.[/]")
                 continue
-            intensity = prompts.number_prompt("Carbon intensity (gCO2/kWh):", default=400, minimum=1, accent="yellow")
+            intensity = prompts.number_prompt(
+                "Carbon intensity (gCO2/kWh):", default=int(DEFAULT_INTENSITY_G_KWH), minimum=1, accent="yellow"
+            )
             with render.spinner("Billing carbon…", "yellow"):
                 c = sims.run_carbon_from_training({**inputs, "intensity": float(intensity)})
             console.print(render.carbon_result(c))
 
 
 # Run-producing simulators only; energy/carbon are follow-up analyses.
-_MAIN_MENU = ("inference", "training")
+_MAIN_MENU = tuple(Domain)
 _FLOWS: dict[str, Callable[[], None]] = {
-    "inference": _flow_inference,
-    "training": _flow_training,
+    Domain.INFERENCE: _flow_inference,
+    Domain.TRAINING: _flow_training,
 }
 
 
@@ -237,7 +274,7 @@ def main() -> None:
         return
     console.print(banner())
     while True:
-        choices = [Choice(k, label, blurb) for k, label, _accent, blurb in DOMAINS if k in _MAIN_MENU]
+        choices = [Choice(k, label, blurb) for k, label, blurb in DOMAINS if k in _MAIN_MENU]
         choices.append(Choice("quit", "Quit", ""))
         try:
             pick = prompts.menu("Choose a simulator", choices, footer="↑↓ move · enter select · q quit")
@@ -254,11 +291,3 @@ def main() -> None:
         except Exception as exc:  # noqa: BLE001 — never let one bad run kill the REPL
             console.print(f"[red]  ✗ simulation error: {exc}[/]")
     console.print("\n[cyan]  thanks for using Kavier 👋[/]\n")
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except (KeyboardInterrupt, Abort):
-        console.print("\n[cyan]  bye 👋[/]\n")
-        sys.exit(0)

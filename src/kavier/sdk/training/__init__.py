@@ -1,19 +1,19 @@
 """Training functionality: the analytical training engine + calibration plus the public verbs.
 
-The first-principles step/full-run engine lives in ``core/`` (driven by the ``kavier training`` CLI),
-wrapped by the ``calibration/`` correction layer. The batch predictors (``performance`` / ``energy`` /
-``efficiency`` / ``carbon``) and the run/carbon helpers live in ``facade.py`` and are re-exported here
-**lazily**. Keeping this ``__init__`` import-light is load-bearing: a bare
-``import kavier.sdk.training.calibration`` executes this module, and the calibration accessor must stay
-stdlib-only (no scipy/sklearn/numpy/pandas). ``kavier.training`` is a convenience alias for this package.
+The first-principles step/full-run engine lives in ``core/``, wrapped by the ``calibration/``
+correction layer. The batch predictors (``performance`` / ``energy`` / ``efficiency`` / ``carbon``)
+live in ``facade.py`` and are re-exported here lazily. Keeping this ``__init__`` import-light is
+load-bearing: a bare ``import kavier.sdk.training.calibration`` executes it, and the calibration
+accessor must stay stdlib-only (no scipy/sklearn/numpy/pandas). ``kavier.training`` aliases this package.
 """
 
 from __future__ import annotations
 
-import importlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:  # for type-checkers only — never imported at runtime (keeps import-time light)
+from kavier._lazy import lazy_getattr
+
+if TYPE_CHECKING:  # type-checkers only; never imported at runtime
     from kavier.sdk.training.facade import (
         DEFAULT_INTENSITY_G_KWH as DEFAULT_INTENSITY_G_KWH,
     )
@@ -55,10 +55,4 @@ _FACADE_EXPORTS = frozenset(
     }
 )
 
-
-def __getattr__(name: str) -> Any:
-    if name in _FACADE_EXPORTS:
-        value = getattr(importlib.import_module(f"{__name__}.facade"), name)
-        globals()[name] = value  # cache so subsequent access skips __getattr__
-        return value
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+__getattr__ = lazy_getattr(globals(), attrs={name: "facade" for name in _FACADE_EXPORTS})

@@ -21,11 +21,13 @@ from typing import Any
 
 from kavier.sdk.cluster.core import engine
 from kavier.sdk.cluster.core import metrics as _metrics
+from kavier.sdk.cluster.vocab import Oversized, Policy
+from kavier.sdk.units import SECONDS_PER_HOUR, WS_PER_KWH
 
-_SECONDS_PER_HOUR = 3600.0
-
-_POLICIES = ("distributed-fcfs", "distributed-backfill", "consolidated-fcfs", "consolidated-backfill")
-_OVERSIZED = ("cap", "drop")
+# Valid string values, derived from the enums (single home) — used for the membership guards and their
+# error messages, which render these tuples verbatim (e.g. ``('cap', 'drop')``).
+_POLICIES = tuple(p.value for p in Policy)
+_OVERSIZED = tuple(o.value for o in Oversized)
 
 
 @dataclass(frozen=True)
@@ -45,27 +47,27 @@ class JobRecord:
 
     @property
     def submit_h(self) -> float:
-        return self.submit_s / _SECONDS_PER_HOUR
+        return self.submit_s / SECONDS_PER_HOUR
 
     @property
     def start_h(self) -> float:
-        return self.start_s / _SECONDS_PER_HOUR
+        return self.start_s / SECONDS_PER_HOUR
 
     @property
     def end_h(self) -> float:
-        return self.end_s / _SECONDS_PER_HOUR
+        return self.end_s / SECONDS_PER_HOUR
 
     @property
     def wait_h(self) -> float:
-        return self.wait_s / _SECONDS_PER_HOUR
+        return self.wait_s / SECONDS_PER_HOUR
 
     @property
     def runtime_h(self) -> float:
-        return self.runtime_s / _SECONDS_PER_HOUR
+        return self.runtime_s / SECONDS_PER_HOUR
 
     @property
     def turnaround_h(self) -> float:
-        return self.turnaround_s / _SECONDS_PER_HOUR
+        return self.turnaround_s / SECONDS_PER_HOUR
 
 
 @dataclass(frozen=True)
@@ -86,19 +88,19 @@ class ClusterMetrics:
 
     @property
     def makespan_h(self) -> float:
-        return self.makespan_s / _SECONDS_PER_HOUR
+        return self.makespan_s / SECONDS_PER_HOUR
 
     @property
     def avg_wait_h(self) -> float:
-        return self.avg_wait_s / _SECONDS_PER_HOUR
+        return self.avg_wait_s / SECONDS_PER_HOUR
 
     @property
     def avg_run_h(self) -> float:
-        return self.avg_run_s / _SECONDS_PER_HOUR
+        return self.avg_run_s / SECONDS_PER_HOUR
 
     @property
     def avg_turnaround_h(self) -> float:
-        return self.avg_turnaround_s / _SECONDS_PER_HOUR
+        return self.avg_turnaround_s / SECONDS_PER_HOUR
 
 
 @dataclass(frozen=True)
@@ -125,7 +127,7 @@ class Timeline:
 
     @property
     def times_h(self) -> list[float]:
-        return [t / _SECONDS_PER_HOUR for t in self.times_s]
+        return [t / SECONDS_PER_HOUR for t in self.times_s]
 
 
 @dataclass(frozen=True)
@@ -194,10 +196,10 @@ def _normalise(jobs: Any) -> list[dict[str, Any]]:
 def schedule(
     jobs: Any,
     *,
-    policy: str = "consolidated-fcfs",
+    policy: str = Policy.CONSOLIDATED_FCFS,
     num_nodes: int | None = None,
     node_gpus: int | None = None,
-    oversized: str = "cap",
+    oversized: str = Oversized.CAP,
     default_watts_per_gpu: float | None = None,
 ) -> ClusterSimResult:
     """Simulate ``jobs`` on a homogeneous ``num_nodes × node_gpus`` datacenter and return per-job,
@@ -229,11 +231,11 @@ def schedule(
     norm = _normalise(jobs)
     ejobs = [engine.Job(j["index"], j["submit_s"], j["gpus"], j["duration_s"], j["nodes"]) for j in norm]
 
-    if policy == "distributed-fcfs":
+    if policy == Policy.DISTRIBUTED_FCFS:
         placements = engine.run_fcfs(ejobs, num_nodes, node_gpus, oversized)
-    elif policy == "distributed-backfill":
+    elif policy == Policy.DISTRIBUTED_BACKFILL:
         placements = engine.run_backfill(ejobs, node_gpus, num_nodes, oversized)
-    elif policy == "consolidated-fcfs":
+    elif policy == Policy.CONSOLIDATED_FCFS:
         placements = engine.run_fcfs_consolidated(ejobs, num_nodes, node_gpus, oversized)
     else:  # consolidated-backfill
         placements = engine.run_backfill_consolidated(ejobs, node_gpus, num_nodes, oversized)
@@ -249,7 +251,7 @@ def schedule(
         runtime_s = job["duration_s"]
         end_s = start_s + runtime_s
         power = job["power_w_per_gpu"] if job["power_w_per_gpu"] is not None else default_watts_per_gpu
-        energy_kwh = None if power is None else power * gpus * runtime_s / 3.6e6
+        energy_kwh = None if power is None else power * gpus * runtime_s / WS_PER_KWH
         records.append(
             JobRecord(
                 job_id=job["job_id"],

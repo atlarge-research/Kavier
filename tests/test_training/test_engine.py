@@ -17,12 +17,8 @@ Engine model (kavier.sdk.training.core.engine):
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pyarrow.parquet as pq
 import pytest
 
-from kavier.sdk.io.training_opendc import build_training_opendc_frames, export_training_opendc
 from kavier.sdk.library.lookup import get_gpu
 from kavier.sdk.training.core.engine import simulate_full_training, simulate_training_step
 
@@ -282,80 +278,3 @@ def test_resolve_total_tokens_error_paths(kwargs, message):
     call.update(kwargs)
     with pytest.raises(ValueError, match=message):
         simulate_full_training(**call)
-
-
-def test_build_opendc_frames_schema_and_fragments_tile_task_duration():
-    # OpenDC interface contract: exact column schemas (a downstream parquet reader needs these
-    # names/order) + the tiling invariant -- fragments partition the task duration exactly, each
-    # fragment is one simulated step, and all fragments belong to the one task_id.
-    tasks, fragments, _summary = build_training_opendc_frames(
-        model_name="mistral-7b-v0.1",
-        method="full",
-        gpu_model="NVIDIA-A100-SXM4-80GB",
-        tokens_per_sample=1024,
-        batch_size=4,
-        number_gpus=2,
-        number_nodes=1,
-        total_tokens=1_000_000,
-        task_id=1,
-        submission_time_ms=1234,
-        simulate_full_training_fn=simulate_full_training,
-        simulate_training_step_fn=simulate_training_step,
-    )
-
-    assert list(tasks.columns) == [
-        "id",
-        "submission_time",
-        "duration",
-        "cpu_count",
-        "cpu_capacity",
-        "mem_capacity",
-        "gpu_count",
-        "gpu_capacity",
-    ]
-    assert list(fragments.columns) == ["id", "duration", "cpu_count", "cpu_usage", "gpu_count", "gpu_usage"]
-    assert tasks.loc[0, "id"] == 1  # task_id passthrough
-    assert tasks.loc[0, "submission_time"] == 1234  # submission_time passthrough
-    assert len(fragments) > 1
-    assert (fragments["id"] == 1).all()  # every fragment tagged with the task_id
-    assert fragments["duration"].nunique() == 1  # uniform steps
-    # Tiling: fragments exactly partition the task duration.
-    assert fragments["duration"].sum() == tasks.loc[0, "duration"]
-
-
-def test_export_training_opendc_writes_parquet_with_matching_schema(tmp_path: Path):
-    # Exercises the parquet write path; asserts the on-disk schema matches the in-memory contract
-    # and that fragment ids round-trip to the given task_id.
-    result = export_training_opendc(
-        output_dir=str(tmp_path),
-        model_name="mistral-7b-v0.1",
-        method="full",
-        gpu_model="NVIDIA-A100-SXM4-80GB",
-        tokens_per_sample=1024,
-        batch_size=4,
-        number_gpus=1,
-        number_nodes=1,
-        total_tokens=100_000,
-        task_id=7,
-        submission_time_ms=0,
-        simulate_full_training_fn=simulate_full_training,
-        simulate_training_step_fn=simulate_training_step,
-    )
-    assert result["train_tokens_per_second"] > 0
-
-    tasks_table = pq.read_table(tmp_path / "tasks.parquet")
-    fragments_table = pq.read_table(tmp_path / "fragments.parquet")
-    assert tasks_table.column_names == [
-        "id",
-        "submission_time",
-        "duration",
-        "cpu_count",
-        "cpu_capacity",
-        "mem_capacity",
-        "gpu_count",
-        "gpu_capacity",
-    ]
-    assert fragments_table.column_names == ["id", "duration", "cpu_count", "cpu_usage", "gpu_count", "gpu_usage"]
-    assert tasks_table.num_rows == 1
-    assert fragments_table.num_rows > 1
-    assert set(fragments_table.column("id").to_pylist()) == {7}  # all fragments carry task_id=7

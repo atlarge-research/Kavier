@@ -13,7 +13,7 @@ from kavier.sdk.energy.metrics import efficiency_summary
 
 
 def add_efficiency_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add ``--kavier``, ``--opendc``, ``--price``, and ``--out`` arguments to ``parser``."""
+    """Add the ``kavier energy`` flags to ``parser``."""
     parser.add_argument("--kavier", required=True, help="Path to Kavier performance output (tasks.parquet)")
     parser.add_argument("--opendc", required=True, help="Path to OpenDC output (powerSource.parquet)")
     parser.add_argument(

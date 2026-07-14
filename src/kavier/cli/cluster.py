@@ -18,6 +18,7 @@ from typing import Any
 from kavier.cli._shared import FriendlyParser, apply_config
 from kavier.sdk.cluster import schedule
 from kavier.sdk.cluster.facade import ClusterSimResult
+from kavier.sdk.cluster.vocab import Oversized, Policy
 
 _EXAMPLE_CMD = "kavier cluster --jobs jobs.csv --policy consolidated-fcfs --num-nodes 4 --node-gpus 8"
 
@@ -54,8 +55,8 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     )
     parser.add_argument(
         "--policy",
-        choices=("distributed-fcfs", "distributed-backfill", "consolidated-fcfs", "consolidated-backfill"),
-        default="consolidated-fcfs",
+        choices=[p.value for p in Policy],
+        default=Policy.CONSOLIDATED_FCFS,
         help="Scheduling policy: distributed-fcfs/distributed-backfill tight-pack (ignore the nodes "
         "column); the consolidated-* variants honour per-job nodes (gang placement) "
         "(default: consolidated-fcfs)",
@@ -64,8 +65,8 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     parser.add_argument("--node-gpus", type=int, default=None, help="GPUs per node")
     parser.add_argument(
         "--oversized",
-        choices=("cap", "drop"),
-        default="cap",
+        choices=[o.value for o in Oversized],
+        default=Oversized.CAP,
         help="Clamp (cap) or skip (drop) a job that wants more GPUs than the cluster (default: cap)",
     )
     parser.add_argument(

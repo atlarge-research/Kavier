@@ -7,8 +7,9 @@ stays light and pulls in neither ``pandas`` nor ``matplotlib``. ``kavier.cluster
 
 from __future__ import annotations
 
-import importlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+
+from kavier._lazy import lazy_getattr
 
 if TYPE_CHECKING:  # type-checkers only; never imported at runtime
     from kavier.sdk.cluster.facade import (
@@ -40,11 +41,4 @@ _LAZY_EXPORTS = {
     "plot_timeline": "plot",
 }
 
-
-def __getattr__(name: str) -> Any:
-    module = _LAZY_EXPORTS.get(name)
-    if module is not None:
-        value = getattr(importlib.import_module(f"{__name__}.{module}"), name)
-        globals()[name] = value  # cache so later lookups skip __getattr__
-        return value
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+__getattr__ = lazy_getattr(globals(), attrs=_LAZY_EXPORTS)

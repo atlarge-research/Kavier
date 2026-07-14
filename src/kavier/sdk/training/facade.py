@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 
 from kavier.sdk.co2.engine import Fragment, compute_emissions
+from kavier.sdk.domain import RESULT_SOURCE_KEY, Domain
 from kavier.sdk.inference.facade import (
     DEFAULT_GPU_HOUR_PRICE,
     DEFAULT_INTENSITY_G_KWH,
@@ -19,6 +20,7 @@ from kavier.sdk.inference.facade import (
     _with_columns,
 )
 from kavier.sdk.training.core.engine import simulate_full_training, simulate_training_step
+from kavier.sdk.units import SECONDS_PER_HOUR, WH_PER_KWH, per_mtoken
 
 DEFAULT_NUM_NODES = 1
 
@@ -65,11 +67,11 @@ def run_carbon_from_training(p: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("training runtime is 0 — set a job size (total tokens or epochs) to bill carbon")
     power_w = float(tr["aggregate_power_w"])
     start = pd.Timestamp("2026-01-01 00:00:00")
-    trace = _flat_trace(start, runtime_s / 3600.0, p["intensity"])
+    trace = _flat_trace(start, runtime_s / SECONDS_PER_HOUR, p["intensity"])
     frag = Fragment(start_time=start, duration_s=runtime_s, power_w=power_w)
     res = compute_emissions([frag], trace)
     return {
-        "source": "training",
+        RESULT_SOURCE_KEY: Domain.TRAINING,
         "model": tr["model_name"],
         "gpu": tr["gpu_name"],
         "intensity": float(p["intensity"]),
@@ -108,13 +110,12 @@ def energy(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.Da
     for row in rows:
         c = run_carbon_from_training({**_train_params(row), "intensity": DEFAULT_INTENSITY_G_KWH})
         total_tokens = c["total_tokens"]
-        energy_wh = c["total_energy_kwh"] * 1000.0
-        per_m = 1_000_000.0 / total_tokens if total_tokens else 0.0
+        energy_wh = c["total_energy_kwh"] * WH_PER_KWH
         predicted.append(
             {
                 "energy_wh": energy_wh,
                 "energy_kwh": c["total_energy_kwh"],
-                "energy_per_mtoken_wh": energy_wh * per_m,
+                "energy_per_mtoken_wh": per_mtoken(energy_wh, total_tokens),
                 "aggregate_power_w": c["power_w"],
                 "total_tokens": total_tokens,
             }
@@ -132,11 +133,10 @@ def efficiency(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> p
         runtime_s = float(tr["train_runtime"])
         price = float(row.get("gpu_hour_price", DEFAULT_GPU_HOUR_PRICE))
         # GPU-hours = wall-clock runtime x total GPUs (matches the inference $/Mtoken basis).
-        gpu_hours = runtime_s / 3600.0 * int(tr["total_gpus"])
-        per_m = 1_000_000.0 / total_tokens if total_tokens else 0.0
+        gpu_hours = runtime_s / SECONDS_PER_HOUR * int(tr["total_gpus"])
         predicted.append(
             {
-                "financial_per_mtoken": (gpu_hours * price * per_m) if total_tokens else None,
+                "financial_per_mtoken": per_mtoken(gpu_hours * price, total_tokens) if total_tokens else None,
                 "gpu_hours": gpu_hours,
             }
         )
@@ -151,12 +151,11 @@ def carbon(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.Da
         intensity = float(row.get("intensity", DEFAULT_INTENSITY_G_KWH))
         c = run_carbon_from_training({**_train_params(row), "intensity": intensity})
         total_tokens = c["total_tokens"]
-        per_m = 1_000_000.0 / total_tokens if total_tokens else 0.0
         predicted.append(
             {
                 "total_co2_g": c["total_co2_g"],
                 "total_co2_kg": c["total_co2_kg"],
-                "carbon_per_mtoken_g": c["total_co2_g"] * per_m,
+                "carbon_per_mtoken_g": per_mtoken(c["total_co2_g"], total_tokens),
                 "total_energy_kwh": c["total_energy_kwh"],
             }
         )

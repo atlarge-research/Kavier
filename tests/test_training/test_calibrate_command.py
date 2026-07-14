@@ -298,15 +298,15 @@ def test_calibrate_registered_and_dispatches_argv(monkeypatch):
     the exact remaining argv. Falsification: command absent from the table, or a handler that drops /
     rewrites argv. (Stubs main, so no fit runs -- dependency-free.)"""
     from kavier.cli import calibrate
-    from kavier.cli.main import _COMMANDS
+    from kavier.cli.main import _COMMANDS, main
 
     assert "calibrate" in _COMMANDS
-    help_text, handler = _COMMANDS["calibrate"]
+    help_text, _module = _COMMANDS["calibrate"]
     assert help_text  # a one-line help string is present
 
     seen: dict[str, object] = {}
     monkeypatch.setattr(calibrate, "main", lambda argv=None: seen.__setitem__("argv", argv))
-    handler(["trace.csv", "--models", "granite-3-8b", "--output", "out.json"])
+    main(["calibrate", "trace.csv", "--models", "granite-3-8b", "--output", "out.json"])
     assert seen["argv"] == ["trace.csv", "--models", "granite-3-8b", "--output", "out.json"]
 
 

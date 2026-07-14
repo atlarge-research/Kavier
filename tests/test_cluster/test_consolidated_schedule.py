@@ -1,7 +1,8 @@
 """End-to-end behaviour of the consolidated scheduling policies via ``kavier.sdk.cluster.schedule``.
 
-``fcfs-consolidated`` / ``backfill-consolidated`` honour each job's ``nodes`` request (gang
-placement); ``fcfs`` / ``backfill`` ignore it (tight-pack). These tests pin the reported bug fix (a
+``consolidated-fcfs`` / ``consolidated-backfill`` honour each job's ``nodes`` request (gang
+placement); ``distributed-fcfs`` / ``distributed-backfill`` ignore it (tight-pack). These tests pin the
+reported bug fix (a
 single-node job must never be scattered) and the oversized handling, and contrast against the
 unchanged spread behaviour.
 """
@@ -21,7 +22,7 @@ _FRAGMENTING = [
 ]
 
 
-@pytest.mark.parametrize("policy", ["fcfs-consolidated", "backfill-consolidated"])
+@pytest.mark.parametrize("policy", ["consolidated-fcfs", "consolidated-backfill"])
 def test_consolidated_keeps_single_node_job_whole_despite_fragmentation(policy: str) -> None:
     # The reported bug, reproduced end-to-end: with node 0 partly used (free=[6,8]), B's 8-GPU/1-node
     # request must occupy the one node with a full 8 free (node 1), NOT be scattered 6+2.
@@ -32,7 +33,7 @@ def test_consolidated_keeps_single_node_job_whole_despite_fragmentation(policy: 
 def test_spread_backfill_still_splits_the_same_job() -> None:
     # Contrast + regression pin: plain backfill (spread) DOES scatter B as 6+2 (least-free-first
     # tight-pack) — the exact bug the consolidated policies fix, and proof the spread path is unchanged.
-    by_id = {j.job_id: j for j in schedule(_FRAGMENTING, policy="backfill", num_nodes=2, node_gpus=8).jobs}
+    by_id = {j.job_id: j for j in schedule(_FRAGMENTING, policy="distributed-backfill", num_nodes=2, node_gpus=8).jobs}
     assert by_id["B"].nodes == ((0, 6), (1, 2))
 
 
@@ -49,7 +50,7 @@ def test_feasible_job_uses_exactly_n_distinct_nodes_evenly(gpus: int, nodes: int
     # holding gpus//nodes GPUs (one replica per node, even split).
     res = schedule(
         [{"submit_s": 0, "gpus": gpus, "duration_s": 100, "nodes": nodes}],
-        policy="fcfs-consolidated",
+        policy="consolidated-fcfs",
         num_nodes=8,
         node_gpus=8,
     )
@@ -64,7 +65,7 @@ def test_consolidated_places_24gpu_3node_job_on_exactly_three_nodes() -> None:
     # stays idle), never spread across all four.
     res = schedule(
         [{"job_id": "j", "submit_s": 0, "gpus": 24, "duration_s": 600, "nodes": 3}],
-        policy="backfill-consolidated",
+        policy="consolidated-backfill",
         num_nodes=4,
         node_gpus=8,
     )
@@ -78,7 +79,7 @@ def test_consolidated_drops_job_whose_per_node_share_cannot_fit() -> None:
         {"job_id": "toobig", "submit_s": 0, "gpus": 16, "duration_s": 300, "nodes": 1},
         {"job_id": "ok", "submit_s": 0, "gpus": 8, "duration_s": 300, "nodes": 1},
     ]
-    res = schedule(jobs, policy="backfill-consolidated", num_nodes=4, node_gpus=8, oversized="drop")
+    res = schedule(jobs, policy="consolidated-backfill", num_nodes=4, node_gpus=8, oversized="drop")
     assert res.dropped == ["toobig"]
     assert [j.job_id for j in res.jobs] == ["ok"]
 
@@ -88,7 +89,7 @@ def test_consolidated_cap_widens_nodes_so_the_share_fits() -> None:
     # (min_nodes=ceil(16/8)=2) so it runs as 8+8 on two nodes — not dropped, gpus preserved at 16.
     res = schedule(
         [{"job_id": "j", "submit_s": 0, "gpus": 16, "duration_s": 300, "nodes": 1}],
-        policy="backfill-consolidated",
+        policy="consolidated-backfill",
         num_nodes=4,
         node_gpus=8,
         oversized="cap",
@@ -104,7 +105,7 @@ def test_consolidated_cap_clamps_gpus_to_cluster_capacity() -> None:
     # as the geometry allows -> 8 on every one of the 4 nodes.
     res = schedule(
         [{"job_id": "j", "submit_s": 0, "gpus": 999, "duration_s": 300, "nodes": 1}],
-        policy="backfill-consolidated",
+        policy="consolidated-backfill",
         num_nodes=4,
         node_gpus=8,
         oversized="cap",

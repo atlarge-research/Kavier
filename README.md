@@ -74,14 +74,15 @@ utilization, goodput, peak queue). A tiny example trace ships with Kavier — sw
 ```bash
 # trace columns: submit_s,gpus,duration_s[,nodes,power_w_per_gpu]
 uv run kavier cluster --jobs src/kavier/sdk/cluster/data/input/trace_example.csv \
-  --policy backfill --num-nodes 4 --node-gpus 8 \
+  --policy consolidated-backfill --num-nodes 4 --node-gpus 8 \
   --out per_jobs.csv --out-nodes per_nodes.csv --plot timeline.pdf
 ```
 
-Four `--policy` values pick the scheduling discipline **and** the placement mode. `fcfs` (strict
-First-Come-First-Served) and `backfill` (FIFO + aggressive backfill so small jobs jump the queue)
-both **spread**-place tight-packed for a fast start and **ignore** the `nodes` column (a 10-GPU job on
-8-GPU nodes runs 8+2). `fcfs-consolidated` and `backfill-consolidated` add **consolidated (gang)**
+Four `--policy` values pick the scheduling discipline **and** the placement mode. `distributed-fcfs`
+(strict First-Come-First-Served) and `distributed-backfill` (FIFO + aggressive backfill so small jobs
+jump the queue) both **spread**-place tight-packed for a fast start and **ignore** the `nodes` column (a
+10-GPU job on 8-GPU nodes runs 8+2). `consolidated-fcfs` (the **default**) and `consolidated-backfill`
+add **consolidated (gang)**
 placement that **honours** each job's `nodes`: a job of `gpus` GPUs asking for `nodes` replicas lands
 on exactly that many distinct, co-located nodes (evenly split, one replica per node), never scattered
 wider — waiting until such a placement is free rather than fragmenting across nodes.
@@ -94,7 +95,7 @@ Per-node results go to `--out-nodes` (utilisation, jobs hosted, peak GPUs, idle 
 cluster summary prints as JSON.
 `--plot timeline.pdf` renders the operational timeline — needs the `[plot]` extra (`uv sync --extra
 plot`). Programmatic use: `from kavier.sdk.cluster import schedule` — call
-`schedule(pd.read_csv("trace.csv"), policy="backfill", num_nodes=4, node_gpus=8)`, read `result.jobs` /
+`schedule(pd.read_csv("trace.csv"), policy="distributed-backfill", num_nodes=4, node_gpus=8)`, read `result.jobs` /
 `result.cluster` / `result.nodes`, and optionally `plot_timeline(result, "timeline.pdf")`.
 
 ## Structure

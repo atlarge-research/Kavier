@@ -19,7 +19,7 @@ from kavier.cli._shared import FriendlyParser, apply_config
 from kavier.sdk.cluster import schedule
 from kavier.sdk.cluster.facade import ClusterSimResult
 
-_EXAMPLE_CMD = "kavier cluster --jobs jobs.csv --policy fcfs --num-nodes 4 --node-gpus 8"
+_EXAMPLE_CMD = "kavier cluster --jobs jobs.csv --policy consolidated-fcfs --num-nodes 4 --node-gpus 8"
 
 _PER_JOB_FIELDS = (
     "job_id",
@@ -54,10 +54,11 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     )
     parser.add_argument(
         "--policy",
-        choices=("fcfs", "backfill", "fcfs-consolidated", "backfill-consolidated"),
-        default="fcfs",
-        help="Scheduling policy: fcfs/backfill tight-pack (ignore the nodes column); the "
-        "*-consolidated variants honour per-job nodes (gang placement) (default: fcfs)",
+        choices=("distributed-fcfs", "distributed-backfill", "consolidated-fcfs", "consolidated-backfill"),
+        default="consolidated-fcfs",
+        help="Scheduling policy: distributed-fcfs/distributed-backfill tight-pack (ignore the nodes "
+        "column); the consolidated-* variants honour per-job nodes (gang placement) "
+        "(default: consolidated-fcfs)",
     )
     parser.add_argument("--num-nodes", type=int, default=None, help="Number of nodes in the datacenter")
     parser.add_argument("--node-gpus", type=int, default=None, help="GPUs per node")

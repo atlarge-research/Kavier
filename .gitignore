@@ -30,9 +30,7 @@ venv/
 .vscode/
 .idea/
 .bob/
-.claude/*
-# …but do version-control shared repo skills (agent guidance for the whole team)
-!.claude/skills/
+.claude/
 
 # ── MkDocs build output ──────────────────
 docs/site/
@@ -58,3 +56,4 @@ src/reader/
 # Large inference demo trace: kept locally for reference, never shipped or
 # committed (size + dataset-license). See examples-local/README.md.
 examples-local/*.csv
+/kavier_output/

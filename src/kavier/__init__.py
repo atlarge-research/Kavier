@@ -9,10 +9,10 @@ low-level training engine all resolve on first access. The engines themselves li
 
 from __future__ import annotations
 
-import importlib
 from importlib.metadata import PackageNotFoundError, version
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
+from kavier._lazy import lazy_getattr
 from kavier.sdk.domain import Domain
 
 if TYPE_CHECKING:  # type-checkers only; never imported at runtime
@@ -37,33 +37,22 @@ __all__ = [
 # Lazy attribute access (PEP 562): importing ``kavier`` must not pull in pandas/numpy or any engine,
 # and must preserve the stdlib-only import contract of ``kavier.sdk.training.calibration`` (a bare
 # ``import kavier.sdk.training.calibration`` executes this module first). Heavy names resolve only on
-# first access. ``kavier.inference`` / ``kavier.training`` are convenience aliases for the sdk verb
-# packages, where the actual functionality lives.
+# first access. ``kavier.inference`` / ``kavier.training`` / ``kavier.cluster`` are convenience aliases
+# for the sdk packages (``kavier.sdk.X``), where the actual functionality lives — see ``kavier._lazy``.
+# Targets are submodule paths relative to this ``kavier`` package.
 _LAZY_ALIASES = {
-    "cluster": "kavier.sdk.cluster",
-    Domain.INFERENCE: "kavier.sdk.inference",
-    Domain.TRAINING: "kavier.sdk.training",
+    "cluster": "sdk.cluster",
+    Domain.INFERENCE: "sdk.inference",
+    Domain.TRAINING: "sdk.training",
 }
 _LAZY_ATTRS = {
-    "GPU_SPEC_LIBRARY": "kavier.sdk.library",
-    "LLM_SPEC_LIBRARY": "kavier.sdk.library",
-    "simulate_full_training": "kavier.sdk.training.core.engine",
-    "simulate_training_step": "kavier.sdk.training.core.engine",
+    "GPU_SPEC_LIBRARY": "sdk.library",
+    "LLM_SPEC_LIBRARY": "sdk.library",
+    "simulate_full_training": "sdk.training.core.engine",
+    "simulate_training_step": "sdk.training.core.engine",
 }
 
-
-def __getattr__(name: str) -> Any:
-    target = _LAZY_ALIASES.get(name)
-    if target is not None:
-        module = importlib.import_module(target)
-        globals()[name] = module
-        return module
-    module_name = _LAZY_ATTRS.get(name)
-    if module_name is not None:
-        value = getattr(importlib.import_module(module_name), name)
-        globals()[name] = value
-        return value
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+__getattr__ = lazy_getattr(globals(), modules=_LAZY_ALIASES, attrs=_LAZY_ATTRS)
 
 
 def __dir__() -> list[str]:

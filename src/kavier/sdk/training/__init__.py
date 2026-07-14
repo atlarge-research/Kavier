@@ -9,8 +9,9 @@ accessor must stay stdlib-only (no scipy/sklearn/numpy/pandas). ``kavier.trainin
 
 from __future__ import annotations
 
-import importlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+
+from kavier._lazy import lazy_getattr
 
 if TYPE_CHECKING:  # type-checkers only; never imported at runtime
     from kavier.sdk.training.facade import (
@@ -54,10 +55,4 @@ _FACADE_EXPORTS = frozenset(
     }
 )
 
-
-def __getattr__(name: str) -> Any:
-    if name in _FACADE_EXPORTS:
-        value = getattr(importlib.import_module(f"{__name__}.facade"), name)
-        globals()[name] = value  # cache so subsequent access skips __getattr__
-        return value
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+__getattr__ = lazy_getattr(globals(), attrs={name: "facade" for name in _FACADE_EXPORTS})

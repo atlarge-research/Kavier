@@ -13,7 +13,7 @@ predicting performance, sustainability, and efficiency of LLM ecosystems under
 inference and training.
 
 Kavier helps operators, researchers, and engineers predict:
-* **Performance** — inference latencies, training throughput, GPU utilization
+* **Performance** — inference latencies, training throughput, GPU utilization + Model FLOPs Utilization (MFU)
 * **Sustainability** — energy consumption, carbon emissions (gCO2/Mtoken)
 * **Efficiency** — financial and energy cost per token/sample given GPU-hour prices
 
@@ -68,8 +68,12 @@ kavier inference --trace "$TRACE"
 
 `kavier cluster` is a FIFO/backfill **queuing simulator**: give it a CSV trace of jobs (arrival
 time, GPUs requested, GPU-locked duration) and a fixed cluster size, and it schedules them and
-reports per-job timings (wait, start/end, runtime, energy) plus cluster metrics (makespan,
-utilization, goodput, peak queue). A tiny example trace ships with Kavier — swap in your own:
+reports per-job timings (wait, start/end, runtime, energy, per-job `goodput`) plus cluster metrics
+(makespan, utilization, peak queue, and two goodput measures). Note the two distinct "goodput"
+numbers: `goodput_jobs_per_s` is scheduling **throughput** (jobs completed per second), while
+`scheduling_goodput` is scheduling **efficiency** — `Σ runtime_s / Σ turnaround_s`, the fraction of
+wall-clock spent actually training vs. queued (mirrors the standard `train_runtime / elapsed`
+goodput measured on real job logs). A tiny example trace ships with Kavier — swap in your own:
 
 ```bash
 # trace columns: submit_s,gpus,duration_s[,nodes,power_w_per_gpu]

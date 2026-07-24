@@ -59,3 +59,6 @@ src/reader/
 examples-local/*.csv
 /kavier_output/
 plan.md
+*plan.md
+
+results/

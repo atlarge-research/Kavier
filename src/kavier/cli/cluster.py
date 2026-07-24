@@ -67,7 +67,8 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "--oversized",
         choices=[o.value for o in Oversized],
         default=Oversized.CAP,
-        help="Clamp (cap) or skip (drop) a job that wants more GPUs than the cluster (default: cap)",
+        help="How to handle a job requesting more GPUs than the cluster: clamp it (cap), skip it "
+        "(drop), or reject with an error before simulation starts (strict) (default: cap)",
     )
     parser.add_argument(
         "--watts-per-gpu", type=float, default=None, help="Fallback per-GPU power (W) for the energy estimate"

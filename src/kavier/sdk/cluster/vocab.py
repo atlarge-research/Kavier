@@ -27,7 +27,12 @@ class Policy(StrEnum):
 
 
 class Oversized(StrEnum):
-    """How to treat a job requesting more GPUs than the whole cluster: clamp it or skip it."""
+    """How to treat a job requesting more GPUs than the whole cluster.
+
+    ``"cap"`` clamps the job's GPU count to the cluster total; ``"drop"`` silently skips it;
+    ``"strict"`` raises a :class:`ValueError` before simulation begins if any job exceeds capacity.
+    """
 
     CAP = "cap"
     DROP = "drop"
+    STRICT = "strict"

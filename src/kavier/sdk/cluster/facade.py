@@ -212,9 +212,10 @@ def schedule(
     consolidated (gang) placement that honours ``nodes`` — a ``gpus``/``nodes`` job lands on exactly
     ``nodes`` distinct
     co-located nodes, never scattered wider. ``oversized`` is ``"cap"`` (clamp a too-big job to the
-    cluster) or ``"drop"`` (skip it; for the consolidated policies a job whose per-node share exceeds
-    ``node_gpus`` is the too-big case). Energy per job is ``(power_w_per_gpu or default_watts_per_gpu)
-    × gpus × runtime_s / 3.6e6`` kWh (``None`` if no power).
+    cluster), ``"drop"`` (skip it; for the consolidated policies a job whose per-node share exceeds
+    ``node_gpus`` is the too-big case), or ``"strict"`` (raise :class:`ValueError` before simulation
+    if any job's ``gpus`` exceeds the cluster capacity). Energy per job is ``(power_w_per_gpu or
+    default_watts_per_gpu) × gpus × runtime_s / 3.6e6`` kWh (``None`` if no power).
     """
     if policy not in _POLICIES:
         raise ValueError(f"policy must be one of {_POLICIES}, got {policy!r}")
@@ -229,6 +230,14 @@ def schedule(
     capacity = num_nodes * node_gpus
 
     norm = _normalise(jobs)
+    if oversized == Oversized.STRICT:
+        for j in norm:
+            if j["gpus"] > capacity:
+                raise ValueError(
+                    f"job {j['job_id']!r} requests {j['gpus']} GPUs but the cluster capacity is "
+                    f"{capacity} (num_nodes={num_nodes}, node_gpus={node_gpus}); "
+                    f"use oversized='cap' or 'drop' to allow oversized jobs"
+                )
     ejobs = [engine.Job(j["index"], j["submit_s"], j["gpus"], j["duration_s"], j["nodes"]) for j in norm]
 
     if policy == Policy.DISTRIBUTED_FCFS:

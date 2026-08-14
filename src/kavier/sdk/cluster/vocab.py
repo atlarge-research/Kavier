@@ -36,3 +36,19 @@ class Oversized(StrEnum):
     CAP = "cap"
     DROP = "drop"
     STRICT = "strict"
+
+
+class PlacementStrategy(StrEnum):
+    """Node-selection strategy for consolidated placement (:func:`place_consolidated`).
+
+    ``"pack"`` prefers the least-free node first (bin-packing / tightest-fit), filling nodes before
+    moving on to fresh ones — keeps whole nodes open for large jobs. ``"spread"`` prefers the
+    most-free node first, mirroring the Kubernetes ``LeastAllocated`` scorer: jobs are distributed
+    evenly across nodes rather than consolidated onto as few as possible.
+
+    Only affects the ``consolidated-*`` scheduling policies; the ``distributed-*`` policies use
+    :func:`place` (tight-pack only) and are unaffected.
+    """
+
+    PACK = "pack"
+    SPREAD = "spread"

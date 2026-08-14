@@ -21,13 +21,14 @@ from typing import Any
 
 from kavier.sdk.cluster.core import engine
 from kavier.sdk.cluster.core import metrics as _metrics
-from kavier.sdk.cluster.vocab import Oversized, Policy
+from kavier.sdk.cluster.vocab import Oversized, PlacementStrategy, Policy
 from kavier.sdk.units import SECONDS_PER_HOUR, WS_PER_KWH
 
 # Valid string values, derived from the enums (single home) — used for the membership guards and their
 # error messages, which render these tuples verbatim (e.g. ``('cap', 'drop')``).
 _POLICIES = tuple(p.value for p in Policy)
 _OVERSIZED = tuple(o.value for o in Oversized)
+_PLACEMENTS = tuple(s.value for s in PlacementStrategy)
 
 
 @dataclass(frozen=True)
@@ -200,6 +201,7 @@ def schedule(
     num_nodes: int | None = None,
     node_gpus: int | None = None,
     oversized: str = Oversized.CAP,
+    placement: str = PlacementStrategy.PACK,
     default_watts_per_gpu: float | None = None,
 ) -> ClusterSimResult:
     """Simulate ``jobs`` on a homogeneous ``num_nodes × node_gpus`` datacenter and return per-job,
@@ -210,17 +212,22 @@ def schedule(
     strict FCFS timing and ``policy="distributed-backfill"`` is FIFO+backfill, both tight-pack (the
     ``nodes`` column is ignored); ``policy="consolidated-fcfs"`` / ``"consolidated-backfill"`` add
     consolidated (gang) placement that honours ``nodes`` — a ``gpus``/``nodes`` job lands on exactly
-    ``nodes`` distinct
-    co-located nodes, never scattered wider. ``oversized`` is ``"cap"`` (clamp a too-big job to the
-    cluster), ``"drop"`` (skip it; for the consolidated policies a job whose per-node share exceeds
-    ``node_gpus`` is the too-big case), or ``"strict"`` (raise :class:`ValueError` before simulation
-    if any job's ``gpus`` exceeds the cluster capacity). Energy per job is ``(power_w_per_gpu or
-    default_watts_per_gpu) × gpus × runtime_s / 3.6e6`` kWh (``None`` if no power).
+    ``nodes`` distinct co-located nodes, never scattered wider. ``oversized`` is ``"cap"`` (clamp a
+    too-big job to the cluster), ``"drop"`` (skip it; for the consolidated policies a job whose
+    per-node share exceeds ``node_gpus`` is the too-big case), or ``"strict"`` (raise
+    :class:`ValueError` before simulation if any job's ``gpus`` exceeds the cluster capacity).
+    ``placement`` controls node-selection for the ``consolidated-*`` policies: ``"pack"`` (default)
+    fills the least-free node first (bin-packing); ``"spread"`` prefers the most-free node, mirroring
+    the Kubernetes ``LeastAllocated`` scorer. Ignored by the ``distributed-*`` policies. Energy per
+    job is ``(power_w_per_gpu or default_watts_per_gpu) × gpus × runtime_s / 3.6e6`` kWh (``None``
+    if no power).
     """
     if policy not in _POLICIES:
         raise ValueError(f"policy must be one of {_POLICIES}, got {policy!r}")
     if oversized not in _OVERSIZED:
         raise ValueError(f"oversized must be one of {_OVERSIZED}, got {oversized!r}")
+    if placement not in _PLACEMENTS:
+        raise ValueError(f"placement must be one of {_PLACEMENTS}, got {placement!r}")
     if num_nodes is None or node_gpus is None:
         raise ValueError("cluster needs num_nodes and node_gpus (e.g. num_nodes=4, node_gpus=8)")
     num_nodes = int(num_nodes)
@@ -240,14 +247,15 @@ def schedule(
                 )
     ejobs = [engine.Job(j["index"], j["submit_s"], j["gpus"], j["duration_s"], j["nodes"]) for j in norm]
 
+    spread = placement == PlacementStrategy.SPREAD
     if policy == Policy.DISTRIBUTED_FCFS:
         placements = engine.run_fcfs(ejobs, num_nodes, node_gpus, oversized)
     elif policy == Policy.DISTRIBUTED_BACKFILL:
         placements = engine.run_backfill(ejobs, node_gpus, num_nodes, oversized)
     elif policy == Policy.CONSOLIDATED_FCFS:
-        placements = engine.run_fcfs_consolidated(ejobs, num_nodes, node_gpus, oversized)
+        placements = engine.run_fcfs_consolidated(ejobs, num_nodes, node_gpus, oversized, spread=spread)
     else:  # consolidated-backfill
-        placements = engine.run_backfill_consolidated(ejobs, node_gpus, num_nodes, oversized)
+        placements = engine.run_backfill_consolidated(ejobs, node_gpus, num_nodes, oversized, spread=spread)
 
     placed = {p.idx: p for p in placements}
     records: list[JobRecord] = []

@@ -93,6 +93,7 @@ def test_nan_power_is_treated_as_missing_not_poisoned() -> None:
     [
         {"policy": "round_robin", "num_nodes": 1, "node_gpus": 8},  # unknown policy
         {"policy": "distributed-fcfs", "oversized": "queue", "num_nodes": 1, "node_gpus": 8},  # unknown oversized mode
+        {"policy": "distributed-fcfs", "placement": "random", "num_nodes": 1, "node_gpus": 8},  # unknown placement
         {"policy": "distributed-fcfs"},  # no topology given
         {"policy": "distributed-fcfs", "num_nodes": 2},  # node_gpus missing
         {"policy": "distributed-backfill", "node_gpus": 8},  # num_nodes missing
@@ -102,3 +103,41 @@ def test_nan_power_is_treated_as_missing_not_poisoned() -> None:
 def test_invalid_arguments_raise_value_error(kwargs: dict[str, object]) -> None:
     with pytest.raises(ValueError):
         schedule([{"submit_s": 0, "gpus": 1, "duration_s": 1}], **kwargs)  # type: ignore[arg-type]
+
+
+def test_placement_spread_distributes_across_nodes() -> None:
+    # Two sequential 1-node/4-GPU jobs on 2x8 cluster with spread: each lands on a different node.
+    jobs = [
+        {"job_id": "a", "submit_s": 0, "gpus": 4, "duration_s": 10, "nodes": 1},
+        {"job_id": "b", "submit_s": 0, "gpus": 4, "duration_s": 10, "nodes": 1},
+    ]
+    res = schedule(jobs, policy="consolidated-backfill", num_nodes=2, node_gpus=8, placement="spread")
+    by_id = {j.job_id: j for j in res.jobs}
+    # Each job must be on a distinct node
+    node_a = by_id["a"].nodes[0][0]
+    node_b = by_id["b"].nodes[0][0]
+    assert node_a != node_b, f"spread should place jobs on different nodes, got both on node {node_a}"
+
+
+def test_placement_pack_consolidates_onto_same_node() -> None:
+    # Same scenario with pack: both jobs land on node 0.
+    jobs = [
+        {"job_id": "a", "submit_s": 0, "gpus": 4, "duration_s": 10, "nodes": 1},
+        {"job_id": "b", "submit_s": 0, "gpus": 4, "duration_s": 10, "nodes": 1},
+    ]
+    res = schedule(jobs, policy="consolidated-backfill", num_nodes=2, node_gpus=8, placement="pack")
+    by_id = {j.job_id: j for j in res.jobs}
+    node_a = by_id["a"].nodes[0][0]
+    node_b = by_id["b"].nodes[0][0]
+    assert node_a == node_b == 0, f"pack should place both jobs on node 0, got {node_a} and {node_b}"
+
+
+def test_placement_default_is_pack() -> None:
+    # Omitting placement= gives the same result as placement="pack".
+    jobs = [
+        {"job_id": "a", "submit_s": 0, "gpus": 4, "duration_s": 10, "nodes": 1},
+        {"job_id": "b", "submit_s": 0, "gpus": 4, "duration_s": 10, "nodes": 1},
+    ]
+    explicit = schedule(jobs, policy="consolidated-backfill", num_nodes=2, node_gpus=8, placement="pack")
+    default = schedule(jobs, policy="consolidated-backfill", num_nodes=2, node_gpus=8)
+    assert [(j.job_id, j.nodes) for j in explicit.jobs] == [(j.job_id, j.nodes) for j in default.jobs]

@@ -4,6 +4,9 @@
 ``place_consolidated(free, gpus, nodes, node_gpus)`` must put ``gpus`` GPUs on EXACTLY
 ``max(1, min(nodes, len(free)))`` distinct nodes, even-split, never scattered wider — the fix for the
 split-placement bug where a nodes=1 job was fragmented across several nodes.
+
+``spread=True`` inverts the node-selection order to prefer the most-free node (``LeastAllocated``
+style), while ``spread=False`` (default) uses tightest-fit (least-free first, bin-packing).
 """
 
 from __future__ import annotations
@@ -65,3 +68,44 @@ def test_does_not_mutate_free() -> None:
 
 def test_zero_request_is_empty_assignment() -> None:
     assert place_consolidated([8, 8], 0, 1, 8) == []
+
+
+# ---------------------------------------------------------------------------
+# spread=True — LeastAllocated-style placement
+# ---------------------------------------------------------------------------
+
+
+def test_spread_places_sequential_jobs_on_different_nodes() -> None:
+    # The scenario from the design discussion: 2 nodes (8 GPUs each), two sequential 1-node/4-GPU jobs.
+    # Pack: both land on node 0 (fill it before touching node 1).
+    # Spread: job 1 → node 0 (tie-broken by id), then free=[4,8]; most-free is node 1 → job 2 there.
+    assert place_consolidated([8, 8], 4, 1, 8, spread=False) == [(0, 4)]
+    # After job 1 on node 0: free = [4, 8]
+    assert place_consolidated([4, 8], 4, 1, 8, spread=False) == [(0, 4)]   # pack: fills node 0 again
+    assert place_consolidated([4, 8], 4, 1, 8, spread=True) == [(1, 4)]    # spread: picks roomier node 1
+
+
+def test_spread_initial_tie_broken_by_node_id() -> None:
+    # Both nodes equally free; id tiebreak makes node 0 the first choice in both pack and spread.
+    assert place_consolidated([8, 8], 4, 1, 8, spread=True) == [(0, 4)]
+
+
+def test_spread_multi_node_job_still_honours_node_count() -> None:
+    # spread=True must still place on EXACTLY nodes distinct nodes, not just anywhere.
+    # gpus=16, nodes=2, node_gpus=8 on free=[8,8,8,8]: demands [8,8]; spread picks two most-free nodes
+    # (all tied → nodes 0 and 1 by id tiebreak).
+    result = place_consolidated([8, 8, 8, 8], 16, 2, 8, spread=True)
+    assert result is not None
+    assert len(result) == 2
+    assert sum(count for _, count in result) == 16
+
+
+def test_spread_returns_none_when_infeasible_same_as_pack() -> None:
+    # Infeasibility (per-node share > node_gpus) is independent of spread flag.
+    assert place_consolidated([8, 8], 16, 1, 8, spread=True) is None
+
+
+def test_spread_does_not_mutate_free() -> None:
+    free = [8, 4, 8, 4]
+    place_consolidated(free, 8, 1, 8, spread=True)
+    assert free == [8, 4, 8, 4]

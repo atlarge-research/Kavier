@@ -18,7 +18,7 @@ import heapq
 import math
 from typing import NamedTuple
 
-from kavier.sdk.cluster.vocab import Oversized
+from kavier.sdk.cluster.vocab import Oversized, PlacementStrategy
 
 
 class Job(NamedTuple):
@@ -69,7 +69,13 @@ def place(free: list[int], gpus: int) -> list[tuple[int, int]] | None:
     return sorted(taken.items())
 
 
-def place_consolidated(free: list[int], gpus: int, nodes: int, node_gpus: int) -> list[tuple[int, int]] | None:
+def place_consolidated(
+    free: list[int],
+    gpus: int,
+    nodes: int,
+    node_gpus: int,
+    spread: bool = False,
+) -> list[tuple[int, int]] | None:
     """Consolidated (gang) placement: put ``gpus`` GPUs on EXACTLY ``n_eff`` distinct nodes.
 
     Honours a job's ``nodes`` request so a ``gpus``/``nodes`` job is co-located on that many nodes
@@ -82,8 +88,10 @@ def place_consolidated(free: list[int], gpus: int, nodes: int, node_gpus: int) -
        divisible case every demand is ``gpus // nodes``.
     3. if any single node's share exceeds ``node_gpus`` the job cannot fit one replica per node →
        return ``None`` (infeasible; this is the oversized signal for the consolidated policies).
-    4. assign each demand (largest first) to a DISTINCT node with ``free >= demand``, tightest-fit
-       (least-free node that still fits, lowest id on ties) to keep roomy nodes open.
+    4. assign each demand (largest first) to a DISTINCT node with ``free >= demand``. Node order
+       depends on ``spread``: ``False`` (default) → tightest-fit (least-free node first, lowest id
+       on ties) to keep roomy nodes open (bin-packing); ``True`` → most-free node first (lowest id
+       on ties), mirroring the Kubernetes ``LeastAllocated`` scorer to spread load evenly.
 
     Returns ``[(node_id, gpus_on_node), ...]`` sorted by node id (summing to ``gpus``), ``[]`` for
     ``gpus <= 0``, or ``None`` if it does not fit right now. Does not mutate ``free``.
@@ -95,7 +103,10 @@ def place_consolidated(free: list[int], gpus: int, nodes: int, node_gpus: int) -
     demands = [base + (1 if i < rem else 0) for i in range(n_eff)]
     if max(demands) > node_gpus:
         return None
-    order = sorted(range(len(free)), key=lambda n: (free[n], n))  # tightest-fit, id tiebreak
+    if spread:
+        order = sorted(range(len(free)), key=lambda n: (-free[n], n))  # most-free first, id tiebreak
+    else:
+        order = sorted(range(len(free)), key=lambda n: (free[n], n))   # least-free first, id tiebreak
     used: set[int] = set()
     taken: dict[int, int] = {}
     for demand in sorted(demands, reverse=True):  # place the biggest replicas first
@@ -268,7 +279,9 @@ def _prepare_consolidated(
     return prepared
 
 
-def run_fcfs_consolidated(jobs: list[Job], num_nodes: int, node_gpus: int, oversized: str = "cap") -> list[Placement]:
+def run_fcfs_consolidated(
+    jobs: list[Job], num_nodes: int, node_gpus: int, oversized: str = "cap", spread: bool = False
+) -> list[Placement]:
     """Strict FCFS timing with consolidated (gang) placement honouring each job's ``nodes`` request.
 
     Like :func:`run_fcfs` this is head-of-line: jobs start in submission order and never before the
@@ -276,7 +289,8 @@ def run_fcfs_consolidated(jobs: list[Job], num_nodes: int, node_gpus: int, overs
     is node-aware — a job starts at the earliest time its consolidated placement
     (:func:`place_consolidated`) fits the per-node free GPUs, waiting for running jobs to finish if
     needed. ``oversized`` is handled by :func:`_prepare_consolidated` (``"drop"`` skips an infeasible
-    job; ``"cap"`` shrinks it).
+    job; ``"cap"`` shrinks it). ``spread`` selects the node-order strategy: ``False`` (default) →
+    bin-packing (least-free first); ``True`` → ``LeastAllocated``-style (most-free first).
     """
     prepared = _prepare_consolidated(jobs, num_nodes, node_gpus, oversized)
     if not prepared:
@@ -293,7 +307,7 @@ def run_fcfs_consolidated(jobs: list[Job], num_nodes: int, node_gpus: int, overs
             _, freed = heapq.heappop(running)
             for node_id, count in freed:
                 free[node_id] += count
-        assigned = place_consolidated(free, gpus, nodes, node_gpus)
+        assigned = place_consolidated(free, gpus, nodes, node_gpus, spread=spread)
         while assigned is None:  # advance time until the consolidated placement fits
             if not running:  # pragma: no cover - _prepare_consolidated guarantees feasibility
                 raise RuntimeError(f"consolidated placement infeasible for job {index}")
@@ -301,7 +315,7 @@ def run_fcfs_consolidated(jobs: list[Job], num_nodes: int, node_gpus: int, overs
             start = max(start, end_s)
             for node_id, count in freed:
                 free[node_id] += count
-            assigned = place_consolidated(free, gpus, nodes, node_gpus)
+            assigned = place_consolidated(free, gpus, nodes, node_gpus, spread=spread)
         for node_id, count in assigned:
             free[node_id] -= count
         nodes_assignment = tuple(assigned)
@@ -312,7 +326,7 @@ def run_fcfs_consolidated(jobs: list[Job], num_nodes: int, node_gpus: int, overs
 
 
 def run_backfill_consolidated(
-    jobs: list[Job], node_gpus: int, num_nodes: int, oversized: str = "cap"
+    jobs: list[Job], node_gpus: int, num_nodes: int, oversized: str = "cap", spread: bool = False
 ) -> list[Placement]:
     """Best-effort FIFO + aggressive backfill with consolidated (gang) placement.
 
@@ -321,6 +335,8 @@ def run_backfill_consolidated(
     :func:`place_consolidated`, so a ``gpus``/``nodes`` job lands on exactly that many distinct nodes
     (co-located) instead of tight-packed across fragments. ``oversized`` is handled by
     :func:`_prepare_consolidated` (``"drop"`` skips an infeasible job; ``"cap"`` shrinks it).
+    ``spread`` selects the node-order strategy: ``False`` (default) → bin-packing (least-free first);
+    ``True`` → ``LeastAllocated``-style (most-free first).
     """
     prepared = _prepare_consolidated(jobs, num_nodes, node_gpus, oversized)
     if not prepared:
@@ -345,7 +361,7 @@ def run_backfill_consolidated(
                 free[node_id] += count
         admitted: list[int] = []
         for queue_pos, (index, _submit, gpus, nodes, duration) in enumerate(pending):
-            assigned = place_consolidated(free, gpus, nodes, node_gpus)
+            assigned = place_consolidated(free, gpus, nodes, node_gpus, spread=spread)
             if assigned is None:
                 continue
             for node_id, count in assigned:

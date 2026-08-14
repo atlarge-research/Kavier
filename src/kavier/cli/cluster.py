@@ -18,7 +18,7 @@ from typing import Any
 from kavier.cli._shared import FriendlyParser, apply_config
 from kavier.sdk.cluster import schedule
 from kavier.sdk.cluster.facade import ClusterSimResult
-from kavier.sdk.cluster.vocab import Oversized, Policy
+from kavier.sdk.cluster.vocab import Oversized, PlacementStrategy, Policy
 
 _EXAMPLE_CMD = "kavier cluster --jobs jobs.csv --policy consolidated-fcfs --num-nodes 4 --node-gpus 8"
 
@@ -69,6 +69,14 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         default=Oversized.CAP,
         help="How to handle a job requesting more GPUs than the cluster: clamp it (cap), skip it "
         "(drop), or reject with an error before simulation starts (strict) (default: cap)",
+    )
+    parser.add_argument(
+        "--placement",
+        choices=[s.value for s in PlacementStrategy],
+        default=PlacementStrategy.PACK,
+        help="Node-selection strategy for consolidated-* policies: pack fills the least-free node "
+        "first (bin-packing, default); spread prefers the most-free node, mirroring the Kubernetes "
+        "LeastAllocated scorer to distribute jobs evenly across nodes (default: pack)",
     )
     parser.add_argument(
         "--watts-per-gpu", type=float, default=None, help="Fallback per-GPU power (W) for the energy estimate"
@@ -181,6 +189,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             num_nodes=args.num_nodes,
             node_gpus=args.node_gpus,
             oversized=args.oversized,
+            placement=args.placement,
             default_watts_per_gpu=args.watts_per_gpu,
         )
     except (ValueError, KeyError) as exc:

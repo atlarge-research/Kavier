@@ -46,6 +46,7 @@ class JobRecord:
     turnaround_s: float  # end - ready_s (wait + runtime; ready_s = max(submit_s, max dep end_s))
     energy_kwh: float | None  # None when no per-GPU power is known
     nodes: tuple[tuple[int, int], ...]  # ((node_id, gpus_on_node), ...) the job was placed on
+    dependencies: tuple[str, ...]  # job_id strings this job depends on (empty when none)
 
     @property
     def submit_h(self) -> float:
@@ -330,6 +331,7 @@ def schedule(
                 turnaround_s=end_s - ready_s,
                 energy_kwh=energy_kwh,
                 nodes=placement.nodes,
+                dependencies=tuple(job["dependencies"]),
             )
         )
 

@@ -31,6 +31,12 @@ class Job(NamedTuple):
     gpus: int
     duration_s: float
     nodes: int
+    dependencies: tuple[int, ...] = ()
+
+
+def job_schedulable(job: Job, completed: set[int]) -> bool:
+    """Return True when all of job's dependency indices are in the completed set."""
+    return all(dep in completed for dep in job.dependencies)
 
 
 class Placement(NamedTuple):
@@ -142,19 +148,28 @@ def run_fcfs(jobs: list[Job], num_nodes: int, node_gpus: int, oversized: str = "
     if not active:
         return []
 
+    job_by_idx = {job.idx: job for job in jobs}
     order = sorted(active, key=lambda t: t[1])  # by submission time; stable => FIFO on ties
-    running: list[tuple[float, int]] = []  # min-heap of (end_s, gpus)
+    running: list[tuple[float, int, int]] = []  # min-heap of (end_s, idx, gpus)
     free = capacity_gpus
+    completed: set[int] = set()
     last_start = order[0][1]
     scheduled: list[tuple[int, float, int, float]] = []  # (idx, start, gpus, duration)
     for index, submit, gpus, duration in order:
         start = max(submit, last_start)  # FCFS: never start before the previous job
-        while free < gpus:
-            end_s, freed = heapq.heappop(running)
+        # release all jobs that finish by `start`
+        while running and running[0][0] <= start:
+            end_s, finished_idx, freed = heapq.heappop(running)
+            free += freed
+            completed.add(finished_idx)
+        # wait for resources AND dependency satisfaction
+        while free < gpus or not job_schedulable(job_by_idx[index], completed):
+            end_s, finished_idx, freed = heapq.heappop(running)
             start = max(start, end_s)
             free += freed
+            completed.add(finished_idx)
         free -= gpus
-        heapq.heappush(running, (start + duration, gpus))
+        heapq.heappush(running, (start + duration, index, gpus))
         scheduled.append((index, start, gpus, duration))
         last_start = start
 
@@ -212,11 +227,13 @@ def run_backfill(jobs: list[Job], node_gpus: int, num_nodes: int, oversized: str
     if not prepared:
         return []
 
+    job_by_idx = {job.idx: job for job in jobs}
     arrivals = sorted(prepared, key=lambda t: t[1])  # by submission time; stable => FIFO on ties
     n = len(arrivals)
     pending: list[tuple[int, float, int, float]] = []
-    running: list[tuple[float, tuple[tuple[int, int], ...]]] = []  # min-heap of (end_s, node_assignment)
+    running: list[tuple[float, int, tuple[tuple[int, int], ...]]] = []  # min-heap of (end_s, idx, node_assignment)
     free = [node_gpus] * num_nodes
+    completed: set[int] = set()
     next_arrival = 0
     done: dict[int, Placement] = {}
 
@@ -226,18 +243,21 @@ def run_backfill(jobs: list[Job], node_gpus: int, num_nodes: int, oversized: str
             pending.append(arrivals[next_arrival])
             next_arrival += 1
         while running and running[0][0] <= time:
-            _, freed = heapq.heappop(running)
+            _, finished_idx, freed = heapq.heappop(running)
             for node_id, count in freed:
                 free[node_id] += count
+            completed.add(finished_idx)
         admitted: list[int] = []
         for queue_pos, (index, _submit, gpus, duration) in enumerate(pending):
+            if not job_schedulable(job_by_idx[index], completed):
+                continue
             assigned = place(free, gpus)
             if assigned is None:
                 continue
             for node_id, count in assigned:
                 free[node_id] -= count
             nodes = tuple(assigned)
-            heapq.heappush(running, (time + duration, nodes))
+            heapq.heappush(running, (time + duration, index, nodes))
             done[index] = Placement(index, time, gpus, nodes)
             admitted.append(queue_pos)
         for queue_pos in reversed(admitted):
@@ -296,30 +316,36 @@ def run_fcfs_consolidated(
     if not prepared:
         return []
 
+    job_by_idx = {job.idx: job for job in jobs}
     order = sorted(prepared, key=lambda t: t[1])  # by submission time; stable => FIFO on ties
     free = [node_gpus] * num_nodes
-    running: list[tuple[float, tuple[tuple[int, int], ...]]] = []  # min-heap of (end_s, assignment)
+    running: list[tuple[float, int, tuple[tuple[int, int], ...]]] = []  # min-heap of (end_s, idx, assignment)
+    completed: set[int] = set()
     last_start = order[0][1]
     placements: list[Placement] = []
     for index, submit, gpus, nodes, duration in order:
         start = max(submit, last_start)  # FCFS: never start before the previous job
-        while running and running[0][0] <= start:  # release everything finished by `start`
-            _, freed = heapq.heappop(running)
+        # release all jobs that finish by `start`
+        while running and running[0][0] <= start:
+            _, finished_idx, freed = heapq.heappop(running)
             for node_id, count in freed:
                 free[node_id] += count
+            completed.add(finished_idx)
         assigned = place_consolidated(free, gpus, nodes, node_gpus, spread=spread)
-        while assigned is None:  # advance time until the consolidated placement fits
+        # advance time until consolidated placement fits AND dependencies are satisfied
+        while assigned is None or not job_schedulable(job_by_idx[index], completed):
             if not running:  # pragma: no cover - _prepare_consolidated guarantees feasibility
                 raise RuntimeError(f"consolidated placement infeasible for job {index}")
-            end_s, freed = heapq.heappop(running)
+            end_s, finished_idx, freed = heapq.heappop(running)
             start = max(start, end_s)
             for node_id, count in freed:
                 free[node_id] += count
+            completed.add(finished_idx)
             assigned = place_consolidated(free, gpus, nodes, node_gpus, spread=spread)
         for node_id, count in assigned:
             free[node_id] -= count
         nodes_assignment = tuple(assigned)
-        heapq.heappush(running, (start + duration, nodes_assignment))
+        heapq.heappush(running, (start + duration, index, nodes_assignment))
         placements.append(Placement(index, start, gpus, nodes_assignment))
         last_start = start
     return placements
@@ -342,11 +368,13 @@ def run_backfill_consolidated(
     if not prepared:
         return []
 
+    job_by_idx = {job.idx: job for job in jobs}
     arrivals = sorted(prepared, key=lambda t: t[1])  # by submission time; stable => FIFO on ties
     n = len(arrivals)
     pending: list[tuple[int, float, int, int, float]] = []
-    running: list[tuple[float, tuple[tuple[int, int], ...]]] = []  # min-heap of (end_s, assignment)
+    running: list[tuple[float, int, tuple[tuple[int, int], ...]]] = []  # min-heap of (end_s, idx, assignment)
     free = [node_gpus] * num_nodes
+    completed: set[int] = set()
     next_arrival = 0
     done: dict[int, Placement] = {}
 
@@ -356,18 +384,21 @@ def run_backfill_consolidated(
             pending.append(arrivals[next_arrival])
             next_arrival += 1
         while running and running[0][0] <= time:
-            _, freed = heapq.heappop(running)
+            _, finished_idx, freed = heapq.heappop(running)
             for node_id, count in freed:
                 free[node_id] += count
+            completed.add(finished_idx)
         admitted: list[int] = []
         for queue_pos, (index, _submit, gpus, nodes, duration) in enumerate(pending):
+            if not job_schedulable(job_by_idx[index], completed):
+                continue
             assigned = place_consolidated(free, gpus, nodes, node_gpus, spread=spread)
             if assigned is None:
                 continue
             for node_id, count in assigned:
                 free[node_id] -= count
             nodes_assignment = tuple(assigned)
-            heapq.heappush(running, (time + duration, nodes_assignment))
+            heapq.heappush(running, (time + duration, index, nodes_assignment))
             done[index] = Placement(index, time, gpus, nodes_assignment)
             admitted.append(queue_pos)
         for queue_pos in reversed(admitted):

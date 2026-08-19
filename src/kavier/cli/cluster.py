@@ -112,6 +112,8 @@ def _load_jobs(path: Path) -> list[dict[str, Any]]:
                 job["power_w_per_gpu"] = float(row["power_w_per_gpu"])
             if row.get("job_id"):
                 job["job_id"] = row["job_id"]
+            if row.get("dependencies"):
+                job["dependencies"] = row["dependencies"]
             jobs.append(job)
     return jobs
 

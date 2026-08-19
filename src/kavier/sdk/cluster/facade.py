@@ -41,9 +41,9 @@ class JobRecord:
     submit_s: float
     start_s: float
     end_s: float
-    wait_s: float  # start - submit (time queued)
+    wait_s: float  # start - ready_s (time queued after becoming ready)
     runtime_s: float  # end - start (equals the job's duration)
-    turnaround_s: float  # end - submit (wait + runtime)
+    turnaround_s: float  # end - ready_s (wait + runtime; ready_s = max(submit_s, max dep end_s))
     energy_kwh: float | None  # None when no per-GPU power is known
     nodes: tuple[tuple[int, int], ...]  # ((node_id, gpus_on_node), ...) the job was placed on
 
@@ -297,6 +297,12 @@ def schedule(
         placements = engine.run_backfill_consolidated(ejobs, node_gpus, num_nodes, oversized, spread=spread)
 
     placed = {p.idx: p for p in placements}
+    # end_s keyed by job index — used to compute dependency-aware ready_s below.
+    idx_to_end_s: dict[int, float] = {
+        job["index"]: placed[job["index"]].start_s + job["duration_s"]
+        for job in norm
+        if job["index"] in placed
+    }
     records: list[JobRecord] = []
     for job in norm:
         placement = placed.get(job["index"])
@@ -306,6 +312,10 @@ def schedule(
         gpus = placement.gpus
         runtime_s = job["duration_s"]
         end_s = start_s + runtime_s
+        # ready_s: the moment the job became schedulable — submit time, or whenever its last
+        # dependency finished, whichever is later.
+        dep_ends = [idx_to_end_s[d] for d in job["dep_indices"] if d in idx_to_end_s]
+        ready_s = max(job["submit_s"], *dep_ends) if dep_ends else job["submit_s"]
         power = job["power_w_per_gpu"] if job["power_w_per_gpu"] is not None else default_watts_per_gpu
         energy_kwh = None if power is None else power * gpus * runtime_s / WS_PER_KWH
         records.append(
@@ -315,9 +325,9 @@ def schedule(
                 submit_s=job["submit_s"],
                 start_s=start_s,
                 end_s=end_s,
-                wait_s=start_s - job["submit_s"],
+                wait_s=start_s - ready_s,
                 runtime_s=runtime_s,
-                turnaround_s=end_s - job["submit_s"],
+                turnaround_s=end_s - ready_s,
                 energy_kwh=energy_kwh,
                 nodes=placement.nodes,
             )

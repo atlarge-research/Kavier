@@ -84,6 +84,7 @@ dev = [
     "types-tqdm",
     "types-cachetools",
     "types-PyYAML",
+    "coastline-recommender[autoconf,ml]>=0.2,<0.3",
 ]
 
 # ------------------------------------------------------------------

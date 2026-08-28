@@ -150,6 +150,21 @@ uv run mypy --strict --follow-imports=skip \
 Add the `calibration` extra (`uv sync --extra calibration`) to run the scipy/scikit-learn
 calibration-refit tests; without it, `test_engine_regen.py` and friends `importorskip`-skip.
 
+### Experimental conservative recommendation policy
+
+The development environment also installs Coastline for recommendation experiments.
+`kavier.experimental.ConservativePerformanceDiv4Strategy` wraps Coastline's performance policy,
+keeps its GPU ranking, and divides the selected **per-device** batch by four before a second
+feasibility check and prediction. Its output keeps the two batch meanings explicit:
+
+* `metadata["per_device_batch_size"]` is the micro-batch loaded on each GPU.
+* `metadata["effective_batch_size"]` (and the compatibility key `metadata["batch_size"]`) equals
+  `per_device_batch_size * total_gpus`. Gradient accumulation is separate.
+
+Construct it with `ConservativePerformanceDiv4Strategy.from_config(coastline_config)` and call
+`recommend(workload, context)` like any Coastline strategy. The policy name is
+`Conservative Performance Div 4`; its machine key is `conservative_performance_div4`.
+
 A multi-stage [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml) are provided for
 containerized runs (they build a wheel and install it — no source tree, no `PYTHONPATH`), but Docker
 is optional — every tutorial and the workflow above use `uv`:

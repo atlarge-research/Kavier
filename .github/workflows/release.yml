@@ -5,9 +5,13 @@ name: Release
 #   guard (tag == pyproject)  ->  gates (reuse ci.yml)  ->  build the wheel once
 #     ->  PyPI (OIDC, no token) + Docker (cli & ui -> GHCR) in parallel  ->  GitHub release.
 # Nothing publishes unless the gates pass; the version lives ONLY in pyproject.toml (the tag mirrors it).
+# Plain semver tags ONLY. GitHub filter patterns are full-ref matches, `[0-9]` is a character
+# class and `+` means "one or more of the preceding element" (filter pattern cheat sheet), so
+# `v0.5.1` starts a release while suffixed freeze/marker tags (`v0.5.1-thesis`, `v0.5.1rc1`) and
+# four-component tags (`v0.5.0.2`) leave the trailing characters unmatched and never trigger it.
 on:
   push:
-    tags: ["v*.*.*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 # Least privilege, granted per-job below; declared here so the whole run can mint what it needs.
 permissions:
@@ -34,6 +38,11 @@ jobs:
   # "tested" and "released" can never drift apart.
   gates:
     needs: guard
+    # A called workflow can never hold more than the caller grants it, and ci.yml's test job asks
+    # for `id-token: write` (tokenless Codecov upload). Raise the ceiling here or the gate errors.
+    permissions:
+      contents: read
+      id-token: write
     uses: ./.github/workflows/ci.yml
 
   # Build the sdist + wheel ONCE; PyPI and the GitHub release both consume this exact artifact.
@@ -56,13 +65,18 @@ jobs:
     # Trusted Publishing (OIDC): no API token. Configure a PyPI Trusted Publisher for this repo with
     # workflow file `release.yml` (and no environment).
     permissions:
-      id-token: write
+      id-token: write  # mints the Trusted-Publishing OIDC token AND signs the attestations
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
+      # PEP 740 attestations: each sdist/wheel is signed with the workflow's Sigstore identity and
+      # uploaded alongside it, so PyPI can prove this exact artifact came from this tag in this repo.
+      # Only works on Trusted-Publishing flows, and needs no permission beyond `id-token: write`.
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: true
 
   # Build + push the cli and ui image targets. Default registry is GHCR (no extra secret — uses the
   # built-in GITHUB_TOKEN). To use Docker Hub instead: swap `registry`/`username`/`password` for

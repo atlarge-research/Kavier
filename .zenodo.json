@@ -1,0 +1,35 @@
+{
+  "upload_type": "software",
+  "title": "Kavier: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference and Training",
+  "description": "Kavier simulates the performance, sustainability, and efficiency of LLM ecosystems under inference and training: inference latencies, training throughput, GPU utilization and Model FLOPs Utilization, energy consumption, carbon emissions, and cost per token or sample.",
+  "version": "0.5.1",
+  "license": "MIT",
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "Nicolae, Radu",
+      "affiliation": "Vrije Universiteit Amsterdam"
+    },
+    {
+      "name": "AtLarge Research"
+    }
+  ],
+  "keywords": [
+    "LLM",
+    "simulation",
+    "performance",
+    "sustainability",
+    "energy",
+    "carbon",
+    "GPU",
+    "training",
+    "inference"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/atlarge-research/kavier",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}

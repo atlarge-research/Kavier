@@ -1,0 +1,54 @@
+cff-version: 1.2.0
+message: >-
+  If you use Kavier in academic work, please cite the Kavier thesis
+  (preferred-citation below). Cite this file when you need to refer to a
+  specific released version of the software itself.
+title: Kavier
+abstract: >-
+  Kavier simulates the performance, sustainability, and efficiency of LLM
+  ecosystems under inference and training: inference latencies, training
+  throughput, GPU utilization and Model FLOPs Utilization, energy consumption,
+  carbon emissions, and cost per token or sample.
+type: software
+version: 0.5.1
+date-released: "2026-09-16"
+license: MIT
+repository-code: "https://github.com/atlarge-research/kavier"
+url: "https://github.com/atlarge-research/kavier"
+authors:
+  - given-names: Radu
+    family-names: Nicolae
+    affiliation: Vrije Universiteit Amsterdam
+  - name: AtLarge Research
+    email: info@atlarge-research.com
+keywords:
+  - LLM
+  - simulation
+  - performance
+  - sustainability
+  - energy
+  - carbon
+  - GPU
+  - training
+  - inference
+
+preferred-citation:
+  type: thesis
+  title: >-
+    Kavier: Exploring Performance, Sustainability, and Efficiency of LLM
+    Ecosystems under Inference through Cache-Aware Discrete-Event Simulation
+  authors:
+    - given-names: Radu
+      family-names: Nicolae
+    - given-names: Alexandru
+      family-names: Iosup
+    - given-names: Animesh
+      family-names: Trivedi
+    - given-names: Jesse
+      family-names: Donkervliet
+  institution:
+    name: Vrije Universiteit Amsterdam, IBM Research Zurich
+  year: 2025
+  month: 7
+  url: >-
+    https://atlarge-research.com/pdfs/2025-15-07_bsc_thesis_radu_nicolae.pdf

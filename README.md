@@ -5,6 +5,7 @@ Simulating performance, sustainability, and efficiency of LLM Ecosystems under i
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.txt)
 [![Documentation](https://img.shields.io/badge/docs-main-green.svg)](docs/)
 [![CI](https://github.com/atlarge-research/kavier/actions/workflows/ci.yml/badge.svg)](https://github.com/atlarge-research/kavier/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/atlarge-research/kavier/branch/master/graph/badge.svg)](https://codecov.io/gh/atlarge-research/kavier)
 
 ---
 
@@ -140,6 +141,7 @@ mypy). Before pushing, run the same gates CI enforces on every push/PR
 
 ```bash
 uv run pytest                 # test suite
+uv run pytest --cov           # …with a coverage report (CI adds --cov-report=xml for Codecov)
 uv run ruff check .           # lint
 uv run ruff format --check .  # formatting (CI pins ruff==0.15.15; fix with: uv run ruff format .)
 
@@ -150,6 +152,9 @@ uv run mypy --strict --follow-imports=skip \
   src/kavier/sdk/training/calibration/__init__.py \
   src/kavier/sdk/training/core/engine.py
 ```
+
+Run `uv run pre-commit install` once per clone and the ruff gates (plus whitespace hygiene) run on
+every commit; CI runs the same hooks with `uv run pre-commit run --all-files`.
 
 Add the `calibration` extra (`uv sync --extra calibration`) to run the scipy/scikit-learn
 calibration-refit tests; without it, `test_engine_regen.py` and friends `importorskip`-skip.

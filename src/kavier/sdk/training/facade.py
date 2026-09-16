@@ -6,6 +6,7 @@ predicted columns as a DataFrame.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import pandas as pd
@@ -19,15 +20,52 @@ from kavier.sdk.inference.facade import (
     _normalise,
     _with_columns,
 )
+from kavier.sdk.library.lookup import get_gpu, get_llm
 from kavier.sdk.training.core.engine import simulate_full_training, simulate_training_step
-from kavier.sdk.units import SECONDS_PER_HOUR, WH_PER_KWH, per_mtoken
+from kavier.sdk.units import FLOPS_PER_TFLOP, SECONDS_PER_HOUR, WH_PER_KWH, per_mtoken
 
 DEFAULT_NUM_NODES = 1
+
+# Training does a forward + backward pass, ~3x the forward FLOPs, so per parameter per token it is
+# 3 x FLOPS_PER_PARAM_PER_TOKEN (=2) = 6 FLOPs — the canonical "6N" of the PaLM/Chowdhery MFU
+# definition, and exactly the multiplier the supervisors' mfu_calculator.py uses.
+_TRAINING_FLOPS_PER_PARAM_PER_TOKEN = 6.0
 
 
 def _train_params(row: dict[str, Any]) -> dict[str, Any]:
     """Default ``num_nodes`` (the only training key a batch commonly omits)."""
     return {**row, "num_nodes": row.get("num_nodes", DEFAULT_NUM_NODES)}
+
+
+def _mean_flops_utilization(model_name: str, gpu_name: str, train_tokens_per_second: float, total_gpus: int) -> float:
+    """Realized per-GPU Model FLOPs Utilization (%), backed out of the predicted throughput.
+
+    ``MFU = (6 · N_active · tokens/s) / (total_gpus · peak_flops) · 100`` — the standard hardware MFU
+    (Chowdhery et al. 2022), computed from Kavier's predicted ``train_tokens_per_second`` using the
+    catalog's active-parameter count (MoE-aware) and its fp16/bf16 tensor-core peak.
+
+    This is DISTINCT from ``gpu_compute_utilization``: that column is the raw *assumed* efficiency the
+    engine uses to *derive* throughput, whereas this is the efficiency *implied by* the resulting
+    throughput. The denominator is the SAME ``fp_16_tensor_core_tflops`` the engine derives throughput
+    against, so the two share one basis — but they are NOT ordered in general, because throughput also
+    carries the fitted calibration multipliers that ``gpu_compute_utilization`` omits. Realized MFU
+    falls BELOW assumed when comm/optimizer overhead or a method_scale < 1 dominates (e.g. full or
+    qlora fine-tuning) and rises ABOVE it when a method_scale > 1 (lora ≈ 1.11, gptq-lora ≈ 1.22)
+    outweighs the negligible LoRA overhead. Only on the uncalibrated path (which the facade never
+    exercises — ``run_training`` always calls the calibrated ``simulate_full_training``) is realized ≤
+    assumed strict.
+
+    Caveat: for Hopper (H100/H200) the catalog figure is NVIDIA's with-sparsity peak (~2× dense bf16),
+    so read Hopper MFU as a fraction of that inflated peak, not of dense bf16 — it reads ~2× lower than
+    the supervisors' ``mfu_calculator.py`` (which uses a dense peak). A100/L40S carry dense figures and
+    need no such caveat. Returns NaN if the denominator is degenerate (``total_gpus`` or peak ≤ 0).
+    """
+    peak_flops = get_gpu(gpu_name).fp_16_tensor_core_tflops * FLOPS_PER_TFLOP
+    denom = total_gpus * peak_flops
+    if denom <= 0:
+        return math.nan
+    n_active = get_llm(model_name).active_params
+    return _TRAINING_FLOPS_PER_PARAM_PER_TOKEN * n_active * train_tokens_per_second / denom * 100.0
 
 
 def run_training(p: dict[str, Any]) -> dict[str, Any]:
@@ -56,6 +94,9 @@ def run_training(p: dict[str, Any]) -> dict[str, Any]:
     )
     out: dict[str, Any] = {**full, **step, "total_gpus": total_gpus}
     out["aggregate_power_w"] = step["gpu_power_watts"] * total_gpus
+    out["mean_flops_utilization"] = _mean_flops_utilization(
+        p["model"], p["gpu"], out["train_tokens_per_second"], total_gpus
+    )
     return out
 
 
@@ -85,13 +126,15 @@ def run_carbon_from_training(p: dict[str, Any]) -> dict[str, Any]:
 
 
 def performance(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.DataFrame:
-    """Per-job throughput/util: + train_tokens_per_second, train_runtime, gpu_compute_utilization, gpu_power_watts."""
+    """Per-job throughput/util: + train_tokens_per_second, train_runtime, gpu_compute_utilization,
+    mean_flops_utilization, gpu_power_watts."""
     rows = _normalise(batch)
     cols = (
         "train_tokens_per_second",
         "train_runtime",
         "train_samples_per_second",
         "gpu_compute_utilization",
+        "mean_flops_utilization",
         "gpu_memory_utilization",
         "gpu_power_watts",
         "total_tokens",

@@ -59,3 +59,7 @@ src/reader/
 examples-local/*.csv
 /kavier_output/
 plan.md
+
+# CLI output (see README): regenerate with `kavier cluster --out ...`
+per_jobs.csv
+per_nodes.csv

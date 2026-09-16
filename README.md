@@ -2,8 +2,8 @@
 
 Simulating performance, sustainability, and efficiency of LLM Ecosystems under inference and training.
 
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-main-green.svg)](docs/content/index.md)
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.txt)
+[![Documentation](https://img.shields.io/badge/docs-main-green.svg)](docs/)
 [![CI](https://github.com/atlarge-research/kavier/actions/workflows/ci.yml/badge.svg)](https://github.com/atlarge-research/kavier/actions/workflows/ci.yml)
 
 ---
@@ -13,7 +13,7 @@ predicting performance, sustainability, and efficiency of LLM ecosystems under
 inference and training.
 
 Kavier helps operators, researchers, and engineers predict:
-* **Performance** — inference latencies, training throughput, GPU utilization
+* **Performance** — inference latencies, training throughput, GPU utilization + Model FLOPs Utilization (MFU)
 * **Sustainability** — energy consumption, carbon emissions (gCO2/Mtoken)
 * **Efficiency** — financial and energy cost per token/sample given GPU-hour prices
 
@@ -68,8 +68,12 @@ kavier inference --trace "$TRACE"
 
 `kavier cluster` is a FIFO/backfill **queuing simulator**: give it a CSV trace of jobs (arrival
 time, GPUs requested, GPU-locked duration) and a fixed cluster size, and it schedules them and
-reports per-job timings (wait, start/end, runtime, energy) plus cluster metrics (makespan,
-utilization, goodput, peak queue). A tiny example trace ships with Kavier — swap in your own:
+reports per-job timings (wait, start/end, runtime, energy, per-job `goodput`) plus cluster metrics
+(makespan, utilization, peak queue, and two goodput measures). Note the two distinct "goodput"
+numbers: `goodput_jobs_per_s` is scheduling **throughput** (jobs completed per second), while
+`scheduling_goodput` is scheduling **efficiency** — `Σ runtime_s / Σ turnaround_s`, the fraction of
+wall-clock spent actually training vs. queued (mirrors the standard `train_runtime / elapsed`
+goodput measured on real job logs). A tiny example trace ships with Kavier — swap in your own:
 
 ```bash
 # trace columns: submit_s,gpus,duration_s[,nodes,power_w_per_gpu]
@@ -181,37 +185,28 @@ A good starter task: add a GPU to the built-in spec library.
    uv run kavier inference --gpu "YourGPU" --trace src/kavier/sdk/inference/data/input/input_example.csv
    ```
 
-Finish with the full gate set above, then open a PR — see the
-[contributing guide](docs/content/contributing.md).
+Finish with the full gate set above, then open a PR.
 
 ## Documentation
 
-The documentation is a [MkDocs](https://www.mkdocs.org/) (Material) site under
-[`docs/`](docs/). Start reading at [`docs/content/index.md`](docs/content/index.md): getting
-started, the Kavier CLI (`kavier inference`, `kavier training`, `kavier energy`, `kavier carbon`)
-and the `kavier-ui` interactive UI, the per-component pages (performance, energy, CO2, efficiency,
-library), and the contributing guide.
-
-Build and serve it locally:
+The reference for the CLI is the CLI itself — every subcommand documents its own flags:
 
 ```bash
-cd docs
-pip install -r requirements.txt
-mkdocs serve            # live site on http://localhost:8000
-mkdocs build            # or emit the static site to docs/site/
+uv run kavier --help
+uv run kavier inference --help   # likewise training / cluster / energy / carbon
 ```
 
-Or with Docker (documentation only):
+Two written guides live under [`docs/`](docs/):
 
-```bash
-docker build -t kavier-docs docs/
-docker run --rm -p 8000:8000 kavier-docs
-```
+* [`docs/usage.py`](docs/usage.py) — the public Python API by example (the four predictors on both
+  the `inference` and `training` namespaces). It is a runnable script: `uv run python docs/usage.py`.
+* [`docs/cluster-usage.md`](docs/cluster-usage.md) — the cluster queuing simulator: trace columns,
+  policies, and the per-job/per-cluster metrics it reports.
 
 ## Contributing
 
 Questions, suggestions and contributions are welcome and appreciated!
-Please refer to the [contributing guide](docs/content/contributing.md) for more details.
+Open an issue or a PR; the gates in [Development](#development) are what CI enforces.
 
 ## License
 

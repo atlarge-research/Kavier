@@ -114,6 +114,16 @@ inference physics live in `kavier/sdk/io/constants.py` (`COMPUTE_EFFICIENCY`, `M
 - **Two divergent energy/carbon paths that share no code**: the self-contained facade estimate (flat
   synthetic trace) vs. the OpenDC-readback path (`kavier energy` sums an external `powerSource.parquet`).
   They can disagree for the "same" run — this is a known, documented limitation, not a bug.
+- **The two "utilization/goodput" pairs are near-homonyms — don't conflate them.** Training `performance`
+  emits both `gpu_compute_utilization` (the *assumed* physical MFU the engine feeds INTO the throughput
+  prediction) and `mean_flops_utilization` (the *realized* 6N·tok/s÷(gpus·peak) MFU backed OUT of the
+  predicted throughput). They share the catalog peak basis but are NOT ordered — a fitted `method_scale > 1`
+  (lora/gptq-lora) can push realized above assumed. Predicted MFU is self-consistent, not independently
+  validated (it circularly reflects `mfu_factor`); on Hopper it reads against NVIDIA's *with-sparsity* peak,
+  so ~2× lower than the dense-peak `mfu_calculator.py`. Separately, the cluster sim has `goodput_jobs_per_s`
+  (throughput, jobs/s) AND `scheduling_goodput` (efficiency, Σruntime÷Σturnaround ∈ [0,1], over *scheduled*
+  jobs only — dropped jobs are excluded). Predicted `scheduling_goodput` inherits the fidelity of the input
+  job durations (Coastline feeds Kavier-predicted durations into the sim).
 - **Calibration regeneration is deterministic.** `calibration/engine.py --check` (and
   `test_engine_regen.py`) rebuild the JSON from scratch (seed-42 Powell); the fit is brittle to
   profiling-CSV row order. Because adding catalog models shifts the >8-GPU mgc (see next gotcha), the

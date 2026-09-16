@@ -2,8 +2,9 @@
 
 Simulates a fixed-size GPU cluster running jobs of known duration under a scheduling policy
 (``"distributed-fcfs"``, ``"distributed-backfill"``, ``"consolidated-fcfs"``, or
-``"consolidated-backfill"``) and returns per-job metrics (wait, start/end, runtime, energy),
-per-cluster metrics (makespan, utilisation, goodput, peaks), and a GPUs-in-use / queue-depth timeline.
+``"consolidated-backfill"``) and returns per-job metrics (wait, start/end, runtime, energy, goodput),
+per-cluster metrics (makespan, utilisation, two goodput measures — ``goodput_jobs_per_s`` throughput and
+``scheduling_goodput`` efficiency — and peaks), and a GPUs-in-use / queue-depth timeline.
 The ``consolidated-*`` policies honour each job's ``nodes`` request (gang placement: exactly ``nodes``
 distinct co-located nodes); the ``distributed-*`` policies ignore it (tight-pack).
 
@@ -69,6 +70,11 @@ class JobRecord:
     def turnaround_h(self) -> float:
         return self.turnaround_s / SECONDS_PER_HOUR
 
+    @property
+    def goodput(self) -> float:
+        """Fraction of this job's wall-clock spent training: ``runtime_s / turnaround_s`` (0 if none)."""
+        return self.runtime_s / self.turnaround_s if self.turnaround_s > 0 else 0.0
+
 
 @dataclass(frozen=True)
 class ClusterMetrics:
@@ -81,7 +87,8 @@ class ClusterMetrics:
     avg_run_s: float
     avg_turnaround_s: float
     utilization: float  # GPU·s used / (capacity × makespan)
-    goodput_jobs_per_s: float
+    goodput_jobs_per_s: float  # scheduling THROUGHPUT: jobs completed per second
+    scheduling_goodput: float  # scheduling EFFICIENCY: Σ runtime_s / Σ turnaround_s (training time / wall-clock)
     total_energy_kwh: float | None
     peak_gpus: int
     peak_queue: int
@@ -343,6 +350,7 @@ def _summarise(records: list[JobRecord], capacity_gpus: int) -> tuple[ClusterMet
             avg_turnaround_s=0.0,
             utilization=0.0,
             goodput_jobs_per_s=0.0,
+            scheduling_goodput=0.0,
             total_energy_kwh=None,
             peak_gpus=0,
             peak_queue=0,
@@ -357,6 +365,11 @@ def _summarise(records: list[JobRecord], capacity_gpus: int) -> tuple[ClusterMet
     gpu_seconds = sum(r.gpus * r.runtime_s for r in records)  # area under the GPUs-in-use curve
     utilization = gpu_seconds / (capacity_gpus * makespan_s) if capacity_gpus > 0 and makespan_s > 0 else 0.0
     goodput = n / makespan_s if makespan_s > 0 else 0.0
+    # Scheduling goodput = training time / total wall-clock (incl. queue wait), aggregated over jobs.
+    # Mirrors the supervisors' overall goodput (Σ train_runtime / Σ (completed − submission_time)).
+    total_runtime_s = sum(r.runtime_s for r in records)
+    total_turnaround_s = sum(r.turnaround_s for r in records)
+    scheduling_goodput = total_runtime_s / total_turnaround_s if total_turnaround_s > 0 else 0.0
     energies = [r.energy_kwh for r in records if r.energy_kwh is not None]
     total_energy = sum(energies) if energies else None
 
@@ -383,6 +396,7 @@ def _summarise(records: list[JobRecord], capacity_gpus: int) -> tuple[ClusterMet
         avg_turnaround_s=avg_turnaround_s,
         utilization=utilization,
         goodput_jobs_per_s=goodput,
+        scheduling_goodput=scheduling_goodput,
         total_energy_kwh=total_energy,
         peak_gpus=peak_gpus,
         peak_queue=peak_queue,

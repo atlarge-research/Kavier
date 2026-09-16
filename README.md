@@ -2,8 +2,8 @@
 
 Simulating performance, sustainability, and efficiency of LLM Ecosystems under inference and training.
 
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-main-green.svg)](docs/content/index.md)
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.txt)
+[![Documentation](https://img.shields.io/badge/docs-main-green.svg)](docs/)
 [![CI](https://github.com/atlarge-research/kavier/actions/workflows/ci.yml/badge.svg)](https://github.com/atlarge-research/kavier/actions/workflows/ci.yml)
 
 ---
@@ -185,37 +185,28 @@ A good starter task: add a GPU to the built-in spec library.
    uv run kavier inference --gpu "YourGPU" --trace src/kavier/sdk/inference/data/input/input_example.csv
    ```
 
-Finish with the full gate set above, then open a PR — see the
-[contributing guide](docs/content/contributing.md).
+Finish with the full gate set above, then open a PR.
 
 ## Documentation
 
-The documentation is a [MkDocs](https://www.mkdocs.org/) (Material) site under
-[`docs/`](docs/). Start reading at [`docs/content/index.md`](docs/content/index.md): getting
-started, the Kavier CLI (`kavier inference`, `kavier training`, `kavier energy`, `kavier carbon`)
-and the `kavier-ui` interactive UI, the per-component pages (performance, energy, CO2, efficiency,
-library), and the contributing guide.
-
-Build and serve it locally:
+The reference for the CLI is the CLI itself — every subcommand documents its own flags:
 
 ```bash
-cd docs
-pip install -r requirements.txt
-mkdocs serve            # live site on http://localhost:8000
-mkdocs build            # or emit the static site to docs/site/
+uv run kavier --help
+uv run kavier inference --help   # likewise training / cluster / energy / carbon
 ```
 
-Or with Docker (documentation only):
+Two written guides live under [`docs/`](docs/):
 
-```bash
-docker build -t kavier-docs docs/
-docker run --rm -p 8000:8000 kavier-docs
-```
+* [`docs/usage.py`](docs/usage.py) — the public Python API by example (the four predictors on both
+  the `inference` and `training` namespaces). It is a runnable script: `uv run python docs/usage.py`.
+* [`docs/cluster-usage.md`](docs/cluster-usage.md) — the cluster queuing simulator: trace columns,
+  policies, and the per-job/per-cluster metrics it reports.
 
 ## Contributing
 
 Questions, suggestions and contributions are welcome and appreciated!
-Please refer to the [contributing guide](docs/content/contributing.md) for more details.
+Open an issue or a PR; the gates in [Development](#development) are what CI enforces.
 
 ## License
 

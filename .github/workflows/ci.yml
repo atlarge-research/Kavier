@@ -49,9 +49,16 @@ jobs:
 
   test:
     needs: lint
-    runs-on: ubuntu-latest
+    # Kavier is POSIX-only (the UI drives the terminal via termios), and macOS is the other half of
+    # that promise — it is what the authors develop on, so it is what CI has to keep working.
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write  # tokenless (OIDC) Codecov upload — see the upload step below
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest]
         python-version: ["3.13", "3.14"]
 
     steps:
@@ -84,12 +91,23 @@ jobs:
           uv run python -m kavier --help
           uv run python -m kavier.cli --help
           uv run python -m kavier.ui < /dev/null
-          # UI is POSIX-only (termios); import must work on Linux. The REPL detects the
-          # non-TTY stdin and exits cleanly.
+          # UI is POSIX-only (termios); import must work on both POSIX runners. The REPL detects
+          # the non-TTY stdin and exits cleanly.
           uv run python -c "import kavier.ui.app"
 
-      - name: Run pytest
-        run: uv run pytest
+      - name: Run pytest (with coverage)
+        run: uv run pytest --cov --cov-report=xml
+
+      # Tokenless upload via OIDC (needs the job's `id-token: write` above), so no CODECOV_TOKEN
+      # secret is required for pushes from this repo. Coverage is a signal, not a gate: a Codecov
+      # outage or a fork PR (no OIDC) must never fail an otherwise-green run.
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          files: coverage.xml
+          flags: ${{ matrix.os }}-py${{ matrix.python-version }}
+          fail_ci_if_error: false
 
   # Test what we actually ship: build the wheel, install it into a fresh venv
   # (no repo on the path), and smoke every console script + packaged data (issue #12).

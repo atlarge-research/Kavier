@@ -77,6 +77,7 @@ plot = ["matplotlib>=3.5"]
 [dependency-groups]
 dev = [
     "pytest>=8.2",
+    "pytest-cov>=5.0",
     "hypothesis>=6.102",
     "ruff==0.15.15",
     "mypy>=1.10",
@@ -112,6 +113,15 @@ ignore = []
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+# Coverage is opt-in: plain `uv run pytest` stays fast, and `--cov` (what CI passes) picks the
+# settings up from here. `source` is the installed package, so the src/ layout is measured whether
+# tests import it from the checkout or from the venv.
+[tool.coverage.run]
+source = ["kavier"]
+
+[tool.coverage.report]
+show_missing = true
 
 [tool.mypy]
 python_version = "3.13"

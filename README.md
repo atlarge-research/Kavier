@@ -153,6 +153,9 @@ uv run mypy --strict --follow-imports=skip \
   src/kavier/sdk/training/core/engine.py
 ```
 
+Run `uv run pre-commit install` once per clone and the ruff gates (plus whitespace hygiene) run on
+every commit; CI runs the same hooks with `uv run pre-commit run --all-files`.
+
 Add the `calibration` extra (`uv sync --extra calibration`) to run the scipy/scikit-learn
 calibration-refit tests; without it, `test_engine_regen.py` and friends `importorskip`-skip.
 

@@ -80,6 +80,8 @@ dev = [
     "pytest-cov>=5.0",
     "hypothesis>=6.102",
     "ruff==0.15.15",
+    # Keep the ruff rev in .pre-commit-config.yaml pinned to the ruff version above.
+    "pre-commit>=4.0",
     "mypy>=1.10",
     "pandas-stubs>=2.2",
     "types-tqdm",

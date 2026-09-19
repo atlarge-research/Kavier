@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "kavier"
-version = "0.5.1"
+version = "0.5.2"
 description = "Kavier: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference and Training"
 readme = "README.md"
 license = "MIT"
@@ -13,7 +13,7 @@ authors = [
     { name = "Radu Nicolae" },
     { name = "AtLarge Research", email = "info@atlarge-research.com" },
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.9",
     "pandas>=2.2.3",
@@ -44,6 +44,8 @@ classifiers = [
     # The interactive `kavier-ui` REPL drives the terminal via termios/tty (kavier.ui.prompts),
     # so the distribution is POSIX-only; the one-shot `kavier` CLI is what Windows users would miss.
     "Operating System :: POSIX",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Intended Audience :: Science/Research",
@@ -106,7 +108,7 @@ source-exclude = ["**/data/output/**"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py313"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
@@ -126,7 +128,7 @@ source = ["kavier"]
 show_missing = true
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.11"
 strict = true
 mypy_path = "src"
 # Strict-clean packages (the full tree is gated incrementally — see .github/workflows/ci.yml).

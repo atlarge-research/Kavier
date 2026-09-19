@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-19
+
 ### Added
 
 - Test matrix now covers **macOS** as well as Linux (`ubuntu-latest`, `macos-latest` × Python 3.13,
@@ -33,6 +35,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The release workflow now triggers on **plain semver tags only**
   (`v[0-9]+.[0-9]+.[0-9]+`). The previous `v*.*.*` glob also matched suffixed marker tags, so a
   freeze tag such as `v0.5.1-thesis` would have started a real publish run.
+- **`requires-python` lowered to `>=3.11`** (was `>=3.13`), with matching `ruff`
+  `target-version = "py311"` and `mypy` `python_version = "3.11"`. No source change was needed —
+  the tree already parsed under the 3.11 grammar and uses no 3.12+ stdlib — and the full test
+  suite passes on 3.11. This lets Kavier be consumed by projects on older interpreters, notably
+  IBM's `ado` (whose venv is Python 3.11) via the COASTLINE experiment plugin.
+
+  `src/` is byte-identical to the `v0.5.1-thesis` freeze, so 0.5.2 is behaviourally the thesis
+  code: the tag remains the archival marker for the reproducibility capsule.
 
 ### Fixed
 

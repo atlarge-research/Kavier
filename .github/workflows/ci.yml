@@ -1,13 +1,18 @@
 name: CI
 
+# Pull requests only: a plain push (any branch or tag) runs nothing. Release tags still pass the
+# full suite through release.yml's gate; workflow_dispatch runs it by hand on any branch.
 on:
-  push:
   pull_request:
+  workflow_dispatch:
   workflow_call:  # reused by release.yml as the pre-publish gate
 
+# Every job is capped at 10 min (normal runs take under 6). GitHub's default is 360: on 2026-09-16 a
+# hung macOS test job ran the full 6 h.
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -62,16 +67,17 @@ jobs:
 
   test:
     needs: lint
-    # Kavier is POSIX-only (the UI drives the terminal via termios), and macOS is the other half of
-    # that promise — it is what the authors develop on, so it is what CI has to keep working.
+    # Linux only. Kavier is POSIX-only (the UI drives the terminal via termios); macOS is covered by
+    # local development — it is what the authors work on — not by CI, where its minutes cost ~10x.
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     permissions:
       contents: read
       id-token: write  # tokenless (OIDC) Codecov upload — see the upload step below
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
         python-version: ["3.13", "3.14"]
 
     steps:
@@ -104,8 +110,8 @@ jobs:
           uv run python -m kavier --help
           uv run python -m kavier.cli --help
           uv run python -m kavier.ui < /dev/null
-          # UI is POSIX-only (termios); import must work on both POSIX runners. The REPL detects
-          # the non-TTY stdin and exits cleanly.
+          # UI is POSIX-only (termios); the import must work on the runner. The REPL detects the
+          # non-TTY stdin and exits cleanly.
           uv run python -c "import kavier.ui.app"
 
       - name: Run pytest (with coverage)
@@ -127,6 +133,7 @@ jobs:
   wheel-smoke:
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -165,6 +172,7 @@ jobs:
   docker-build:
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       matrix:
         target: [cli, ui]

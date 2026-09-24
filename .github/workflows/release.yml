@@ -25,6 +25,7 @@ jobs:
   # Fail fast if the tag and the source of truth disagree, so a mislabelled artifact can never ship.
   guard:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: Tag must equal pyproject.toml version
@@ -49,6 +50,7 @@ jobs:
   build:
     needs: gates
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -62,6 +64,7 @@ jobs:
   pypi:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Trusted Publishing (OIDC): no API token. Configure a PyPI Trusted Publisher for this repo with
     # workflow file `release.yml` (and no environment).
     permissions:
@@ -84,6 +87,7 @@ jobs:
   docker:
     needs: gates
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       packages: write
     strategy:
@@ -117,6 +121,7 @@ jobs:
   github-release:
     needs: [pypi, docker]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:

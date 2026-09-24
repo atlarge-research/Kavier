@@ -121,7 +121,7 @@ jobs:
       # secret is required for pushes from this repo. Coverage is a signal, not a gate: a Codecov
       # outage or a fork PR (no OIDC) must never fail an otherwise-green run.
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           use_oidc: true
           files: coverage.xml
@@ -179,10 +179,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build ${{ matrix.target }} image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           target: ${{ matrix.target }}

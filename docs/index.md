@@ -32,6 +32,7 @@ kavier --help
   author = {Nicolae, Radu and Lotito, Daniele and Trivedi, Animesh and Donkervliet, Jesse and Iosup, Alexandru},
   title  = {Kavier: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference and Training},
   year   = {2026},
+  doi    = {10.5281/zenodo.23110996},
   url    = {https://github.com/atlarge-research/Kavier}
 }
 ```

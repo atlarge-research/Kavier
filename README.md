@@ -4,6 +4,7 @@ Simulating the performance, sustainability, and efficiency of LLM ecosystems und
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/atlarge-research/Kavier/blob/master/LICENSE.txt)
 [![Documentation](https://img.shields.io/badge/docs-site-green.svg)](https://atlarge-research.github.io/Kavier/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23110996.svg)](https://doi.org/10.5281/zenodo.23110996)
 
 Kavier is a physics-driven simulator. It predicts inference latency, training throughput, GPU utilization
 and MFU, energy, carbon emissions, and cost per token or sample.

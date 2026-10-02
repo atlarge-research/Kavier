@@ -8,6 +8,7 @@ from typing import Any, Iterable, List
 
 import pandas as pd
 
+from kavier.sdk.io.parquet import read_parquet
 from kavier.sdk.units import G_PER_KG, WS_PER_KWH
 
 # Column names of a carbon-intensity trace frame; shared by the CarbonTrace validator and the
@@ -93,7 +94,7 @@ class EmissionResult:
 
 def load_carbon_trace(path: str, step_minutes: int | None = None) -> CarbonTrace:
     """Load a carbon-intensity parquet into a CarbonTrace; ``step_minutes`` overrides the inferred step."""
-    df = pd.read_parquet(path)
+    df = read_parquet(path)
     step = dt.timedelta(minutes=step_minutes) if step_minutes else None
     return CarbonTrace.from_dataframe(df, step=step)
 

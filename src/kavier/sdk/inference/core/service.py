@@ -5,13 +5,13 @@ import os
 import time
 
 import numpy as np
-import pandas as pd
 
 from kavier.sdk.inference.core.config import SimConfig
 from kavier.sdk.inference.core.engine import simulate
 from kavier.sdk.io.input_spec import InputSpec
 from kavier.sdk.io.log import log
 from kavier.sdk.io.opendc.adapter import output_kavier_specs, prepare_opendc_input
+from kavier.sdk.io.parquet import read_parquet
 from kavier.sdk.io.stream_writer import StreamingParquetWriter
 from kavier.sdk.library.lookup import get_gpu, get_llm
 
@@ -51,8 +51,8 @@ def run_performance(args) -> str:
         frags_sw.close()
 
     prepare_opendc_input(
-        pd.read_parquet(f"{out_dir}/tasks.parquet"),
-        pd.read_parquet(f"{out_dir}/fragments.parquet"),
+        read_parquet(f"{out_dir}/tasks.parquet"),
+        read_parquet(f"{out_dir}/fragments.parquet"),
         out_dir,
     )
     output_kavier_specs(out_dir, results)

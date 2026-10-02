@@ -12,6 +12,7 @@ from kavier.cli._args import add_training_job_args
 from kavier.cli._shared import FriendlyParser, apply_config
 from kavier.sdk.co2.engine import EmissionResult, Fragment, compute_emissions, load_carbon_trace
 from kavier.sdk.co2.fragments import fragments_from_powersource, fragments_from_training
+from kavier.sdk.io.parquet import read_parquet
 from kavier.sdk.library.lookup import UnknownSpecError
 
 _EXAMPLE_CMD = (
@@ -106,7 +107,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     trace = load_carbon_trace(args.carbon_trace, step_minutes=args.carbon_step_minutes)
 
     if args.powersource:
-        ps = pd.read_parquet(args.powersource)
+        ps = read_parquet(args.powersource)
         fragments = fragments_from_powersource(ps)
     else:
         try:

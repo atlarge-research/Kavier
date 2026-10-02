@@ -7,9 +7,8 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-import pandas as pd
-
 from kavier.sdk.energy.metrics import efficiency_summary
+from kavier.sdk.io.parquet import read_parquet
 
 
 def add_efficiency_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
@@ -39,8 +38,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     if not opendc_output_path.exists():
         raise FileNotFoundError(opendc_output_path)
 
-    kavier_performance_df = pd.read_parquet(kavier_performance_path)
-    opendc_output_df = pd.read_parquet(opendc_output_path)
+    kavier_performance_df = read_parquet(kavier_performance_path)
+    opendc_output_df = read_parquet(opendc_output_path)
 
     if "total_tokens" not in kavier_performance_df.columns:
         raise ValueError(

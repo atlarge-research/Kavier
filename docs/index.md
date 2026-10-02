@@ -42,5 +42,6 @@ The metadata is in [`CITATION.cff`](https://github.com/atlarge-research/Kavier/b
 [^bsc]: R. Nicolae, A. Iosup, A. Trivedi, J. Donkervliet. *Kavier: Exploring Performance, Sustainability, and
     Efficiency of LLM Ecosystems under Inference through Cache-Aware Discrete-Event Simulation.* BSc thesis,
     Vrije Universiteit Amsterdam, 2025. [PDF](https://atlarge-research.com/pdfs/2025-15-07_bsc_thesis_radu_nicolae.pdf)
-[^msc]: R. Nicolae, D. Lotito, A. Iosup. *Infrastructure recommenders for large-scale fine-tuning workloads.* MSc thesis,
-    Vrije Universiteit Amsterdam, 2026.
+[^msc]: R. Nicolae, D. Lotito, A. Iosup. *Coastline: Exploring the impact of multi-objective, context-aware recommenders
+    on performance and sustainability of datacenters under LLM fine-tuning workloads.* MSc thesis, Vrije Universiteit
+    Amsterdam, 2026.

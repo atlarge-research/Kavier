@@ -1,13 +1,9 @@
 """End-to-end tests for the ``kavier carbon`` CLI (kavier.cli.carbon.main).
 
-Oracle strategy: the trace intensity is held constant at 150 gCO2/kWh, so the
-energy-weighted average intensity the CLI reports MUST be exactly 150 and the
-billed CO2 MUST equal energy * 150 -- both independent of the (complex) training
-engine that produces the energy figure. Where an absolute energy number is
-needed, the oracle is either hand-derived (powerSource mode) or the SDK layer
-(``fragments_from_training`` + ``compute_emissions``) invoked with explicitly
-typed params, which cross-checks that ``main`` forwards its parsed flags
-correctly and formats the totals it gets back.
+The trace intensity is constant at 150 gCO2/kWh, so the reported average intensity is 150 and
+CO2 = energy * 150 whatever energy the training engine returns. Absolute energy is checked by hand
+(powerSource mode) or against ``fragments_from_training`` + ``compute_emissions`` called with typed
+params, which checks that ``main`` forwards its flags and formats the totals.
 """
 
 from __future__ import annotations
@@ -23,8 +19,7 @@ from kavier.sdk.co2.fragments import fragments_from_training
 
 INTENSITY = 150.0  # constant gCO2/kWh over the whole synthetic trace
 
-# One canonical from-training workload, shared by the CLI (as argv strings) and
-# the SDK oracle (as typed kwargs) so a wiring bug in main() shows up as a mismatch.
+# Shared by the CLI (argv strings) and the SDK reference (typed kwargs); a wiring bug in main() shows as a mismatch.
 TRAIN_PARAMS = {
     "model_name": "mistral-7b-v0.1",
     "method": "lora",
@@ -73,21 +68,18 @@ def test_cli_from_training_bills_at_constant_trace_intensity(small_trace, capsys
     main(_train_argv(small_trace))
     totals = _parse_totals(capsys.readouterr().out)
 
-    # Hand oracle: a constant-intensity trace forces the energy-weighted mean to
-    # equal that intensity, whatever the training engine reports for energy.
+    # A constant trace makes the energy-weighted mean equal that intensity.
     assert totals["avg_intensity"] == INTENSITY
-    # CO2 (g) must be energy (kWh) * 150; abs tol covers the 2-decimal display rounding of CO2.
+    # abs tol covers the 2-decimal display rounding of CO2.
     assert totals["co2_g"] == pytest.approx(totals["energy_kwh"] * INTENSITY, abs=1e-2)
 
 
 def test_cli_from_training_forwards_args_to_sdk(small_trace, capsys):
-    """main() forwards its flags unmangled: CLI totals match a direct SDK computation with the same params."""
+    """CLI totals match a direct SDK computation with the same params."""
     main(_train_argv(small_trace))
     totals = _parse_totals(capsys.readouterr().out)
 
-    # Independent oracle: the SDK layer (different module from the CLI) run with
-    # explicitly typed params. A mis-forwarded flag (e.g. swapping batch_size and
-    # tokens_per_sample) would change the energy and break this cross-check.
+    # A mis-forwarded flag (e.g. batch_size swapped with tokens_per_sample) changes the energy.
     frags = fragments_from_training(
         model_name=TRAIN_PARAMS["model_name"],
         method=TRAIN_PARAMS["method"],
@@ -104,15 +96,16 @@ def test_cli_from_training_forwards_args_to_sdk(small_trace, capsys):
     # Printed energy is rounded to 4 decimals, CO2 to 2 decimals.
     assert totals["energy_kwh"] == pytest.approx(expected.total_energy_kwh, abs=1e-4)
     assert totals["co2_g"] == pytest.approx(expected.total_co2_g, abs=1e-2)
-    # Sanity: the training run consumed real, positive energy (guards a zero SDK stub).
+    # Guards against a zero-energy SDK stub.
     assert expected.total_energy_kwh > 0
 
 
 def test_cli_powersource_hand_derived_totals(small_trace, tmp_path, capsys):
     """powerSource mode: 3 windows of 3.6e6 Ws each => 3 kWh total, 450 g CO2 at 150 gCO2/kWh."""
+    # Each row covers the 30 minutes before its timestamp, so the first window starts at the trace start.
     ps = pd.DataFrame(
         {
-            "timestamp": pd.to_datetime(["2025-06-01 00:00", "2025-06-01 00:30", "2025-06-01 01:00"]),
+            "timestamp": pd.to_datetime(["2025-06-01 00:30", "2025-06-01 01:00", "2025-06-01 01:30"]),
             "energy_usage": [3.6e6, 3.6e6, 3.6e6],  # watt-seconds
         }
     )
@@ -122,8 +115,7 @@ def test_cli_powersource_hand_derived_totals(small_trace, tmp_path, capsys):
     main(["--powersource", str(ps_path), "--carbon_trace", small_trace])
     totals = _parse_totals(capsys.readouterr().out)
 
-    # Hand oracle: 3.6e6 Ws / 3.6e6 (Ws per kWh) = 1 kWh per window * 3 = 3 kWh;
-    # 3 kWh * 150 gCO2/kWh = 450 g.
+    # 3.6e6 Ws / 3.6e6 Ws/kWh = 1 kWh per window, x 3 = 3 kWh; 3 kWh * 150 gCO2/kWh = 450 g.
     assert totals["energy_kwh"] == pytest.approx(3.0, abs=1e-4)
     assert totals["co2_g"] == pytest.approx(450.0, abs=1e-2)
     assert totals["avg_intensity"] == INTENSITY
@@ -139,17 +131,16 @@ def test_cli_output_csv_breakdown_tiles_to_total(small_trace, tmp_path, capsys):
     bd = pd.read_csv(csv_path)
     assert {"window_start", "carbon_intensity", "energy_kwh", "co2_g"} <= set(bd.columns)
     assert len(bd) >= 1
-    # Independent oracle: constant trace => every billed window intensity is 150.
+    # Constant trace: every billed window intensity is 150.
     assert (bd["carbon_intensity"] == INTENSITY).all()
-    # The breakdown must tile the whole run: per-window energy/CO2 sum to the printed totals.
+    # Per-window energy and CO2 sum to the printed totals.
     assert bd["energy_kwh"].sum() == pytest.approx(totals["energy_kwh"], abs=1e-4)
     assert bd["co2_g"].sum() == pytest.approx(totals["co2_g"], abs=1e-2)
 
 
 def test_cli_start_before_trace_coverage_exits_2(small_trace, capsys):
-    """A start_time outside the trace window is rejected via a non-zero exit, not silently billed."""
+    """A start_time outside the trace window exits with code 2."""
     with pytest.raises(SystemExit) as exc:
-        # 2020 is years before the trace's 2025 coverage.
         main(_train_argv(small_trace, start_time="2020-01-01 00:00"))
     assert exc.value.code == 2
     err = capsys.readouterr().err.lower()
@@ -161,8 +152,17 @@ def test_cli_unknown_model_exits_2(small_trace, capsys):
     with pytest.raises(SystemExit) as exc:
         main(_train_argv(small_trace, model_name="NoSuchModel-999"))
     assert exc.value.code == 2
-    # Falsifies removal of the except-UnknownSpecError branch (a bare KeyError would propagate instead).
+    # Without the except-UnknownSpecError branch a bare KeyError would propagate.
     assert "unknown model" in capsys.readouterr().err.lower()
+
+
+def test_cli_powersource_without_energy_column_exits_2(small_trace, tmp_path, capsys):
+    ps_path = tmp_path / "powerSource.parquet"
+    pd.DataFrame({"timestamp": [0, 300_000]}).to_parquet(ps_path)
+    with pytest.raises(SystemExit) as exc:
+        main(["--powersource", str(ps_path), "--carbon_trace", small_trace])
+    assert exc.value.code == 2
+    assert "energy_usage" in capsys.readouterr().err
 
 
 def test_cli_from_training_requires_start_time(small_trace, capsys):

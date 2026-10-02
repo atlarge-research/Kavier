@@ -132,7 +132,7 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=8.1e9,
     ),
-    # controlled-benchmark models from a build trace, real-trace cluster run, calibrated on own profiling-dataset rows.
+    # Controlled-benchmark models (build trace, real-trace cluster run); calibrated on their profiling-dataset rows.
     # granite-3.1-8b shares granite-3.0-8b architecture (HF config).
     "granite-3.1-8b-instruct": LLMSpec(
         llm_name="granite-3.1-8b-instruct",
@@ -153,12 +153,9 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=2.53e9,
     ),
-    # ------------------------------------------------------------------
-    # Profiling-dataset coverage: architecture specs for the remaining
-    # calibratable models. Keys match raw_trace.csv model_name exactly.
+    # Remaining calibratable models in the profiling dataset. Keys match raw_trace.csv model_name exactly.
     # Sources are the HuggingFace config.json unless noted.
-    # ------------------------------------------------------------------
-    # Llama family (dense; textbook Meta configs).
+    # Llama family (dense; Meta configs).
     "llama-7b": LLMSpec(  # LLaMA-1 7B
         llm_name="llama-7b",
         n_layers=32,
@@ -204,7 +201,7 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=70e9,
     ),
-    "llama3.1-8b": LLMSpec(  # Llama-3.1-8B (same body as Llama-3-8B)
+    "llama3.1-8b": LLMSpec(  # Llama-3.1-8B (same architecture as Llama-3-8B)
         llm_name="llama3.1-8b",
         n_layers=32,
         n_heads=32,
@@ -232,7 +229,7 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=123e9,
     ),
-    # ALLaM (SDAIA/IBM) — initialised from Llama-2-13B weights (per IBM model card).
+    # ALLaM (SDAIA/IBM): initialised from Llama-2-13B weights (IBM model card).
     "allam-1-13b": LLMSpec(
         llm_name="allam-1-13b",
         n_layers=40,
@@ -242,8 +239,8 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=13e9,
     ),
-    # IBM Granite first-gen (GPTBigCode / multi-query attention). NEEDS-VERIFICATION:
-    # gated HF repos; dims from the Granite Foundation Models technical report.
+    # IBM Granite first generation (GPTBigCode, multi-query attention). Unverified: gated HF repos;
+    # dims from the Granite Foundation Models technical report.
     "granite-13b-v2": LLMSpec(
         llm_name="granite-13b-v2",
         n_layers=40,
@@ -253,7 +250,7 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=13e9,
     ),
-    # granite-20b-v2: same 20B architecture as the shipped "Granite-20B" entry.
+    # granite-20b-v2: same 20B architecture as the "Granite-20B" entry.
     "granite-20b-v2": LLMSpec(
         llm_name="granite-20b-v2",
         n_layers=52,
@@ -273,7 +270,7 @@ LLM_SPEC_LIBRARY = {
         p_bytes=2,
         m_params=6.7e9,
     ),
-    # granite-8b-japanese: 8B Llama-2-style dense. NEEDS-VERIFICATION (gated HF repo).
+    # granite-8b-japanese: 8B Llama-2-style dense. Unverified (gated HF repo).
     "granite-8b-japanese": LLMSpec(
         llm_name="granite-8b-japanese",
         n_layers=36,

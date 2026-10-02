@@ -1,10 +1,8 @@
-"""Training-model accuracy layer: Median Absolute Percentage Error vs measured hardware.
+"""Training-model accuracy: median absolute percentage error (MdAPE) against measured hardware.
 
-The engine (``simulate_full_training``) is validated against an *independent* oracle -- real
-measured training throughput recorded in the (unvendored) internal validation CSV. The MdAPE
-metric that turns those two series into a single accuracy number is load-bearing for the 12%
-contract, so it is extracted here and unit-tested with hand-derived oracles that always run,
-even on a clean checkout where the validation CSV is absent and the accuracy test skips.
+``simulate_full_training`` is compared with measured training throughput from the unvendored internal
+validation CSV. The MdAPE helper behind the 12% threshold is unit-tested on hand-computed inputs, so
+those tests run on a clean checkout where the CSV is absent and the accuracy test skips.
 """
 
 from __future__ import annotations
@@ -24,24 +22,22 @@ from .conftest import simulatable_mask, throughput_column
 # The (unvendored) internal validation CSV, if present, ships under the training package's data dir.
 VALIDATION_CSV = Path(str(files("kavier.sdk.training").joinpath("data", "input", "validation_clean.csv")))
 
-# Published accuracy ceiling for the calibrated training model (docs/content/known-weaknesses.md).
+# Published accuracy ceiling for the calibrated training model [%].
 MDAPE_THRESHOLD_PCT = 12.0
 MIN_SAMPLES = 100
 
 
 def _median_ape_pct(predictions: Sequence[float], actuals: Sequence[float]) -> tuple[float, int]:
-    """Median absolute percentage error (in %) over pairs where both values are strictly positive.
+    """Return the median absolute percentage error [%] over pairs where both values are positive.
 
-    Returns ``(mdape_pct, n_valid)``. Non-positive predictions/actuals are dropped (a <=0 measured
-    throughput is a bad data row; a <=0 prediction is a degenerate engine output that must not
-    silently define an APE of 0).
+    Returns ``(mdape_pct, n_valid)``. A measured throughput <= 0 is a bad data row; a prediction <= 0
+    is a degenerate engine output. Both are dropped.
     """
     apes = [abs(p - a) / a * 100.0 for p, a in zip(predictions, actuals, strict=True) if a > 0 and p > 0]
     return float(np.median(apes)), len(apes)
 
 
 def test_median_ape_matches_hand_computed_percentages() -> None:
-    # preds/actuals chosen so APEs are trivial to derive by hand:
     #   |150-100|/100*100 = 50 ; |90-100|/100*100 = 10 ; |100-100|/100*100 = 0
     # sorted -> [0, 10, 50]; the median of 3 values is the middle element -> 10.0
     mdape, n = _median_ape_pct([150.0, 90.0, 100.0], [100.0, 100.0, 100.0])
@@ -49,9 +45,8 @@ def test_median_ape_matches_hand_computed_percentages() -> None:
 
 
 def test_median_ape_averages_the_two_middle_values() -> None:
-    # Even count pins that we use a true median (mean of the two middle), not sorted[n//2].
-    #   APEs: 10, 20, 30, 40 -> sorted middle pair (20, 30) -> mean 25.0
-    # A sorted[n//2] implementation would return 30.0 and fail here.
+    # Even count: the median is the mean of the middle pair.
+    #   APEs: 10, 20, 30, 40 -> middle pair (20, 30) -> 25.0; sorted[n//2] would give 30.0.
     mdape, n = _median_ape_pct([110.0, 120.0, 130.0, 140.0], [100.0, 100.0, 100.0, 100.0])
     assert (mdape, n) == (25.0, 4)
 
@@ -59,17 +54,16 @@ def test_median_ape_averages_the_two_middle_values() -> None:
 def test_median_ape_drops_nonpositive_rows() -> None:
     # Only the first pair is valid: (5, 0) drops on actual<=0, (-3, 50) drops on pred<=0,
     # (100, -10) drops on actual<=0. Remaining APE = |150-100|/100*100 = 50 ; n = 1.
-    # If the filter were removed, (5, 0) would divide by zero -> inf and blow up the median.
+    # Without the filter (5, 0) would divide by zero.
     mdape, n = _median_ape_pct([150.0, 5.0, -3.0, 100.0], [100.0, 0.0, 50.0, -10.0])
     assert (mdape, n) == (50.0, 1)
 
 
 @pytest.mark.skipif(not VALIDATION_CSV.exists(), reason="validation_clean.csv not present")
 def test_mdape_on_validation_clean() -> None:
-    # Oracle: measured training throughput from real hardware runs (independent of the engine).
-    # Contract: the calibrated engine predicts within MDAPE_THRESHOLD_PCT of measured on the
-    # supported model/GPU set. A `return <constant>` engine, or a unit/scaling regression (e.g.
-    # the /1e9 vs /1e12 FLOPs base), pushes the median APE far past 12% -> red.
+    # Measured throughput from real hardware runs. The calibrated engine must predict within
+    # MDAPE_THRESHOLD_PCT on the supported model/GPU set; a constant engine or a unit error such as
+    # /1e9 vs /1e12 for the FLOPs base pushes the MdAPE well past 12%.
     df = pd.read_csv(VALIDATION_CSV)
     sim = df.loc[simulatable_mask(df)].copy()
     assert len(sim) >= MIN_SAMPLES, f"need >={MIN_SAMPLES} simulatable rows, got {len(sim)}"
@@ -92,8 +86,8 @@ def test_mdape_on_validation_clean() -> None:
         actuals.append(float(getattr(row, tcol)))
 
     mdape, n = _median_ape_pct(preds, actuals)
-    # Guard the accuracy claim: a regression that zeroes/NaNs half the predictions would silently
-    # shrink the sample instead of raising the error, so require enough valid pairs to survive.
+    # Zero or NaN predictions are dropped and would shrink the sample without raising the error,
+    # so require enough valid pairs.
     assert n >= MIN_SAMPLES, f"too few valid predictions: {n}"
     assert mdape <= MDAPE_THRESHOLD_PCT, (
         f"MdAPE {mdape:.2f}% exceeds threshold {MDAPE_THRESHOLD_PCT}% (n={n} rows from validation_clean.csv)"

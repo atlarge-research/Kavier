@@ -1,10 +1,8 @@
 """Kavier: predict performance, sustainability, and efficiency of LLM ecosystems.
 
-Public API is lazily loaded (PEP 562 ``__getattr__``) so a bare ``import kavier`` stays cheap and
-stdlib-light: the batch-predictor verbs ``kavier.inference`` / ``kavier.training``, the cluster
-simulator ``kavier.cluster``, the ``GPU_SPEC_LIBRARY`` / ``LLM_SPEC_LIBRARY`` catalogues, and the
-low-level training engine all resolve on first access. The engines themselves live under
-``kavier.sdk``; the two verb packages are thin facades over them.
+The public names (``inference``, ``training``, ``cluster``, the GPU and LLM spec libraries, and the
+training engine functions) load on first access via PEP 562 ``__getattr__``. The engines live under
+``kavier.sdk``.
 """
 
 from __future__ import annotations
@@ -15,7 +13,7 @@ from typing import TYPE_CHECKING
 from kavier._lazy import lazy_getattr
 from kavier.sdk.domain import Domain
 
-if TYPE_CHECKING:  # type-checkers only; never imported at runtime
+if TYPE_CHECKING:
     from kavier.sdk import cluster as cluster
     from kavier.sdk import inference as inference
     from kavier.sdk import training as training
@@ -34,12 +32,8 @@ __all__ = [
     "simulate_training_step",
 ]
 
-# Lazy attribute access (PEP 562): importing ``kavier`` must not pull in pandas/numpy or any engine,
-# and must preserve the stdlib-only import contract of ``kavier.sdk.training.calibration`` (a bare
-# ``import kavier.sdk.training.calibration`` executes this module first). Heavy names resolve only on
-# first access. ``kavier.inference`` / ``kavier.training`` / ``kavier.cluster`` are convenience aliases
-# for the sdk packages (``kavier.sdk.X``), where the actual functionality lives — see ``kavier._lazy``.
-# Targets are submodule paths relative to this ``kavier`` package.
+# Keep this module free of pandas/numpy: ``import kavier.sdk.training.calibration`` runs it first
+# and must stay stdlib-only. Targets are submodule paths relative to ``kavier``.
 _LAZY_ALIASES = {
     "cluster": "sdk.cluster",
     Domain.INFERENCE: "sdk.inference",
@@ -59,8 +53,8 @@ def __dir__() -> list[str]:
     return sorted([*__all__, "__version__"])
 
 
-# Version from installed dist metadata; pyproject's static ``version`` is the single source of truth.
+# Read from the installed dist metadata, which comes from the static version in pyproject.toml.
 try:
     __version__ = version("kavier")
-except PackageNotFoundError:  # editable/source tree without dist metadata
+except PackageNotFoundError:  # source tree without dist metadata
     __version__ = "0.0.0+unknown"

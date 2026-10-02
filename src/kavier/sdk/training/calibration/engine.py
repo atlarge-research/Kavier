@@ -1,35 +1,34 @@
 #!/usr/bin/env python
-"""The calibration engine: ONE file with all the dev-only fitting logic for calibration.json.
+"""Fit the calibration tables (calibration.json and versions/) from measured runs. Dev-only.
 
-Kavier predicts training speed from physics; calibration is a small set of correction factors,
-learned from measured runs, that pull those predictions closer to reality (physics-only ~16% off,
-calibrated ~10%). This module rebuilds them from scratch from the data, carrying nothing from any
-previous calibration. The runtime accessor lives in __init__.py; the fitted tables live in
-calibration.json (the default) and versions/; everything that produces them is here.
+Kavier predicts training speed from physics. Calibration is a small set of correction factors,
+learned from measured runs, that bring those predictions closer to measurements (physics-only ~16%
+error, calibrated ~10%). This module rebuilds them from the data and carries nothing over from a
+previous calibration. The runtime accessor is in __init__.py.
 
-The from-scratch table is fit from two inputs only:
-  1. raw (uncalibrated) kavier   -- the physics, with every correction reset to a neutral 1.0
-  2. the measured profiling runs -- trace-archive/profiling-dataset/profiling_trace.csv
+The fit has two inputs:
+  1. raw (uncalibrated) kavier: the physics, with every correction set to a neutral 1.0
+  2. the measured profiling runs: trace-archive/profiling-dataset/profiling_trace.csv
 
-How it works -- two layers (see ``regenerate``):
-  - Tier-1 (global scales) = Powell minimization (derivative-free, not gradient) in log-space,
-    minimizing median-APE + an L2 pull toward neutral, lambda chosen on validation.
-  - Tier-2 (per-config) = median of measured/predicted ratios.
-  (>8-GPU mgc 32/128: same median-ratio on the multi-node trace; 16/64: log2 geomean. The
-   held-out 15% test split is never fit -- it only reports accuracy.)
+Two tiers (see ``regenerate``):
+  - Tier 1 (global scales): Powell minimization in log-space (derivative-free) of median APE plus an
+    L2 pull toward neutral, with lambda chosen on the validation split.
+  - Tier 2 (per-config): median of measured/predicted ratios.
+  The >8-GPU mgc at 32/128 is the same median ratio on the multi-node trace; 16/64 are log2 geometric
+  means. The held-out 15% test split is never fit and only reports accuracy.
 
-Two model-sets are fit from the same recipe (the profiling trace is filtered to the set):
+Two model sets use the same recipe, with the profiling trace filtered to the set:
   - 4-model (dense-4: mistral-7b-v0.1, granite-3.3-8b, granite-3-8b, llama3.2-3b) -> versions/calibration_4model.json
   - 6-model (dense-4 + granite-3.1-2b + granite-3.1-8b-instruct)                  -> versions/calibration_6model.json
-The 6-model fit is the default shipped table (calibration.json); the two files are byte-identical.
+The 6-model fit is the shipped default; calibration.json and calibration_6model.json are byte-identical.
 
 Usage (ENG = kavier.sdk.training.calibration.engine):
-  python -m ENG --check                # rebuild BOTH sets; confirm each == its versions/ file
+  python -m ENG --check                # rebuild both sets; confirm each matches its versions/ file
   python -m ENG --write                # rebuild --model-set (default 6) + overwrite its file(s)
   python -m ENG --model-set 4 --write  # rebuild + write only the 4-model file
   python -m ENG --snapshot             # rebuild + save a timestamped copy to diff
 
-The measured-runs files are internal and not shipped here; point at them with --profiling-data / --raw-trace.
+The measured-run files are internal and not shipped; pass them with --profiling-data / --raw-trace.
 """
 
 from __future__ import annotations
@@ -56,8 +55,7 @@ from kavier.sdk.library.llm import LLM_SPEC_LIBRARY
 from kavier.sdk.training.core.engine import simulate_training_step
 
 # ================================ paths & constants ================================
-# engine.py sits at src/kavier/sdk/training/calibration/, so:
-# parents: [4]=src  [5]=repo root  [6]=workspace (holds sibling trace-archive)
+# parents[4] = src, [5] = repo root, [6] = workspace holding trace-archive/.
 _HERE = Path(__file__).resolve()
 SRC = _HERE.parents[4]
 REPO_ROOT = _HERE.parents[5]
@@ -65,50 +63,39 @@ WORKSPACE = _HERE.parents[6]
 TRACE_ARCHIVE = WORKSPACE / "trace-archive" / "profiling-dataset"
 CAL_PATH = _HERE.parent / "calibration.json"
 
-# ONE merged profiling export = curated dense-4 rows (across GPU types) + the controlled-benchmark
-# granite rows. This is the only input the <=8-GPU Tier-1/Tier-2 fit reads.
+# Merged profiling export: curated dense-4 rows across GPU types plus the controlled-benchmark granite rows.
+# The only input of the <=8-GPU Tier 1 and Tier 2 fit.
 PROFILING_CSV = "profiling_trace.csv"
 # Raw multi-node trace, read only to fit the >8-GPU multi-GPU correction (32/128 GPUs).
 RAW_MULTINODE_CSV = "raw_trace.csv"
 
-# Physical-plausibility band for the Tier-1 selection. At <=8-GPU single-node, communication is tiny
-# next to compute, so comm_scale -- and, under weak regularization, a GPU's mfu_multiplier -- is
-# nearly UNCONSTRAINED by the data: an unregularized fit (lambda=0) drives comm_scale to a
-# noise-fitting ~20x. Such a fit predicts the <=8 test split about as well, but it is not physical
-# (a shipped "physics + small corrections" table with comm_scale=20 is wrong on its face) and it
-# corrupts the >8-GPU mgc fit, which divides comm back out. We therefore only accept a Tier-1
-# candidate whose comm_scale and every mfu_multiplier sit in this band, then pick the best-validation
-# survivor. Regularizing a non-identifiable parameter toward its neutral prior is the correct
-# behaviour; the honest held-out test accuracy is ~10% (comm_scale ~ 1.23).
+# Plausibility band for Tier 1 candidates. At <=8 GPUs on one node comm is small next to compute, so the
+# data barely constrain comm_scale or, under weak regularization, mfu_multiplier. With lambda=0 comm_scale
+# fits noise at ~20x: similar test error, but not physical, and it corrupts the >8-GPU mgc fit, which
+# divides comm back out. Held-out test MdAPE with the band is ~10% (comm_scale ~1.23).
 _SCALE_LO, _SCALE_HI = 0.5, 2.0
 
-# Selectable model-sets. The recipe is identical; only the profiling rows it fits on differ
-# (the trace is filtered to the set). DENSE_4 is the exp1 head-to-head set; ALL_6 adds the two
-# controlled-benchmark granite-3.1 models (exp4 / in-vitro). ALL_6 reproduces calibration.json.
+# Model sets differ only in the profiling rows they fit. DENSE_4 is the Exp1 head-to-head set; ALL_6 adds
+# the two controlled-benchmark granite-3.1 models (Exp4 in-vitro) and reproduces calibration.json.
 DENSE_4 = ["mistral-7b-v0.1", "granite-3.3-8b", "granite-3-8b", "llama3.2-3b"]
 ALL_6 = [*DENSE_4, "granite-3.1-2b", "granite-3.1-8b-instruct"]
 MODEL_SETS: dict[str, list[str]] = {"4": DENSE_4, "6": ALL_6}
 
-# The two from-scratch calibrations live here; calibration.json (root) == versions/calibration_6model.json.
+# calibration.json (root) == versions/calibration_6model.json.
 VERSIONS_DIR = CAL_PATH.parent / "versions"
 VERSION_FILES: dict[str, Path] = {
     "4": VERSIONS_DIR / "calibration_4model.json",
     "6": VERSIONS_DIR / "calibration_6model.json",
 }
 
-# Deterministic seed-42 70/15/15 split. NOTE: train_test_split's permutation depends on row COUNT +
-# seed, but the rows it selects also depend on the input DataFrame's row ORDER. Byte-identical
-# regeneration therefore assumes the canonical curated CSV (same rows, same order, same pre-filter);
-# re-exporting it in a different order shifts which rows land in train/val and changes the fitted
-# values. Do NOT sort the rows -- that would change the shipped numbers.
+# Seed-42 70/15/15 split. train_test_split permutes by row count and seed but selects by position, so
+# byte-identical regeneration needs the canonical curated CSV in its original row order. Do not sort it.
 SEED = 42
 TEST_SIZE = 0.15
 VAL_SIZE = 0.176  # 0.176 of the remaining 85% ~= 15% of total
 
-# Columns every profiling trace MUST carry for the fit to be well-defined. A missing one is the only
-# HARD failure the data-driven calibrate() raises (a clear ValueError naming the offenders); everything
-# else (thin/narrow data) degrades to a warning + best-effort fit. Kept as a module constant so the
-# check has a single source of truth shared by _filter_valid_rows and any caller that wants to pre-check.
+# Columns every profiling trace needs. A missing one is the only hard failure of calibrate() (ValueError
+# naming the columns); thin or narrow data only warns. Callers can use this to pre-check a trace.
 REQUIRED_COLUMNS: tuple[str, ...] = (
     "model_name",
     "gpu_model",
@@ -121,11 +108,10 @@ REQUIRED_COLUMNS: tuple[str, ...] = (
     "dataset_tokens_per_second",
 )
 
-# "Suitable calibration dataset" thresholds -- used ONLY to emit the headline warning in calibrate();
-# they never change the fit itself (a dataset that falls short is still fit, just flagged). See
-# _suitability_report. MIN_ROWS_PER_MODEL: a model with fewer valid rows can't pin its scales well.
-# MIN_DISTINCT_BATCH_SIZES: a single batch size per (model, GPU) leaves the batch/MFU shape unconstrained.
-# MIN_DISTINCT_GPU_COUNTS: without >=2 distinct total-GPU counts the multi-GPU correction is unidentifiable.
+# Thresholds for the suitability warning in calibrate(); they do not change the fit (see _suitability_report).
+# MIN_ROWS_PER_MODEL: below this a model's scales are poorly pinned.
+# MIN_DISTINCT_BATCH_SIZES: one batch size per (model, GPU) leaves the batch/MFU curve unconstrained.
+# MIN_DISTINCT_GPU_COUNTS: with one total-GPU count the multi-GPU correction is unidentifiable.
 MIN_ROWS_PER_MODEL = 30
 MIN_DISTINCT_BATCH_SIZES = 2
 MIN_DISTINCT_GPU_COUNTS = 2
@@ -133,8 +119,9 @@ MIN_DISTINCT_GPU_COUNTS = 2
 
 @contextmanager
 def calibration_override(cal_dict: dict[str, Any]) -> Iterator[None]:
-    """Temporarily install ``cal_dict`` as the live calibration the engine reads, then restore.
-    Swaps the module global kavier.sdk.training.calibration._CAL (the same contract Coastline uses)."""
+    """Install ``cal_dict`` as the live calibration for the with-block, then restore the previous one.
+
+    Swaps the module global kavier.sdk.training.calibration._CAL, the same swap Coastline uses."""
     import kavier.sdk.training.calibration as cal
 
     saved = cal._CAL
@@ -147,8 +134,7 @@ def calibration_override(cal_dict: dict[str, Any]) -> Iterator[None]:
 
 # ==================================== metrics =====================================
 def mdape(measured: np.ndarray, pred: np.ndarray) -> float:
-    """Median absolute percentage error (%), over rows with ``measured > 0`` -- the metric the
-    calibration fit minimizes / reports."""
+    """Return the median absolute percentage error [%] over rows with ``measured > 0``."""
     measured = np.asarray(measured, dtype=np.float64)
     pred = np.asarray(pred, dtype=np.float64)
     m = measured > 0
@@ -161,22 +147,21 @@ def mdape(measured: np.ndarray, pred: np.ndarray) -> float:
 def train_val_test_split(
     df: pd.DataFrame, *, test_size: float = TEST_SIZE, val_size: float = VAL_SIZE, seed: int = SEED
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Split ``df`` into (train, val, test) DataFrames (seed-42 70/15/15; see the SEED note)."""
+    """Split ``df`` into (train, val, test), seed-42 70/15/15 (see the comment at SEED)."""
     temp, test = train_test_split(df, test_size=test_size, random_state=seed)
     train, val = train_test_split(temp, test_size=val_size, random_state=seed)
     return train, val, test
 
 
 # ================================ Tier-1 Powell fit ================================
-# Regularized Powell joint refit, lambda chosen on validation. Refits the global scales (comm_scale,
-# mfu_multiplier, present multi_gpu_correction keys, method_scale, model_scale) in log-space,
-# minimizing train MdAPE + an L2 pull toward the prior; select_calibration picks lambda on
-# validation. regenerate() drives this with base_cal = the neutral raw kavier (nothing carried).
+# Regularized Powell refit of the global scales (comm_scale, mfu_multiplier, existing multi_gpu_correction
+# keys, method_scale, model_scale) in log-space: train MdAPE + an L2 pull toward the prior.
+# select_calibration picks lambda on validation; regenerate() starts from neutral raw kavier.
 _SHIPPED = json.loads(CAL_PATH.read_text())
 
 
 def _powell_row_args(rows: pd.DataFrame) -> list[dict]:
-    """Pre-extract per-row engine kwargs for fast repeated evaluation."""
+    """Return per-row engine kwargs, extracted once for repeated evaluation."""
     args = []
     for _, r in rows.iterrows():
         total = int(r["number_gpus"]) * int(r["number_nodes"])
@@ -205,8 +190,9 @@ def _powell_predict(row_args: list[dict], grad_accum_steps: int, backward_factor
 
 
 def _vary_layout(rows: pd.DataFrame, base_cal: dict) -> list[tuple]:
-    """The (kind, key) scale entries the train rows exercise; everything else stays at base_cal.
-    Only mgc keys already in the table are varied (absent totals keep the engine fallback)."""
+    """Return the (kind, key) scale entries the train rows exercise; the rest stay at base_cal.
+
+    Only mgc keys already in the table vary; other GPU totals keep the engine fallback."""
     models = sorted(rows["model_name"].astype(str).unique())
     methods = sorted(rows["method"].astype(str).unique())
     gpus = sorted(rows["gpu_model"].astype(str).unique())
@@ -282,7 +268,7 @@ def _powell_fit(
 
 
 def evaluate(rows: pd.DataFrame, grad_accum_steps: int, backward_factor: float, cal_dict: dict) -> float:
-    """MdAPE (%) of ``cal_dict`` on ``rows``."""
+    """Return the MdAPE [%] of ``cal_dict`` on ``rows``."""
     args = _powell_row_args(rows)
     y_true = pd.to_numeric(rows["dataset_tokens_per_second"], errors="coerce").to_numpy(np.float64)
     return mdape(y_true, _powell_predict(args, grad_accum_steps, backward_factor, cal_dict))
@@ -298,10 +284,10 @@ def select_calibration(
     maxiter: int = 60,
     accept=None,
 ) -> tuple[dict, dict]:
-    """Fit at each lambda on TRAIN; also consider base_cal (no refit). Pick the candidate with
-    the best VALIDATION MdAPE. If ``accept`` is given, only candidates for which ``accept(cal)`` is
-    True are eligible -- used to reject a physically-degenerate fit (e.g. a non-identifiable
-    comm_scale that runs away under weak regularization). Returns (calibration, {choice, val_mdape})."""
+    """Fit each lambda on train, add base_cal without a refit, and keep the best validation MdAPE.
+
+    With ``accept``, only candidates where ``accept(cal)`` is True are eligible; this rejects degenerate
+    fits such as a runaway comm_scale under weak regularization. Returns (calibration, {choice, val_mdape})."""
     candidates = [("none(v2)", copy.deepcopy(base_cal))]
     for lam in lambdas:
         candidates.append(
@@ -310,22 +296,22 @@ def select_calibration(
     best_tag, best_cal, best_val = None, None, np.inf
     for tag, cal_dict in candidates:
         if accept is not None and not accept(cal_dict):
-            continue  # physically-implausible fit: not eligible
+            continue
         vm = evaluate(val_rows, grad_accum_steps, backward_factor, cal_dict)
         if np.isfinite(vm) and vm < best_val:
             best_tag, best_cal, best_val = tag, cal_dict, vm
-    if best_cal is None:  # no eligible candidate had a finite validation metric -> keep the un-refit prior
+    if best_cal is None:  # no eligible candidate with a finite metric: keep the prior
         best_tag, best_cal = "none(v2)", copy.deepcopy(base_cal)
     return best_cal, {"choice": best_tag, "val_mdape": float(best_val)}
 
 
 # ============================== multi-GPU correction fit ==============================
 def fit_count(trace: pd.DataFrame, n: int, base_cal: dict) -> list[float]:
-    """Return the per-row ratios prediction(mgc[n]=1)/measured for valid, resolvable rows
-    at `n` total GPUs. mgc[n] is the median of these ratios. (The trace must carry a ``tot``
-    column = number_gpus * number_nodes.)"""
+    """Return prediction(mgc[n]=1) / measured for valid, resolvable rows at ``n`` total GPUs.
+
+    mgc[n] is the median of these ratios. ``trace`` needs a ``tot`` column = number_gpus * number_nodes."""
     cal_n = copy.deepcopy(base_cal)
-    cal_n["multi_gpu_correction"]["by_num_gpus"][str(n)] = 1.0  # neutralise this count
+    cal_n["multi_gpu_correction"]["by_num_gpus"][str(n)] = 1.0
     rows = trace[trace["tot"] == n]
     ratios: list[float] = []
     with calibration_override(cal_n):
@@ -352,21 +338,19 @@ def fit_count(trace: pd.DataFrame, n: int, base_cal: dict) -> list[float]:
 
 # ============================ from-scratch table assembly ============================
 def _is_physical(cal: dict) -> bool:
-    """True iff comm_scale and all mfu_multipliers are inside the physical band -- the guard the
-    Tier-1 selector uses to skip a degenerate (non-identifiable) unregularized fit."""
+    """Return True if comm_scale and every mfu_multiplier lie in [_SCALE_LO, _SCALE_HI]."""
     if not (_SCALE_LO <= cal["comm_scale"] <= _SCALE_HI):
         return False
     return all(_SCALE_LO <= v <= _SCALE_HI for v in cal["mfu_multiplier"].values())
 
 
 def _neutral_base(reference: dict, models: list[str] | None = None) -> dict:
-    """Raw (uncalibrated) kavier expressed as a calibration dict: the prior the from-scratch fit starts from.
+    """Return raw (uncalibrated) kavier as a calibration dict, the prior of the from-scratch fit.
 
-    Keeps the reference's structure (which GPUs/methods/models/gpu-counts exist, plus schema/version)
-    but resets every multiplicative correction to a neutral 1.0 and empties interaction_scale. The two
-    raw-physics constants (mfu_batch_scale, training_overhead_s) are not fits, so they are kept as-is.
-    When ``models`` is given, model_scale is restricted to that set (preserving key order); ``None``
-    keeps every model.
+    Keeps the reference's structure (GPUs, methods, models, GPU counts, schema/version), resets every
+    multiplicative correction to 1.0 and empties interaction_scale. mfu_batch_scale and
+    training_overhead_s are raw-physics constants and are kept. ``models`` restricts model_scale to that
+    set in the original key order; None keeps every model.
     """
     base = copy.deepcopy(reference)
     base["comm_scale"] = 1.0
@@ -383,9 +367,9 @@ def _neutral_base(reference: dict, models: list[str] | None = None) -> dict:
 
 
 def _require_columns(trace: pd.DataFrame) -> None:
-    """Raise a clear ValueError naming every REQUIRED_COLUMNS entry missing from ``trace``. This is the
-    single HARD failure of the data-driven fit: without these columns the mask/target are undefined, so
-    we fail loudly and specifically rather than let a downstream KeyError obscure which column is absent."""
+    """Raise ValueError naming every REQUIRED_COLUMNS entry missing from ``trace``.
+
+    The one hard failure of the data-driven fit; a later KeyError would not say which column is missing."""
     missing = [c for c in REQUIRED_COLUMNS if c not in trace.columns]
     if missing:
         raise ValueError(
@@ -398,29 +382,25 @@ def _require_columns(trace: pd.DataFrame) -> None:
 def _filter_valid_rows(
     trace: pd.DataFrame, models: list[str] | None = None, max_total_gpus: int | None = None
 ) -> pd.DataFrame:
-    """The valid, positive-throughput rows the fit covers, filtered to ``models`` when given and to
-    ``total_gpus <= max_total_gpus`` when that cap is set (``None`` = keep every GPU count).
+    """Return the valid, positive-throughput rows, filtered to ``models`` and ``total <= max_total_gpus``.
 
-    ``regenerate`` passes ``max_total_gpus=8`` (the shipped <=8 fit; 32/128 come from a separate
-    raw-trace step), so the committed table regenerates byte-for-byte; ``calibrate`` passes ``None`` so
-    a dataset's >8-GPU rows join the main fit directly. Row ORDER is preserved on purpose: the seed-42
-    split selects rows by position, so re-sorting would change which rows land in train/val/test (do
-    NOT sort). Raises ValueError (via _require_columns) if a required column is absent."""
+    None disables either filter. regenerate() passes ``max_total_gpus=8`` (32/128 come from the raw
+    trace), so the committed table regenerates byte-for-byte; calibrate() passes None, so >8-GPU rows
+    join the main fit. Row order is kept because the seed-42 split selects by position. Raises
+    ValueError via _require_columns if a required column is missing."""
     _require_columns(trace)
-    trace = trace.copy()
+    # Invalid rows go first: their GPU counts can be NaN, which the int cast rejects.
+    trace = trace[(trace["is_valid"] == 1.0) & (trace["dataset_tokens_per_second"] > 0)].copy()
     trace["total"] = (pd.to_numeric(trace["number_gpus"]) * pd.to_numeric(trace["number_nodes"])).astype(int)
-    mask = (trace["is_valid"] == 1.0) & (trace["dataset_tokens_per_second"] > 0)
     if max_total_gpus is not None:
-        mask &= trace["total"] <= max_total_gpus
+        trace = trace[trace["total"] <= max_total_gpus]
     if models is not None:
-        mask &= trace["model_name"].astype(str).isin(set(models))
-    return trace[mask].copy()
+        trace = trace[trace["model_name"].astype(str).isin(set(models))]
+    return trace.copy()
 
 
 def _load_profiling(calib_path: Path, models: list[str] | None = None) -> pd.DataFrame:
-    """Read the profiling CSV at ``calib_path`` and return its valid <=8-GPU rows (see
-    _filter_valid_rows). When ``models`` is given the rows are filtered to that set (the only
-    difference between the 4- and 6-model fits)."""
+    """Read the profiling CSV and return its valid <=8-GPU rows, filtered to ``models`` if given."""
     trace = pd.read_csv(calib_path, low_memory=False)
     return _filter_valid_rows(trace, models, max_total_gpus=8)
 
@@ -439,8 +419,8 @@ def _row_kw(r: pd.Series) -> dict:
 
 
 def _predict(rows: pd.DataFrame, cal_dict: dict) -> np.ndarray:
-    # No try/except: a row the engine can't predict should fail loudly, not vanish into a NaN that
-    # silently shrinks a median cell (audited: 0 valid profiling rows fail today).
+    # No try/except, so an unpredictable row raises; a NaN would silently shrink a median cell.
+    # Audited: no valid profiling row fails.
     out = []
     with calibration_override(cal_dict):
         for _, r in rows.iterrows():
@@ -454,9 +434,10 @@ def _ikey(r: pd.Series) -> str:
 
 
 def _build_interaction(rows: pd.DataFrame, base_cal: dict) -> dict:
-    """Per-config median residual (interaction_scale), rounded to 4dp, for ALL models present in
-    ``rows``. ``base_cal`` carries the from-scratch Tier-1 with an EMPTY interaction_scale, so each
-    ratio measures exactly what physics + the Tier-1 scales still leave on the table for that cell."""
+    """Return the per-config median residual (interaction_scale), rounded to 4 dp, for all models in ``rows``.
+
+    ``base_cal`` holds the Tier 1 fit with an empty interaction_scale, so each ratio is what physics and
+    Tier 1 leave unexplained for that cell."""
     pred = _predict(rows, base_cal)
     y = pd.to_numeric(rows["dataset_tokens_per_second"], errors="coerce").to_numpy(np.float64)
     df = pd.DataFrame({"key": [_ikey(r) for _, r in rows.iterrows()], "ratio": y / pred})
@@ -465,10 +446,11 @@ def _build_interaction(rows: pd.DataFrame, base_cal: dict) -> dict:
 
 
 def _fit_mgc_high(raw_path: Path, frozen_cal: dict, counts: tuple[int, ...] = (32, 128)) -> dict:
-    """mgc-only median-ratio fit for the multi-node counts, every other scale frozen at the
-    from-scratch <=8 calibration (a joint refit up here is non-identifiable). For each count n:
-    mgc[n] = median over resolvable n-GPU rows of prediction(mgc[n]=1) / measured. Returns
-    {str(n): value} for every count that had resolvable rows."""
+    """Fit mgc at the multi-node counts by median ratio, with every other scale frozen at the <=8 fit.
+
+    A joint refit at these counts is non-identifiable. For each n, mgc[n] = median over resolvable
+    n-GPU rows of prediction(mgc[n]=1) / measured. Returns {str(n): value} for each count with
+    resolvable rows."""
     raw = pd.read_csv(raw_path, low_memory=False)
     raw = raw[(raw["is_valid"] == 1.0) & (raw["dataset_tokens_per_second"] > 0)].copy()
     raw["tot"] = (pd.to_numeric(raw["number_gpus"]) * pd.to_numeric(raw["number_nodes"])).astype(int)
@@ -481,33 +463,32 @@ def _fit_mgc_high(raw_path: Path, frozen_cal: dict, counts: tuple[int, ...] = (3
 
 
 def _mgc_with_interpolated_gaps(mgc_fitted: dict[str, float], fit_counts: set[int]) -> dict[str, float]:
-    """Assemble the multi_gpu_correction table when EVERY GPU count came from the one joint Tier-1
-    fit (the calibrate() >8-in-main-fit path). ``mgc_fitted`` is tier1's by_num_gpus (the template's
-    key set; counts the Powell layout varied hold fitted values, the rest are still neutral 1.0).
-    ``fit_counts`` are exactly the counts Powell varied. For each template count: use its fitted value
-    if it was fit; otherwise log2-geometric interpolation of the nearest fitted neighbours (this is the
-    same interpolation the <=8 path uses for 16/64, generalized), clamping to the single neighbour when
-    the gap has no bracketing pair, or neutral 1.0 if nothing was fit at all."""
+    """Assemble multi_gpu_correction when every GPU count came from the joint Tier 1 fit (calibrate() path).
+
+    ``mgc_fitted`` is Tier 1's by_num_gpus: the template's keys, fitted where Powell varied them and 1.0
+    elsewhere. ``fit_counts`` are the counts Powell varied. A fitted count keeps its value. One GPU is a
+    fixed anchor at 1.0, the value get_multi_gpu_correction returns for it. A gap gets log2-geometric
+    interpolation of the nearest anchors below and above it (as the <=8 path does for 16/64), or the
+    value of the highest anchor below it when none is above. With nothing fit, every count is 1.0."""
     keys = sorted(int(k) for k in mgc_fitted)
-    fit = sorted(fit_counts)
+    anchors = {1: 1.0, **{c: mgc_fitted[str(c)] for c in fit_counts}}
+    fit = sorted(anchors)
     out: dict[str, float] = {}
     for k in keys:
-        if k in fit_counts:
-            out[str(k)] = mgc_fitted[str(k)]  # raw fitted value (unrounded, as the <=8 path uses 2/4/8)
+        if k in anchors:
+            out[str(k)] = anchors[k]  # unrounded, like 2/4/8 on the <=8 path
             continue
         lower = [c for c in fit if c < k]
         upper = [c for c in fit if c > k]
         if lower and upper:
             lo, hi = lower[-1], upper[0]
             w = (np.log2(k) - np.log2(lo)) / (np.log2(hi) - np.log2(lo))
-            val = float(np.exp((1 - w) * np.log(mgc_fitted[str(lo)]) + w * np.log(mgc_fitted[str(hi)])))
+            val = float(np.exp((1 - w) * np.log(anchors[lo]) + w * np.log(anchors[hi])))
             out[str(k)] = round(val, 2)
         elif lower:
-            out[str(k)] = round(float(mgc_fitted[str(lower[-1])]), 2)  # above the top fitted count: hold flat
-        elif upper:
-            out[str(k)] = round(float(mgc_fitted[str(upper[0])]), 2)  # below the bottom fitted count: hold flat
+            out[str(k)] = round(float(anchors[lower[-1]]), 2)  # above the top fitted count: hold flat
         else:
-            out[str(k)] = 1.0  # no GPU count was ever fit -> neutral
+            out[str(k)] = round(float(anchors[upper[0]]), 2)  # fewer than one GPU is not a real count: hold flat
     return out
 
 
@@ -520,23 +501,21 @@ def _fit_multi_gpu_correction(
     raw_path: Path | None,
     log: Callable[[str], None],
 ) -> tuple[dict, str]:
-    """Step 5 of the from-scratch fit: the multi_gpu_correction table + its explanatory note.
+    """Return (mgc, mgc_note), the multi_gpu_correction table and its note (step 5 of the fit).
 
-    The source depends on whether >8-GPU rows are already in the main fit -- and the two sources are
-    MUTUALLY EXCLUSIVE, so a >8 row is never counted twice. Returns (mgc, mgc_note)."""
+    The source depends on whether >8-GPU rows are in the main fit. The two sources are mutually
+    exclusive, so no >8 row is counted twice."""
     mgc_lo = tier1["multi_gpu_correction"]["by_num_gpus"]
     high_totals = sorted({int(t) for t in rows["total"].unique() if t > 8})
     if high_totals:
-        # calibrate()'s uncapped path: the >8-GPU rows were already in the joint Tier-1 Powell fit, so
-        # mgc for every count present (2/4/8 AND the >8 counts) comes straight from that fit. We do NOT
-        # also run the raw-trace _fit_mgc_high step: that would double-count the >8 rows and be
-        # inconsistent (it divides comm_scale back out of a comm_scale those same rows just helped fit).
-        # Template counts absent from the data (e.g. 16/64) are filled by log2-geometric interpolation.
+        # Uncapped calibrate() path: the >8-GPU rows were in the joint Tier 1 fit, so mgc for every present
+        # count comes from it. _fit_mgc_high would double-count those rows and divide out a comm_scale they
+        # helped fit. Template counts missing from the data (e.g. 16/64) are interpolated.
         fitted_counts = {int(key) for (kind, key) in _vary_layout(train, neutral) if kind == "mgc"}
         mgc = _mgc_with_interpolated_gaps(mgc_lo, fitted_counts)
         mgc_note = (
             "Every GPU count present in the data was calibrated jointly by the Tier-1 Powell fit: the "
-            ">8-GPU rows are part of the main fit, NOT a separate raw-trace step, so no >8 row is "
+            ">8-GPU rows are part of the main fit, with no separate raw-trace step, so no >8 row is "
             f"double-counted. Counts fit directly: {sorted(fitted_counts)}. Template counts absent from "
             "the data are log2-geometric interpolations of the fitted neighbours (as the <=8 path does "
             "for 16/64). interaction_scale now covers whatever >8 cells the data provides."
@@ -544,7 +523,7 @@ def _fit_multi_gpu_correction(
         log(f"  mgc: joint Tier-1 fit on GPU counts {sorted(fitted_counts)} (>8 in the main fit); gaps interpolated")
     elif raw_path is not None and raw_path.exists():
         frozen = copy.deepcopy(tier1)
-        frozen["interaction_scale"] = interaction  # no effect >8 GPU (no keys there); kept for consistency
+        frozen["interaction_scale"] = interaction  # no keys above 8 GPUs, so no effect on this fit
         hi = _fit_mgc_high(raw_path, frozen, counts=(32, 128))
         if "32" not in hi or "128" not in hi:
             raise SystemExit(f"raw multi-node trace {raw_path} has no resolvable 32/128-GPU rows")
@@ -567,7 +546,7 @@ def _fit_multi_gpu_correction(
     else:
         mgc = {"2": mgc_lo["2"], "4": mgc_lo["4"], "8": mgc_lo["8"], "16": 1.0, "32": 1.0, "64": 1.0, "128": 1.0}
         mgc_note = (
-            "2/4/8: joint Powell fit on the <=8-GPU profiling rows. 16/32/64/128 left NEUTRAL (1.0): "
+            "2/4/8: joint Powell fit on the <=8-GPU profiling rows. 16/32/64/128 left neutral (1.0): "
             "the raw multi-node trace was unavailable at regeneration time, so >8 GPU is uncalibrated; "
             "the recommender restricts to <=8."
         )
@@ -575,7 +554,6 @@ def _fit_multi_gpu_correction(
     return mgc, mgc_note
 
 
-# Rebuild the WHOLE calibration table from scratch from the measured runs (6 steps below).
 def _fit_calibration(
     reference: dict,
     rows: pd.DataFrame,
@@ -583,18 +561,15 @@ def _fit_calibration(
     models: list[str] | None = None,
     log: Callable[[str], None] = print,
 ) -> tuple[dict, dict]:
-    """The from-scratch two-tier fit over already-loaded valid ``rows`` (steps 1-6 inline below).
-    Shared by regenerate() (fixed internal CSV, capped to <=8 GPU) and calibrate() (arbitrary
-    CSV/DataFrame, no cap), so an equivalent input reproduces the same numbers.
+    """Fit the two-tier calibration from scratch on already-loaded valid ``rows``.
 
-    The multi-GPU correction has two mutually-exclusive sources depending on whether ``rows`` already
-    carries >8-GPU data; Step 5 explains the choice and why the >8 rows are never double-counted.
-    Returns (calibration_dict, metrics), metrics being a small fit report (row counts, held-out MdAPE)."""
-    # Step 1: raw kavier = the reference's structure with every correction neutralised to 1.0
-    #         (model_scale restricted to the selected set).
+    Shared by regenerate() (internal CSV, capped at <=8 GPUs) and calibrate() (any CSV or DataFrame, no
+    cap), so equivalent inputs give the same numbers. Step 5 picks one of two sources for the multi-GPU
+    correction. Returns (calibration_dict, metrics); metrics holds row counts and held-out MdAPE."""
+    # Step 1: raw kavier, every correction at 1.0, model_scale restricted to the selected set.
     neutral = _neutral_base(reference, models)
 
-    # Step 2: split the valid rows (selected models) into train / val / test (seed 42).
+    # Step 2: seed-42 train/val/test split.
     train, val, test = train_val_test_split(rows)
     n_models = rows["model_name"].astype(str).nunique()
     max_total = int(rows["total"].max()) if len(rows) else 0
@@ -603,9 +578,8 @@ def _fit_calibration(
         f"(valid, tput>0, <={max_total} GPU, {n_models} models)"
     )
 
-    # Step 3: Tier-1 -- regularized Powell joint fit of the global scales (comm_scale, per-GPU MFU,
-    #         per-method, per-model, multi-GPU 2/4/8) from the neutral prior; lambda picked on val,
-    #         skipping any physically-degenerate (non-identifiable comm_scale) candidate (see _is_physical).
+    # Step 3: Tier 1, regularized Powell fit of the global scales from the neutral prior; lambda picked
+    #         on val, skipping non-physical candidates (_is_physical).
     tier1, info = select_calibration(
         train, val, grad_accum_steps=1, backward_factor=2.0, base_cal=neutral, accept=_is_physical
     )
@@ -614,19 +588,16 @@ def _fit_calibration(
         f"(comm_scale={tier1['comm_scale']:.3f})"
     )
 
-    # Step 4: Tier-2 -- the leftover per-cell residual (interaction_scale): median(measured / pred)
-    #         on train+val, with the Tier-1 scales applied and interaction itself empty.
+    # Step 4: Tier 2, per-cell median(measured / pred) on train+val with Tier 1 applied and no interaction.
     base = copy.deepcopy(tier1)
     base["interaction_scale"] = {}
     train_val = pd.concat([train, val], ignore_index=True)
     interaction = _build_interaction(train_val, base)
 
-    # Step 5: the multi-GPU correction. Its source depends on whether >8-GPU rows are already in the
-    #         main fit -- and the two sources are MUTUALLY EXCLUSIVE, so a >8 row is never counted twice.
+    # Step 5: multi-GPU correction (see _fit_multi_gpu_correction).
     mgc, mgc_note = _fit_multi_gpu_correction(tier1, rows, train, neutral, interaction, raw_path, log)
 
-    # Step 6: assemble in the shipped key order + format. Physics constants + schema/version are kept
-    #         from the reference template; every scale below was fit from the data in steps 3-5.
+    # Step 6: assemble in the shipped key order. Physics constants and schema/version come from the reference.
     out = {
         "schema_version": reference["schema_version"],
         "version": reference["version"],
@@ -647,7 +618,7 @@ def _fit_calibration(
         ),
     }
 
-    # Report the held-out accuracy of the assembled table (the test split never touched the fit).
+    # Held-out accuracy; the test split is not used by the fit.
     held_out = evaluate(test, 1, 2.0, out)
     raw_md = evaluate(test, 1, 2.0, neutral)
     log(f"  held-out test MdAPE: from-scratch={held_out:.2f}%  (raw/uncalibrated={raw_md:.2f}%)")
@@ -667,13 +638,12 @@ def _fit_calibration(
 def regenerate(
     reference: dict, profiling_dir: Path, raw_trace: Path | None = None, models: list[str] | None = None
 ) -> dict:
-    """Rebuild the whole table from scratch. ``models`` selects the model-set the Tier-1/Tier-2 fit
-    covers (the profiling trace is filtered to it); ``None`` keeps every model (the all-6 default that
-    reproduces calibration.json). The trace is capped at <=8 GPU (via ``_load_profiling``), so the
-    >8-GPU mgc always comes from the separate raw multi-node trace -- the multi-GPU correction is a
-    global communication-scaling scalar, not a per-model one, and the dense-4 models have no multi-node
-    rows of their own. This <=8 cap is what keeps regeneration byte-identical; the data-driven
-    ``calibrate`` uses NO cap (see its docstring)."""
+    """Rebuild the whole table from scratch.
+
+    ``models`` selects the model set (the profiling trace is filtered to it); None keeps every model,
+    which reproduces calibration.json. Rows are capped at <=8 GPUs, so the >8-GPU mgc comes from the raw
+    multi-node trace: mgc is one global communication-scaling scalar per GPU count, and the dense-4
+    models have no multi-node rows. The cap keeps regeneration byte-identical; calibrate() has no cap."""
     calib = profiling_dir / PROFILING_CSV
     if not calib.exists():
         raise SystemExit(f"profiling trace not found: {calib}")
@@ -686,15 +656,12 @@ def regenerate(
 
 
 # ============================ parameterized (data-driven) calibrate ============================
-# Minimum valid rows a model needs to be AUTO-selected when calibrate(models=None). Every shipped
-# calibrated model clears this comfortably (the smallest, granite-3-8b, has 46). An explicit models=
-# list bypasses this floor (the caller has asked for exactly those, however thin).
+# Minimum valid rows for auto-selection by calibrate(models=None). The smallest shipped model,
+# granite-3-8b, has 46. An explicit models= list bypasses this floor.
 _MIN_ROWS_TO_AUTOSELECT = 8
 
-# Minimum valid rows a (requested) model needs to be FIT at all: the seed-42 3-way split needs a
-# non-empty train/val/test, which requires >=3 rows. A requested model below this is skipped (with a
-# warning), never fit on an empty split. This is separate from the suitability floor MIN_ROWS_PER_MODEL
-# (=30), which only WARNS about a thin-but-fittable model; a model can be fittable yet unsuitable.
+# Minimum valid rows to fit a requested model: the 3-way split needs non-empty train/val/test. Thinner
+# models are skipped with a warning. MIN_ROWS_PER_MODEL (30) only warns about thin but fittable models.
 _MIN_ROWS_TO_FIT = 3
 
 
@@ -703,17 +670,16 @@ def _eprint(msg: str) -> None:
 
 
 def _select_models(valid_rows: pd.DataFrame, min_rows: int = _MIN_ROWS_TO_AUTOSELECT) -> list[str]:
-    """Model names present in ``valid_rows`` with at least ``min_rows`` rows, sorted -- the auto-set
-    calibrate fits when no explicit models list is given."""
+    """Return the sorted models in ``valid_rows`` with at least ``min_rows`` rows (calibrate()'s auto-set)."""
     counts = valid_rows["model_name"].astype(str).value_counts()
     return sorted(str(m) for m, c in counts.items() if int(c) >= min_rows)
 
 
 def _suitability_report(valid: pd.DataFrame, models: list[str]) -> str | None:
-    """Check the post-filter data for the fitted ``models`` against the 'suitable calibration dataset'
-    properties and return ONE multi-line warning naming only the checks that FAIL (with the offending
-    model / GPU-cell lists), or None if the data looks suitable. Advisory ONLY -- it never changes the
-    fit, so an unsuitable dataset is still fit, just flagged (the headline warning of `kavier calibrate`)."""
+    """Return one multi-line warning listing the failed suitability checks for ``models``, or None.
+
+    The warning names the offending models and (model, GPU) cells. It is advisory: an unsuitable dataset
+    is still fit. This is the headline warning of `kavier calibrate`."""
     df = valid[valid["model_name"].astype(str).isin(set(models))].copy()
     df["model_name"] = df["model_name"].astype(str)
     df["gpu_model"] = df["gpu_model"].astype(str)
@@ -760,18 +726,19 @@ def _suitability_report(valid: pd.DataFrame, models: list[str]) -> str | None:
 
 
 def _resolve_fit_models(valid: pd.DataFrame, models: list[str] | None) -> list[str]:
-    """The final model list calibrate() fits: the requested ``models`` (or the auto-selected set when
-    None), with any model too thin for the 3-way split dropped (with a warning) and a one-shot
-    suitability report emitted. Raises SystemExit if nothing is left to fit. Advisory warnings only --
-    the suitability check never changes which models are returned."""
+    """Return the models calibrate() fits.
+
+    Starts from ``models`` (or the auto-selected set when None), drops models too thin for the 3-way
+    split with a warning, and emits the suitability report once. Raises SystemExit if nothing is left.
+    The suitability check does not change the result."""
     models_final = list(models) if models is not None else _select_models(valid)
     if not models_final:
         raise SystemExit(
             f"no model has >= {_MIN_ROWS_TO_AUTOSELECT} valid rows to auto-fit; pass models= to fit a specific set"
         )
 
-    # A requested model too thin to fit (below the 3-way split floor) is skipped with a warning, not an
-    # error -- the remaining models still fit. (Auto-selected models already clear _MIN_ROWS_TO_AUTOSELECT.)
+    # A requested model below the split floor is skipped with a warning; the rest still fit.
+    # Auto-selected models already clear _MIN_ROWS_TO_AUTOSELECT.
     counts_all = valid["model_name"].astype(str).value_counts()
     fittable = [m for m in models_final if int(counts_all.get(m, 0)) >= _MIN_ROWS_TO_FIT]
     skipped = [m for m in models_final if m not in fittable]
@@ -786,8 +753,7 @@ def _resolve_fit_models(valid: pd.DataFrame, models: list[str] | None) -> list[s
     if not models_final:
         raise SystemExit(f"no requested model has >= {_MIN_ROWS_TO_FIT} valid rows to fit (all skipped as too thin)")
 
-    # Headline suitability warning: emitted once, naming only the checks that fail; silent (one info
-    # line) when the data looks fine. Advisory -- it never changes what is fit.
+    # One suitability warning naming the failed checks, or one info line when the data looks fine.
     report = _suitability_report(valid, models_final)
     if report is not None:
         warnings.warn(report, UserWarning, stacklevel=3)
@@ -797,25 +763,23 @@ def _resolve_fit_models(valid: pd.DataFrame, models: list[str] | None) -> list[s
 
 
 def calibrate(source: str | Path | pd.DataFrame, models: list[str] | None = None) -> dict:
-    """Fit a calibration table from scratch on ``source`` (a profiling CSV path or an in-memory
-    DataFrame with the profiling columns), using the SAME two-tier recipe as regenerate() but
-    parameterized on the given data.
+    """Fit a calibration table from scratch on ``source``, a profiling CSV path or a DataFrame.
 
-    Unlike regenerate(), calibrate applies NO total-GPU cap: a dataset's >8-GPU rows join the main
-    joint fit directly (see _fit_calibration Step 5), so ``calibrate(profiling_trace.csv)`` does NOT
-    reproduce the shipped calibration.json byte-for-byte (regenerate() does). It keeps only
-    ``is_valid == 1`` / ``dataset_tokens_per_second > 0`` rows. When ``source`` is a path, a sibling
-    ``raw_trace.csv`` is consulted for the >8-GPU mgc only when the data itself has no >8 rows.
+    Uses the two-tier recipe of regenerate() with no total-GPU cap: >8-GPU rows join the main joint fit
+    (see _fit_calibration step 5), so ``calibrate(profiling_trace.csv)`` does not reproduce
+    calibration.json byte-for-byte. Keeps rows with ``is_valid == 1`` and
+    ``dataset_tokens_per_second > 0``. For a path source, a sibling ``raw_trace.csv`` supplies the
+    >8-GPU mgc only when the data has no >8 rows.
 
-    ``models`` restricts the fit; None (default) auto-selects every model with at least
-    ``_MIN_ROWS_TO_AUTOSELECT`` valid rows. A missing REQUIRED_COLUMNS column is the only hard failure;
-    a requested model too thin to fit (< ``_MIN_ROWS_TO_FIT`` rows) is skipped with a warning, and an
-    unsuitable dataset (see _suitability_report) draws one advisory warning but is still fit.
+    ``models`` restricts the fit; None auto-selects every model with at least
+    ``_MIN_ROWS_TO_AUTOSELECT`` valid rows. A missing REQUIRED_COLUMNS column is the only hard failure.
+    A requested model with fewer than ``_MIN_ROWS_TO_FIT`` rows is skipped with a warning, and an
+    unsuitable dataset (see _suitability_report) draws one advisory warning and is still fit.
 
-    The shipped calibration.json is used as the STRUCTURAL template only (which GPUs/methods exist, the
-    raw-physics constants, schema/version); no fitted scale is carried -- the fit starts from a neutral
-    1.0 prior, seeded for any requested model the template does not cover. Returns the calibration dict;
-    serialize with ``_dumps`` to match the shipped file format."""
+    The shipped calibration.json is a structural template only (GPUs, methods, raw-physics constants,
+    schema/version). No fitted scale is carried; the fit starts from a neutral 1.0 prior, seeded for any
+    model, GPU or method the template lacks. Returns the calibration dict; ``_dumps`` serializes it in
+    the shipped format."""
     reference = json.loads(CAL_PATH.read_text(encoding="utf-8"))
 
     if isinstance(source, pd.DataFrame):
@@ -827,7 +791,7 @@ def calibrate(source: str | Path | pd.DataFrame, models: list[str] | None = None
         sibling = src.parent / RAW_MULTINODE_CSV
         raw_path = sibling if sibling.exists() else None
 
-    # Uncapped: keep every valid row at ANY GPU count (raises ValueError if a required column is absent).
+    # Uncapped: every valid row at any GPU count; ValueError if a required column is missing.
     valid = _filter_valid_rows(trace, None, max_total_gpus=None)
     if valid.empty:
         raise SystemExit("no valid rows (is_valid==1, dataset_tokens_per_second>0) in the input")
@@ -838,12 +802,8 @@ def calibrate(source: str | Path | pd.DataFrame, models: list[str] | None = None
     if rows.empty:
         raise SystemExit(f"no valid rows for models={models_final} in the input")
 
-    # Seed a neutral (1.0) prior for any model / GPU / method PRESENT in the data but ABSENT from the
-    # template, so calibrate() fits an ARBITRARY dataset: a novel GPU or training method is then
-    # calibrated from its own rows instead of KeyError-crashing in the Powell layout lookup (_get). The
-    # shipped regenerate() path never runs this -- its fixed trace uses only template keys -- so the
-    # byte-identity of the shipped tables is unaffected. (For the shipped 6-model trace nothing is
-    # missing, so the template is used unchanged.)
+    # Seed 1.0 priors for models, GPUs and methods in the data but missing from the template, so a new GPU
+    # or method is fit from its own rows (_get would raise KeyError). regenerate() does not run this.
     reference = copy.deepcopy(reference)
     for m in sorted(set(rows["model_name"].astype(str)) - set(reference["model_scale"])):
         reference["model_scale"][m] = 1.0
@@ -857,13 +817,13 @@ def calibrate(source: str | Path | pd.DataFrame, models: list[str] | None = None
 
 
 def _dumps(cal_dict: dict) -> str:
-    """Serialize exactly as the shipped file is written (indent=2 + trailing newline)."""
+    """Serialize like the shipped file (indent=2, trailing newline)."""
     return json.dumps(cal_dict, indent=2) + "\n"
 
 
 # ======================================== CLI ========================================
 def _resolve_models(model_set: str, models_csv: str | None) -> list[str]:
-    """The model list to fit: an explicit --models CSV wins, else the named --model-set."""
+    """Return the models to fit: --models if given, else the named --model-set."""
     if models_csv:
         return [m.strip() for m in models_csv.split(",") if m.strip()]
     return MODEL_SETS[model_set]
@@ -878,8 +838,7 @@ def _print_diff(expected: str, actual: str, *, fromfile: str, tofile: str) -> No
 
 
 def _write_set(model_set: str, text: str) -> None:
-    """Write the selected set's versions/ file; the 6-model set also mirrors the root calibration.json
-    (the shipped default the accessor/coastline/runtime load)."""
+    """Write the set's versions/ file; the 6-model set also overwrites the root calibration.json default."""
     VERSIONS_DIR.mkdir(exist_ok=True)
     target = VERSION_FILES[model_set]
     target.write_text(text)
@@ -889,10 +848,24 @@ def _write_set(model_set: str, text: str) -> None:
         print(f"  wrote {CAL_PATH.relative_to(REPO_ROOT)} (the default = 6-model)")
 
 
+def _used_values(cal: dict) -> dict:
+    """Return ``cal`` without its >8-GPU multi_gpu_correction entries and their note.
+
+    Those entries are a median over every catalog model's large-GPU runs, so they move when models are
+    added to the catalog; the recommender uses only <=8 GPUs."""
+    out = json.loads(json.dumps(cal))
+    mgc = out["multi_gpu_correction"]
+    mgc["by_num_gpus"] = {k: v for k, v in mgc["by_num_gpus"].items() if int(k) <= 8}
+    mgc.pop("_note", None)
+    return out
+
+
 def _check_both(reference: dict, args: argparse.Namespace) -> None:
-    """Rebuild BOTH model-sets and assert each reproduces its versions/ file byte-for-byte, and that
-    calibration.json equals the 6-model file. The determinism / self-consistency guard for v0.4."""
-    print(f"--check: rebuilding BOTH model-sets from {args.profiling_data} (template: {args.reference})")
+    """Rebuild both model sets and check that they reproduce every used value of their files.
+
+    Each set is compared with its versions/ file (see _used_values), and calibration.json with the
+    6-model file byte for byte."""
+    print(f"--check: rebuilding both model sets from {args.profiling_data} (template: {args.reference})")
     ok = True
     for model_set in ("6", "4"):
         models = MODEL_SETS[model_set]
@@ -904,9 +877,10 @@ def _check_both(reference: dict, args: argparse.Namespace) -> None:
             ok = False
             continue
         target_text = target.read_text(encoding="utf-8")
-        identical = new_text == target_text
-        print(f"  reproduces {target.name} byte-for-byte: {identical}")
-        if not identical:
+        used_equal = _used_values(json.loads(new_text)) == _used_values(json.loads(target_text))
+        print(f"  reproduces the used values of {target.name}: {used_equal}")
+        print(f"  byte-for-byte, including >8-GPU mgc: {new_text == target_text}")
+        if not used_equal:
             ok = False
             _print_diff(target_text, new_text, fromfile=target.name, tofile="regenerated")
 
@@ -916,14 +890,14 @@ def _check_both(reference: dict, args: argparse.Namespace) -> None:
 
     if not ok:
         raise SystemExit(
-            "CHECK FAILED: a model-set did not reproduce its versions/ file byte-for-byte "
+            "CHECK FAILED: a model set did not reproduce the used values of its versions/ file "
             "(re-run --write if the fit legitimately changed, else investigate non-determinism)"
         )
-    print("\nCHECK PASSED: both model-sets reproduce their versions/ files byte-for-byte")
+    print("\nCHECK PASSED: both model sets reproduce the used values of their versions/ files")
 
 
 def _cmd_regen(reference: dict, args: argparse.Namespace) -> None:
-    """The from-scratch (re)generation flow for the selected --model-set (--write/--out/--snapshot)."""
+    """Regenerate the selected --model-set and handle --write, --out and --snapshot."""
     models = _resolve_models(args.model_set, args.regen_models)
     print(
         f"regenerating from scratch from {args.profiling_data} (structural template: {args.reference}; models={models})"
@@ -938,7 +912,7 @@ def _cmd_regen(reference: dict, args: argparse.Namespace) -> None:
     )
     print("  kept from template (raw physics, never fitted): mfu_batch_scale, training_overhead_s, schema/version")
 
-    # If the selected set has a versions/ target, report (and diff) byte-identity against it.
+    # Report byte-identity against the set's versions/ file, with a diff on mismatch.
     target = None if args.regen_models else VERSION_FILES.get(args.model_set)
     if target is not None and target.exists():
         target_text = target.read_text(encoding="utf-8")
@@ -974,9 +948,9 @@ def main() -> None:
         "--reference",
         type=Path,
         default=CAL_PATH,
-        help="calibration.json used ONLY as the structural template (which GPUs/methods/models/"
-        "gpu-counts exist) + the raw-physics constants (mfu_batch_scale, training_overhead_s) + "
-        "schema/version; NONE of its fitted scales are carried (default: the committed file)",
+        help="calibration.json used as the structural template only (GPUs, methods, models, GPU counts), "
+        "plus the raw-physics constants (mfu_batch_scale, training_overhead_s) and schema/version; no "
+        "fitted scale is carried (default: the committed file)",
     )
     ap.add_argument(
         "--raw-trace",
@@ -993,7 +967,9 @@ def main() -> None:
         "--check always rebuilds both",
     )
     ap.add_argument(
-        "--models", dest="regen_models", help="comma-separated model list overriding --model-set (advanced)"
+        "--models",
+        dest="regen_models",
+        help="comma-separated model list overriding --model-set (advanced); save the fit with --out",
     )
     ap.add_argument("--out", type=Path, help="write the regenerated calibration to this path")
     ap.add_argument(
@@ -1011,11 +987,13 @@ def main() -> None:
     ap.add_argument(
         "--check",
         action="store_true",
-        help="rebuild BOTH model-sets and assert each reproduces its versions/ file byte-for-byte "
-        "(and that calibration.json == the 6-model file); a determinism / self-consistency guard; exit 1 if not",
+        help="rebuild both model sets and check that each reproduces the used values of its versions/ file "
+        "(all but the >8-GPU mgc) and that calibration.json equals the 6-model file; exit 1 if not",
     )
 
     args = ap.parse_args()
+    if args.regen_models and args.write:
+        ap.error("--write replaces the shipped 6-model or 4-model table; save a --models fit with --out PATH")
 
     reference = json.loads(args.reference.read_text(encoding="utf-8"))
     if args.check:

@@ -1,28 +1,39 @@
 import json
 import os
+from typing import Any
 
 import pandas as pd
 import pyarrow.dataset as ds
+from pandas.api.types import is_list_like
 from tqdm.auto import tqdm
 
 from kavier.sdk.io.log import log
 
 
+def _to_token_list(s: Any) -> list[int]:
+    """Return one cell as a list of int tokens; a cell is a JSON list string, a list-like, or missing."""
+    if isinstance(s, str):
+        return [int(t) for t in json.loads(s)] if s else []
+    # Parquet list columns arrive as numpy arrays.
+    if is_list_like(s):
+        return [int(t) for t in s]
+    if pd.isna(s):
+        return []
+    raise TypeError(f"expected a list of tokens, got {type(s).__name__}")
+
+
 def _string_array_to_tokens(strings, tqdm_message=""):
     tokens = []
     for s in tqdm(strings, desc=tqdm_message, unit="row"):
-        if s in (None, "") or (isinstance(s, float) and pd.isna(s)):
-            tokens.append([])
-            continue
         try:
-            tokens.append([int(t) for t in json.loads(s)])
-        except (ValueError, json.JSONDecodeError) as e:
-            raise ValueError(f"Bad token string: {s!r} → {e}")
+            tokens.append(_to_token_list(s))
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"Bad token string: {s!r}: {e}") from e
     return tokens
 
 
 class InputSpec:
-    """Inference trace (.csv/.parquet); requires num_input_tokens/num_output_tokens; optional token-list/session_id."""
+    """Inference trace from .csv or .parquet; needs num_input_tokens and num_output_tokens, rest optional."""
 
     def __init__(self, path: str):
         self.path = path
@@ -41,7 +52,7 @@ class InputSpec:
 
         if filetype == "parquet":
             dataset = ds.dataset(path, format="parquet")
-            # Only request columns that exist: the extras are optional (parity with the CSV path).
+            # Extra columns are optional; read only those present, as the CSV path does.
             cols = [c for c in cols_needed if c in dataset.schema.names]
             tbl = dataset.to_table(columns=cols)
             self.df = tbl.to_pandas(self_destruct=True)
@@ -63,21 +74,23 @@ class InputSpec:
         self.num_out_t = self.df["num_output_tokens"]
         self.num_tot_t = self.num_in_t + self.num_out_t
 
-        if set(extra_cols).issubset(self.df.columns):
-            self.in_t = _string_array_to_tokens(
-                self.df["input_tokens"].tolist(), tqdm_message="[1/2] Loading input tokens"
-            )
-            self.out_t = _string_array_to_tokens(
-                self.df["output_tokens"].tolist(), tqdm_message="[2/2] Loading output tokens"
-            )
-            log(":white_check_mark:  Token lists loaded successfully.")
+        # Each optional column loads on its own; the prefix cache needs only input_tokens.
+        if "input_tokens" in self.df.columns:
+            self.in_t = _string_array_to_tokens(self.df["input_tokens"].tolist(), tqdm_message="Loading input tokens")
         else:
-            log("[yellow]⚠️  'input_tokens' / 'output_tokens' missing → skipping token lists.")
-            self.in_t, self.out_t = [], []
+            log("[yellow]No 'input_tokens' column; prefix cache not used.")
+        if "output_tokens" in self.df.columns:
+            self.out_t = _string_array_to_tokens(
+                self.df["output_tokens"].tolist(), tqdm_message="Loading output tokens"
+            )
+        else:
+            log("[yellow]No 'output_tokens' column; skipping output token lists.")
+        if self.in_t or self.out_t:
+            log("Token lists loaded.")
 
         if "session_id" in self.df.columns:
             self.sessions = self.df["session_id"].tolist()
             log(f"Found {len(set(self.sessions))} unique sessions in the trace.")
         else:
             self.sessions = None
-            log("[yellow]No 'session_id' column found → sessions not tracked.")
+            log("[yellow]No 'session_id' column; sessions not tracked.")

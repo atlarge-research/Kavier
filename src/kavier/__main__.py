@@ -1,4 +1,4 @@
-"""``python -m kavier`` entry point: the unified CLI (same as the ``kavier`` console script)."""
+"""Entry point for ``python -m kavier``; same as the ``kavier`` console script."""
 
 from __future__ import annotations
 

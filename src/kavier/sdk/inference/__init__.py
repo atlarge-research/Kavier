@@ -1,8 +1,8 @@
-"""Inference functionality: the per-request simulator engine plus the public batch-predictor verbs.
+"""Inference simulator and batch predictors.
 
-The simulator core lives in ``core/`` and ``stages/``. The batch predictors (``performance`` /
-``energy`` / ``efficiency`` / ``carbon``) live in ``facade.py`` and are re-exported here lazily, so
-importing this package stays cheap until a verb is first used. ``kavier.inference`` aliases this package.
+The per-request simulator lives in ``core/`` and ``stages/``. The batch predictors (``performance``,
+``energy``, ``efficiency``, ``carbon``) live in ``facade.py`` and are re-exported lazily, so
+``facade.py`` is imported only when a predictor is first used. ``kavier.inference`` aliases this package.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from kavier._lazy import lazy_getattr
 
-if TYPE_CHECKING:  # type-checkers only; never imported at runtime
+if TYPE_CHECKING:
     from kavier.sdk.inference.facade import (
         DEFAULT_GPU_HOUR_PRICE as DEFAULT_GPU_HOUR_PRICE,
     )
@@ -52,8 +52,7 @@ if TYPE_CHECKING:  # type-checkers only; never imported at runtime
         run_inference as run_inference,
     )
 
-# Public names re-exported (lazily) from facade.py. Listed explicitly so real submodules
-# (facade / cli / core / stages) are left to the normal import machinery — never delegated.
+# Names re-exported lazily from facade.py. Submodules are not listed and import normally.
 _FACADE_EXPORTS = frozenset(
     {
         "performance",

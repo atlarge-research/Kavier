@@ -1,21 +1,30 @@
-# Kavier — Cluster Simulator
+# Cluster simulator
 
-`kavier.sdk.cluster` simulates a fixed-size GPU cluster running jobs of
-**known duration** under a simple scheduling policy — `fcfs` (strict FIFO)
-or `backfill` (node-aware). It reports **per-job** metrics (queue wait,
-start/end, runtime, energy, per-job `goodput`) and **per-cluster** metrics (makespan,
-utilization, peak GPUs/queue) plus a GPUs-in-use/queue-depth timeline. Two goodput measures are
-reported: `goodput_jobs_per_s` (scheduling throughput, jobs/s) and `scheduling_goodput`
-(scheduling efficiency = `Σ runtime_s / Σ turnaround_s`, i.e. training time / wall-clock).
+`kavier.sdk.cluster` simulates a fixed-size GPU cluster that runs jobs of known duration under
+one of four scheduling policies: `distributed-fcfs`, `distributed-backfill`, `consolidated-fcfs`
+(default), or `consolidated-backfill`.
 
-**Python**
+Per job, it reports queue wait, start and end time, runtime, energy, and `goodput`. Per cluster, it
+reports makespan, utilization, peak GPUs in use, and peak queue depth, plus a timeline of GPUs in use
+and queue depth.
+
+There are two cluster goodput measures. `goodput_jobs_per_s` is the scheduling throughput in jobs/s.
+`scheduling_goodput` is the scheduling efficiency, `sum(runtime_s) / sum(turnaround_s)`: training time
+over wall-clock time.
+
+Python:
+
 ```python
 from kavier.sdk.cluster import schedule
 r = schedule([{"submit_s": 0, "gpus": 8, "duration_s": 3600}],
-             policy="fcfs", num_gpus=16)
+             policy="consolidated-fcfs", num_nodes=2, node_gpus=8)
 print(r.cluster.makespan_h, r.cluster.utilization)
+```
 
-CLI
-kavier cluster --jobs jobs.csv --policy backfill --num-nodes 2 --node-gpus 8
+CLI:
 
-Jobs CSV: submit_s,gpus,duration_s[,nodes,power_w_per_gpu].
+```bash
+kavier cluster --jobs jobs.csv --policy consolidated-backfill --num-nodes 2 --node-gpus 8
+```
+
+Jobs CSV: `submit_s,gpus,duration_s[,nodes,power_w_per_gpu]`.

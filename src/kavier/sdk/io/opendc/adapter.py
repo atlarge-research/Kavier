@@ -75,7 +75,7 @@ def prepare_opendc_input(tasks: pd.DataFrame, fragments: pd.DataFrame, dst_dir: 
 
 
 def output_kavier_specs(dst_dir: str, results: str) -> None:
-    """Dump the Kavier sim ``results`` text alongside the workload as ``_sim_results.txt``."""
+    """Dump the Kavier sim ``results`` text alongside the workload as UTF-8 ``_sim_results.txt``."""
     os.makedirs(dst_dir, exist_ok=True)
-    with open(f"{dst_dir}/_sim_results.txt", "w") as f:
+    with open(f"{dst_dir}/_sim_results.txt", "w", encoding="utf-8") as f:
         f.write(results)

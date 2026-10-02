@@ -24,7 +24,10 @@ def fragments_from_training(
     epochs: float | None = None,
     dataset_tokens: int | None = None,
 ) -> List[Fragment]:
-    """One Fragment: train_runtime (s) at aggregate power; sizing via _resolve_total_tokens (= kavier training)."""
+    """Return one Fragment of ``train_runtime`` seconds at the aggregate power of all GPUs.
+
+    Training length is resolved by ``_resolve_total_tokens``, as in ``kavier training``.
+    """
     if _resolve_total_tokens(total_tokens, epochs, dataset_tokens) is None:
         raise ValueError("--total_tokens (or --epochs + --dataset_tokens) is required to derive a training runtime")
 
@@ -56,9 +59,24 @@ def fragments_from_training(
     return [Fragment(start_time=pd.Timestamp(start_time), duration_s=runtime_s, power_w=aggregate_power_w)]
 
 
+def _powersource_times(df: pd.DataFrame) -> pd.Series:
+    """Return the row timestamps, preferring ``timestamp_absolute`` and reading integers as epoch milliseconds.
+
+    OpenDC writes ``timestamp`` (ms since simulation start) and ``timestamp_absolute`` (epoch ms) as int64.
+    """
+    col = df["timestamp_absolute"] if "timestamp_absolute" in df.columns else df["timestamp"]
+    if pd.api.types.is_integer_dtype(col):
+        return pd.to_datetime(col, unit="ms")
+    return col
+
+
 def fragments_from_powersource(df: pd.DataFrame) -> List[Fragment]:
-    """Per-timestamp Fragment: energy summed per ts, duration = gap to next distinct ts (last reuses prior width)."""
-    if "timestamp" not in df.columns:
+    """Return one Fragment per distinct timestamp.
+
+    Energy is summed per timestamp. OpenDC reports each row's energy as the energy used since the previous
+    row, so a row covers the gap before its timestamp; the first row reuses the next gap.
+    """
+    if "timestamp" not in df.columns and "timestamp_absolute" not in df.columns:
         raise ValueError(
             "powerSource parquet has no 'timestamp' column, so its energy cannot be "
             "placed on the carbon timeline; this input mode is unsupported."
@@ -66,14 +84,14 @@ def fragments_from_powersource(df: pd.DataFrame) -> List[Fragment]:
     if "energy_usage" not in df.columns:
         raise ValueError("powerSource parquet must contain an 'energy_usage' column (watt-seconds)")
 
-    if pd.DatetimeIndex(df["timestamp"]).tz is not None:
+    times = _powersource_times(df)
+    if pd.DatetimeIndex(times).tz is not None:
         raise ValueError("powerSource timestamps must be timezone-naive")
     if len(df) == 0:
         return []
 
-    # Duplicate timestamps (e.g. several sources sampled together) carry real energy:
-    # sum energy per timestamp before diffing so zero-width rows are merged, not dropped.
-    per_ts = df.groupby("timestamp", sort=True)["energy_usage"].sum()
+    # Rows sharing a timestamp (several sources) each carry energy; summing avoids zero-width rows.
+    per_ts = df["energy_usage"].groupby(times, sort=True).sum()
     ts = pd.DatetimeIndex(per_ts.index)
     energy = per_ts.to_numpy()
     if len(ts) < 2:
@@ -82,13 +100,11 @@ def fragments_from_powersource(df: pd.DataFrame) -> List[Fragment]:
             "power) cannot be inferred; provide at least two distinct timestamps."
         )
 
-    deltas = ts[1:] - ts[:-1]
-    durations_s = [d.total_seconds() for d in deltas]
-    durations_s.append(durations_s[-1])  # last row reuses the prior width
+    starts = [ts[0] - (ts[1] - ts[0]), *ts[:-1]]
 
     frags: List[Fragment] = []
     for i in range(len(ts)):
-        dur = durations_s[i]
+        dur = (ts[i] - starts[i]).total_seconds()
         power_w = float(energy[i]) / dur
-        frags.append(Fragment(start_time=ts[i], duration_s=dur, power_w=power_w))
+        frags.append(Fragment(start_time=starts[i], duration_s=dur, power_w=power_w))
     return frags

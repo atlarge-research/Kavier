@@ -1,18 +1,25 @@
 name: CI
 
-# Pull requests only: a plain push (any branch or tag) runs nothing. Release tags still pass the
-# full suite through release.yml's gate; workflow_dispatch runs it by hand on any branch.
+# Runs on pull requests, by hand, and from release.yml. Pushes alone run nothing.
 on:
   pull_request:
   workflow_dispatch:
-  workflow_call:  # reused by release.yml as the pre-publish gate
+  workflow_call:  # release.yml pre-publish gate
 
-# Every job is capped at 10 min (normal runs take under 6). GitHub's default is 360: on 2026-09-16 a
-# hung macOS test job ran the full 6 h.
+permissions:
+  contents: read
+
+# A new push to a pull request cancels its older run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Every job has a timeout (GitHub's default is 360 min); a normal run takes ~1.5 min.
+# Longest release.yml chain: guard 1 + lint 3 + test 5 + build 2 + github-release 2 = 13 min.
 jobs:
   lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v7
 
@@ -20,44 +27,31 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Sync (runtime + dev group)
-        run: uv sync --python 3.13
+      - name: Sync
+        run: uv sync --locked --python 3.13
 
-      - name: Ruff version (pinned)
-        run: uv run ruff --version
-
-      - name: Ruff (lint)
-        run: uv run ruff check .
-
-      - name: Ruff (format check)
-        run: uv run ruff format --check .
-
-      # Hook environments are cloned from GitHub on first use; cache them per config file.
+      # Hook environments are cloned on first use; cache them per config file.
       - name: Cache pre-commit hook environments
         uses: actions/cache@v6
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
 
-      # Runs the same hooks contributors get locally (`uv run pre-commit install`), so the config
-      # cannot rot: ruff --fix and ruff-format here re-check what the two steps above check, and
-      # the whitespace hooks are what CI adds on top.
+      # ruff check, ruff format, and whitespace checks (.pre-commit-config.yaml).
       - name: Pre-commit (all files)
         run: uv run pre-commit run --all-files --show-diff-on-failure
 
-      # Strict mypy is gated incrementally (issue #11). Everything checked below is
-      # strict-clean and must stay clean. Full-tree strict is NOT clean yet — the
-      # remaining ungated debt (as filed in issue #11):
+      # Strict mypy covers only strict-clean code (issue #11). Remaining errors per file:
       #   src/kavier/sdk/training/calibration/engine.py   53
       #   src/kavier/sdk/io/input_spec.py                 21
       #   src/kavier/sdk/io/stream_writer.py               5
       #   + ~12 smaller files in kavier/sdk/inference, kavier/sdk/energy, kavier/sdk/library
-      # Burn-down path: make a file/package strict-clean, then add it to a gate below.
-      - name: Mypy (strict gate — clean packages)
+      # Add a file or package to a gate below once it is strict-clean.
+      - name: Mypy (strict, clean packages)
         run: |
           uv run mypy --strict --show-error-codes \
-            -p kavier.cli -p kavier.ui -p kavier.sdk.co2 -p kavier.sdk.cluster
-      - name: Mypy (strict gate — top-level + training engine)
+            -p kavier.cli -p kavier.sdk.co2 -p kavier.sdk.cluster
+      - name: Mypy (strict, top level and training engine)
         run: |
           uv run mypy --strict --follow-imports=skip --show-error-codes \
             src/kavier/__init__.py \
@@ -67,18 +61,13 @@ jobs:
 
   test:
     needs: lint
-    # Linux only. Kavier is POSIX-only (the UI drives the terminal via termios); macOS is covered by
-    # local development — it is what the authors work on — not by CI, where its minutes cost ~10x.
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      id-token: write  # tokenless (OIDC) Codecov upload — see the upload step below
+    # Linux only; macOS is the development platform.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v7
@@ -89,13 +78,12 @@ jobs:
 
       - name: Sync (dev group; +calibration +plot on 3.13)
         run: |
-          # One leg also installs the [calibration] (scipy/scikit-learn) and [plot] (matplotlib)
-          # extras so the engine-regen tests (test_engine_regen.py) and the cluster plot tests
-          # (test_plot.py) actually run instead of importorskip-ing.
+          # The 3.13 leg adds the [calibration] and [plot] extras, so test_engine_regen.py and
+          # test_plot.py run there instead of being skipped.
           if [ "${{ matrix.python-version }}" = "3.13" ]; then
-            uv sync --python 3.13 --extra calibration --extra plot
+            uv sync --locked --python 3.13 --extra calibration --extra plot
           else
-            uv sync --python "${{ matrix.python-version }}"
+            uv sync --locked --python "${{ matrix.python-version }}"
           fi
 
       - name: CLI smoke (entry points resolve)
@@ -106,34 +94,17 @@ jobs:
           uv run kavier cluster --help
           uv run kavier energy --help
           uv run kavier carbon --help
-          # Module-execution entrypoints must resolve too.
           uv run python -m kavier --help
           uv run python -m kavier.cli --help
-          uv run python -m kavier.ui < /dev/null
-          # UI is POSIX-only (termios); the import must work on the runner. The REPL detects the
-          # non-TTY stdin and exits cleanly.
-          uv run python -c "import kavier.ui.app"
 
       - name: Run pytest (with coverage)
-        run: uv run pytest --cov --cov-report=xml
+        run: uv run pytest --cov
 
-      # Tokenless upload via OIDC (needs the job's `id-token: write` above), so no CODECOV_TOKEN
-      # secret is required for pushes from this repo. Coverage is a signal, not a gate: a Codecov
-      # outage or a fork PR (no OIDC) must never fail an otherwise-green run.
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
-        with:
-          use_oidc: true
-          files: coverage.xml
-          flags: ${{ matrix.os }}-py${{ matrix.python-version }}
-          fail_ci_if_error: false
-
-  # Test what we actually ship: build the wheel, install it into a fresh venv
-  # (no repo on the path), and smoke every console script + packaged data (issue #12).
+  # Install the built wheel into a fresh venv and smoke every console script and packaged data (issue #12).
   wheel-smoke:
     needs: lint
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v7
 
@@ -158,33 +129,40 @@ jobs:
           kavier cluster --help
           kavier energy --help
           kavier carbon --help
-          kavier-ui < /dev/null
           python -m kavier --help
           python -m kavier.cli --help
-          # Packaged calibration tables must ship in the wheel and load.
+          # The calibration tables ship in the wheel.
           python -c "from kavier.sdk.training import calibration; assert calibration.available_calibrations()"
-          # UI must import on POSIX (termios/tty are top-level imports).
-          python -c "import kavier.ui.app"
 
-  # Build the CLI + UI docker images (build only on CI; push happens in release.yml).
-  # Mirrors coastline's docker-build job: same two targets the Dockerfile multiplexes off
-  # one shared runtime stage, so a broken stage fails CI on every push rather than at release.
+  # Build the Dockerfile so a broken image fails the pull request.
   docker-build:
     needs: lint
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      matrix:
-        target: [cli, ui]
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - name: Build ${{ matrix.target }} image
-        uses: docker/build-push-action@v6
+      - name: Build image
+        uses: docker/build-push-action@v7
         with:
           context: .
-          target: ${{ matrix.target }}
           push: false
-          tags: kavier:${{ matrix.target }}
+          tags: kavier
+
+  # The same strict build as docs-deploy.yml, so broken docs fail the pull request.
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Build docs (strict)
+        run: |
+          uv sync --locked --only-group docs --no-install-project
+          uv run --no-sync mkdocs build --strict

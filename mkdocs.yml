@@ -1,0 +1,54 @@
+site_name: Kavier
+site_description: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference and Training
+site_author: Radu Nicolae, AtLarge Research
+site_url: https://atlarge-research.github.io/Kavier/
+repo_url: https://github.com/atlarge-research/Kavier
+repo_name: atlarge-research/Kavier
+copyright: MIT License
+docs_dir: docs
+site_dir: site
+
+nav:
+  - Kavier: index.md
+  - Fine-tuning model: training.md
+  - Usage: usage.md
+  - Cluster simulator: cluster-usage.md
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.snippets
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - assets/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+plugins:
+  - search

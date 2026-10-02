@@ -1,1 +1,1 @@
-"""Training engine and its calibration / CLI-argument helpers."""
+"""Analytical training engine and its configuration."""

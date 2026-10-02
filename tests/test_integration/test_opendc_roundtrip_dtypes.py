@@ -1,10 +1,9 @@
-"""OpenDC export round-trip schema / DTYPES / VALUES for ``kavier.sdk.io.opendc.adapter``.
+"""OpenDC export round-trip of schema, dtypes and values for ``kavier.sdk.io.opendc.adapter``.
 
-The oracle for every dtype assertion is EXTERNAL: OpenDC's Java workload reader is dtype-strict and
-demands exactly these Arrow types on disk (submission_time = ms timestamp, fragment durations =
-duration[ms], task duration/mem = int64, counts = int32). The adapter's job is to coerce arbitrary
-pandas dtypes to that contract; these tests pin the contract, not the adapter's own choices. Value
-oracles are the literal inputs fed in — a faithful coercion must return them unchanged.
+The expected dtypes are the Arrow types OpenDC's Java workload reader requires on disk
+(submission_time = ms timestamp, fragment durations = duration[ms], task duration/mem = int64,
+counts = int32). The adapter coerces arbitrary pandas dtypes to these types. Expected values are the
+literal inputs, which a correct coercion returns unchanged.
 """
 
 from __future__ import annotations
@@ -21,8 +20,8 @@ from kavier.sdk.io.opendc.adapter import (
 
 
 def _raw_tasks(with_tokens: bool = False, extra: bool = False) -> pd.DataFrame:
-    # Deliberately hand floats where the schema wants ints (mem_capacity, id) so a dropped
-    # ``.astype`` shows up as the wrong on-disk type rather than silently passing through.
+    # Floats where the schema wants ints (mem_capacity, id), so a missing ``.astype`` shows up as the
+    # wrong on-disk type.
     row = {
         "id": 5.0,
         "submission_time": 1234,
@@ -36,7 +35,7 @@ def _raw_tasks(with_tokens: bool = False, extra: bool = False) -> pd.DataFrame:
     if with_tokens:
         row["total_tokens"] = 4242
     if extra:
-        row["scheduling_class"] = 99  # not an OpenDC tasks column -> must be dropped
+        row["scheduling_class"] = 99  # not an OpenDC tasks column; dropped
     return pd.DataFrame([row])
 
 
@@ -50,7 +49,7 @@ def _raw_fragments() -> pd.DataFrame:
 
 
 def test_tasks_coerced_to_opendc_required_dtypes(tmp_path) -> None:
-    # Oracle: the OpenDC reader's required column types (independent of the adapter's astype calls).
+    # Column types required by the OpenDC reader.
     path = str(tmp_path / "tasks.parquet")
     write_tasks_opendc(_raw_tasks(), path)
     schema = pq.read_table(path).schema
@@ -66,12 +65,12 @@ def test_tasks_coerced_to_opendc_required_dtypes(tmp_path) -> None:
     }
     for name, typ in expected.items():
         assert schema.field(name).type == typ, name
-    # submission_time is a millisecond timestamp, not an int/second timestamp.
+    # submission_time is a timestamp in milliseconds.
     assert schema.field("submission_time").type == pa.timestamp("ms")
 
 
 def test_tasks_numeric_values_round_trip(tmp_path) -> None:
-    # Oracle: the literal inputs; coercion must not rescale or reorder values.
+    # Coercion keeps the input values, unscaled and in order.
     path = str(tmp_path / "tasks.parquet")
     write_tasks_opendc(_raw_tasks(), path)
     tbl = pq.read_table(path)
@@ -85,8 +84,8 @@ def test_tasks_numeric_values_round_trip(tmp_path) -> None:
 
 
 def test_tasks_submission_time_is_ms_since_epoch(tmp_path) -> None:
-    # Oracle: 1234 is interpreted as MILLISECONDS since epoch -> the instant 1234 ms after 1970-01-01.
-    # If the adapter used unit="s" this would decode to 1_234_000 ms; unit="us"/"ns" would give <1234.
+    # 1234 is read as milliseconds since the epoch. unit="s" would decode to 1_234_000 ms; "us" or "ns"
+    # would give < 1234.
     path = str(tmp_path / "tasks.parquet")
     write_tasks_opendc(_raw_tasks(), path)
     tbl = pq.read_table(path)
@@ -96,8 +95,8 @@ def test_tasks_submission_time_is_ms_since_epoch(tmp_path) -> None:
 
 
 def test_tasks_drop_columns_absent_from_schema(tmp_path) -> None:
-    # Oracle: _coerce_tasks_df selects df.loc[:, schema cols] -> an unknown column is dropped.
-    # A regression to df.copy() (carry all columns) would leak "scheduling_class" onto disk.
+    # _coerce_tasks_df selects df.loc[:, schema cols], so an unknown column is dropped. df.copy() would
+    # write "scheduling_class" to disk.
     path = str(tmp_path / "tasks.parquet")
     write_tasks_opendc(_raw_tasks(extra=True), path)
     names = pq.read_table(path).column_names
@@ -105,7 +104,7 @@ def test_tasks_drop_columns_absent_from_schema(tmp_path) -> None:
 
 
 def test_total_tokens_carried_only_when_present(tmp_path) -> None:
-    # Oracle: total_tokens is inference-only; the schema gains it iff the input has it.
+    # total_tokens is inference-only; the schema has it iff the input has it.
     with_path = str(tmp_path / "with.parquet")
     without_path = str(tmp_path / "without.parquet")
     write_tasks_opendc(_raw_tasks(with_tokens=True), with_path)
@@ -115,12 +114,12 @@ def test_total_tokens_carried_only_when_present(tmp_path) -> None:
     without_tbl = pq.read_table(without_path)
     assert with_tbl.column("total_tokens").to_pylist() == [4242]
     assert with_tbl.schema.field("total_tokens").type == pa.int64()
-    # Training tasks (no token count) must NOT gain a spurious column.
+    # Training tasks (no token count) get no total_tokens column.
     assert "total_tokens" not in without_tbl.column_names
 
 
 def test_fragments_coerced_to_opendc_required_dtypes(tmp_path) -> None:
-    # Oracle: OpenDC fragment schema types; duration is a duration[ms], counts int32, usages float64.
+    # OpenDC fragment types: duration is duration[ms], counts int32, usages float64.
     path = str(tmp_path / "fragments.parquet")
     write_fragments_opendc(_raw_fragments(), path)
     schema = pq.read_table(path).schema
@@ -137,8 +136,8 @@ def test_fragments_coerced_to_opendc_required_dtypes(tmp_path) -> None:
 
 
 def test_fragments_duration_values_are_milliseconds(tmp_path) -> None:
-    # Oracle: input 30000/70000 are MILLISECOND durations -> 30000 ms / 70000 ms timedeltas.
-    # unit="s" would blow these up 1000x; unit="us" would shrink them.
+    # Inputs 30000/70000 are millisecond durations. unit="s" would scale them up 1000x; unit="us" would
+    # shrink them.
     path = str(tmp_path / "fragments.parquet")
     write_fragments_opendc(_raw_fragments(), path)
     durs = pq.read_table(path).column("duration").to_pylist()
@@ -147,14 +146,13 @@ def test_fragments_duration_values_are_milliseconds(tmp_path) -> None:
 
 
 def test_prepare_writes_both_named_files_into_new_dir(tmp_path) -> None:
-    # prepare_opendc_input must os.makedirs a missing dir and emit the two OpenDC files,
-    # routing tasks vs fragments to the right names (not swapped).
+    # prepare_opendc_input creates a missing dir and writes tasks and fragments to their own file names.
     dst = tmp_path / "nested" / "workload"  # does not exist yet
     prepare_opendc_input(_raw_tasks(), _raw_fragments(), str(dst))
 
     tasks = pq.read_table(dst / "tasks.parquet")
     frags = pq.read_table(dst / "fragments.parquet")
-    # 1 task row, 2 fragment rows -> confirms the frames were not swapped between the two files.
+    # 1 task row and 2 fragment rows: the frames were not swapped.
     assert tasks.num_rows == 1
     assert frags.num_rows == 2
     # Content marker: only the tasks file carries submission_time; only fragments carry cpu_usage.

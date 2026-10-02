@@ -1,16 +1,14 @@
-"""Shared argparse flag builders for the training model, used by ``kavier training`` and
-``kavier carbon --from-training``.
-"""
+"""Argparse flags for the training model, shared by ``kavier training`` and ``kavier carbon --from-training``."""
 
 import argparse
 
-from kavier.sdk.training.core.config import Method
+from kavier.sdk.training.core.engine import known_methods
 
 
 def add_training_job_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Add the model/method/GPU/sizing flags shared by the training and carbon (from-training) commands."""
     parser.add_argument("--model_name")
-    parser.add_argument("--method", choices=[m.value for m in Method])
+    parser.add_argument("--method", choices=known_methods())
     parser.add_argument("--gpu_model")
     parser.add_argument("--tokens_per_sample", type=int)
     parser.add_argument("--batch_size", type=int)
@@ -41,7 +39,7 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         default=None,
         help="YAML file of {arg_name: value} applied as defaults (explicit flags still override).",
     )
-    # Single-config args below are required unless --input_csv given; enforced in the subcommand.
+    # The job flags are required without --input_csv; the subcommand checks this.
     parser.add_argument("--input_csv", default=None, help="Simulate every row of this CSV instead of a single config")
     add_training_job_args(parser)
     return parser

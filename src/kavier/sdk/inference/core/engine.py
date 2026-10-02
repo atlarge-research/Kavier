@@ -1,8 +1,6 @@
-"""Inference simulation engine: iterate a trace, simulate each request, stream tasks/fragments, aggregate metrics."""
+"""Trace-level inference simulation: simulate each request, stream tasks and fragments, aggregate metrics."""
 
 from __future__ import annotations
-
-import time
 
 import numpy as np
 import pandas as pd
@@ -10,7 +8,7 @@ import pandas as pd
 from kavier.sdk.inference.core.cache import PrefixCache
 from kavier.sdk.inference.core.config import SimConfig
 from kavier.sdk.inference.core.metrics import Metrics
-from kavier.sdk.inference.core.runner import RequestInput, run_request_loop
+from kavier.sdk.inference.core.runner import TASK_ORIGIN_MS, RequestInput, run_request_loop
 from kavier.sdk.io.input_spec import InputSpec
 from kavier.sdk.io.stream_writer import StreamingParquetWriter
 from kavier.sdk.library.specs.GPUSpec import GPUSpec
@@ -26,7 +24,7 @@ def simulate(
     tasks_writer: StreamingParquetWriter,
     frags_writer: StreamingParquetWriter,
 ) -> str:
-    """Simulate every request in ``trace``, stream OpenDC tasks/fragments to the writers, and return the summary."""
+    """Simulate every request in ``trace``, stream OpenDC tasks and fragments to the writers, return the summary."""
     cache = PrefixCache(cfg.cache)
     metrics = Metrics()
 
@@ -36,7 +34,7 @@ def simulate(
     in_tokens = trace.in_t if trace.in_t else None
 
     TASKS, FRAGS = [], []
-    t0_ms = int(time.time_ns() / 1e6)
+    t0_ms = TASK_ORIGIN_MS
     total = len(num_in)
 
     def _flush() -> None:

@@ -1,10 +1,8 @@
-"""Cluster-scheduling vocabularies: the scheduling ``Policy`` and the oversized-job ``Oversized`` mode.
+"""Scheduling ``Policy`` and oversized-job ``Oversized`` enums for the cluster simulator.
 
-``StrEnum`` members are ``str``, so ``Policy.CONSOLIDATED_FCFS == "consolidated-fcfs"`` and the public
-``schedule(policy=...)`` boundary keeps accepting plain strings unchanged. These live in their own
-stdlib-only module (not in ``facade.py``) because the scheduling kernel in ``core/engine.py`` needs
-``Oversized`` while ``facade.py`` imports the engine — defining them in the facade would create an
-import cycle.
+``StrEnum`` members are ``str``, so ``Policy.CONSOLIDATED_FCFS == "consolidated-fcfs"`` and
+``schedule(policy=...)`` accepts plain strings. The enums sit in a stdlib-only module to avoid an import
+cycle: ``core/engine.py`` needs ``Oversized`` and ``facade.py`` imports the engine.
 """
 
 from __future__ import annotations
@@ -13,10 +11,10 @@ from enum import StrEnum
 
 
 class Policy(StrEnum):
-    """Scheduling discipline for :func:`kavier.sdk.cluster.schedule`.
+    """Scheduling policy for :func:`kavier.sdk.cluster.schedule`.
 
-    ``distributed-*`` spread jobs (tight-pack, ignoring each job's ``nodes`` request); ``consolidated-*``
-    gang-place, honouring ``nodes`` (one replica per distinct co-located node). ``*-fcfs`` is strict
+    ``distributed-*`` tight-packs jobs and ignores each job's ``nodes`` request. ``consolidated-*``
+    gang-places a job on ``nodes`` distinct nodes, one replica per node. ``*-fcfs`` is strict
     head-of-line first-come-first-served; ``*-backfill`` is FIFO with aggressive backfill.
     """
 
@@ -27,7 +25,7 @@ class Policy(StrEnum):
 
 
 class Oversized(StrEnum):
-    """How to treat a job requesting more GPUs than the whole cluster: clamp it or skip it."""
+    """How to treat a job that requests more GPUs than the cluster has: clamp it or skip it."""
 
     CAP = "cap"
     DROP = "drop"

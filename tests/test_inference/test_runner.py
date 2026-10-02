@@ -1,7 +1,6 @@
-"""Behavioural tests for ``simulate_one`` (one request -> OpenDC task + GPU-usage fragments).
+"""Tests for ``simulate_one``: one request -> OpenDC task + GPU-usage fragments.
 
-Every expected value below is hand-derived from the physics constants and the pinned A10 /
-Llama-3-8B specs, NOT read back from the code under test. The physics (independent of runner.py):
+Expected values are computed by hand from the constants and the A10 / Llama-3-8B specs:
 
   COMPUTE_EFFICIENCY=0.30  MEMORY_EFFICIENCY=0.60  PREFILL_OVERHEAD_S=0.025  MAX_GPU_UTILIZATION=0.95
   Llama-3-8B: active_params=8e9, p_bytes=2
@@ -23,7 +22,6 @@ from kavier.sdk.inference.core.runner import simulate_one
 from kavier.sdk.library.gpu import GPU_SPEC_LIBRARY
 from kavier.sdk.library.llm import LLM_SPEC_LIBRARY
 
-# Pin the specs by name so the hand-derived oracles stay valid regardless of catalogue order.
 LLM = LLM_SPEC_LIBRARY["Llama-3-8B"]
 GPU = GPU_SPEC_LIBRARY["A10"]
 
@@ -53,15 +51,14 @@ def test_task_duration_is_hand_derived_milliseconds():
     # prefill(512) = 0.025 + 512*(1.6e10/3.75e13)   = 0.24345333 s
     # decode(128)  = 128 * 4.4444e-2                = 5.68888889 s
     # total        = 5.93234222 s -> round(*1000)   = 5932 ms
-    # Falsification: the old raw-seconds bug (int(total_s)) yields 5, /1000 -> 6, dropping the
-    # roofline max() (using the compute term) collapses decode ~100x.
+    # int(total_s) would give 5; using the compute term alone would shrink decode ~100x.
     task, _frags, _tp, _td = _run(512, 128)
     assert task["duration"] == 5932
 
 
 def test_subsecond_request_not_truncated_to_zero():
     # prefill(1)=0.02542667 s, decode(1)=0.04444444 s, total=0.06987111 s -> round(*1000)=70 ms.
-    # The old int(total_s) truncated this sub-second request to 0; the ms model yields exactly 70.
+    # int(total_s) would give 0.
     task, _frags, _tp, _td = _run(1, 1)
     assert task["duration"] == 70
 
@@ -69,30 +66,57 @@ def test_subsecond_request_not_truncated_to_zero():
 @pytest.mark.parametrize(
     ("n_in", "n_out"),
     [
-        (1, 1),  # total 0.070 s -> num_snaps=max(1,0)=1: single fragment carries the whole residual
+        (1, 1),  # total 0.070 s -> num_snaps=max(1,0)=1: one fragment holds the whole residual
         (512, 128),  # total 5.93 s -> 59 snaps of 100 ms + a residual last fragment
     ],
 )
 def test_fragments_tile_task_duration_exactly(n_in, n_out):
-    # Invariant: the fragments must partition the task duration with no gap/overlap, because the
-    # final fragment absorbs the residual. Falsification: emit a fixed fragment_duration for the
-    # last fragment too and the sum drifts from task["duration"].
+    # Fragments partition the task duration; the last fragment absorbs the residual.
     task, fragments, _tp, _td = _run(n_in, n_out)
     assert sum(f["duration"] for f in fragments) == task["duration"]
 
 
+@pytest.mark.parametrize(
+    ("export_rate_s", "n_fragments"),
+    [
+        (0.0015, 35),  # 1.5 ms rounds to 2 ms fragments: 70 // 2 = 35
+        (0.0006, 70),  # 0.6 ms rounds to 1 ms fragments
+        (0.1234, 1),  # one 123 ms fragment is longer than the 70 ms task
+    ],
+)
+def test_fragments_tile_task_duration_at_fractional_ms_export_rates(export_rate_s, n_fragments):
+    # A 70 ms request (see test_subsecond_request_not_truncated_to_zero).
+    cfg = SimConfig(export_rate=export_rate_s)
+    task, fragments, _tp, _td = simulate_one(
+        idx=0,
+        session_id="s",
+        n_in_tokens=1,
+        n_out_tokens=1,
+        in_tokens=None,
+        llm=LLM,
+        gpu=GPU,
+        cache=PrefixCache(cfg.cache),
+        cfg=cfg,
+        export_rate_s=export_rate_s,
+        t0_ms=0,
+    )
+    assert task["duration"] == 70
+    assert sum(f["duration"] for f in fragments) == 70
+    assert len(fragments) == n_fragments
+    assert all(f["duration"] >= 1 for f in fragments)
+
+
 def test_task_total_tokens_is_input_plus_output_sum():
-    # Independent: 40 + 60 = 100. Asymmetric inputs so n_in+n_in (80) or n_out+n_out (120) fail.
+    # 40 + 60 = 100. Unequal inputs catch n_in+n_in (80) and n_out+n_out (120).
     task, _frags, _tp, _td = _run(40, 60)
     assert task["total_tokens"] == 100
 
 
 def test_fragment_gpu_usage_spans_util_endpoints():
-    # gpu_usage = utilisation * capacity, utilisation is 0.5 in warm/cool windows and
-    # MAX_GPU_UTILIZATION=0.95 in steady state. For a multi-second request both endpoints appear.
+    # gpu_usage = utilisation * capacity; utilisation is 0.5 in warm/cool windows and
+    # MAX_GPU_UTILIZATION=0.95 in steady state. A multi-second request has both.
     #   max = 0.95 * (1695*9216) = 14_840_064.0
     #   min = 0.50 * (1695*9216) =  7_810_560.0
-    # Falsification: a wrong capacity formula (e.g. cores only) or a changed util cap shifts these.
     _task, fragments, _tp, _td = _run(512, 128)
     usages = [f["gpu_usage"] for f in fragments]
     assert max(usages) == pytest.approx(0.95 * A10_CAPACITY)
@@ -100,11 +124,10 @@ def test_fragment_gpu_usage_spans_util_endpoints():
 
 
 def test_prefix_cache_hit_zeroes_prefill_time():
-    # Default cache policy is "prefill": a prefix hit drops prefill to 0, leaving decode-only.
-    # Requires n_in >= cache.min_len (1024) and a prior seeding lookup on the same session.
+    # Default policy "prefill": a prefix hit sets prefill to 0. A hit needs n_in >= min_len (1024)
+    # and an earlier lookup in the same session.
     #   miss: prefill(1024)+decode(128) = 0.46190667 + 5.68888889 = 6.1508 s -> 6151 ms
     #   hit : decode(128) only          = 5.68888889 s              -> 5689 ms
-    # Falsification: if the hit branch didn't zero prefill, the second run would also be 6151 ms.
     cfg = SimConfig()
     shared_cache = PrefixCache(cfg.cache)
     prompt = list(range(1024))

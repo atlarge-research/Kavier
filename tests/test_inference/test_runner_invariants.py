@@ -1,7 +1,6 @@
-"""Behavioural contracts for ``simulate_one`` (per-request inference sim).
+"""Property and roofline tests for ``simulate_one``, the per-request inference simulation.
 
-Oracles are hand-derived from the roofline physics and the pinned catalog constants, NOT
-from the engine's own output. Reference numbers for Llama-3-8B on an A10:
+Expected values are computed by hand. Reference numbers for Llama-3-8B on an A10:
 
   active_params = 8e9, p_bytes = 2
   A10: fp16 tensor TFLOPS = 125, mem bandwidth = 600e9 B/s, cores = 9216, core_max = 1695 MHz
@@ -10,7 +9,7 @@ from the engine's own output. Reference numbers for Llama-3-8B on an A10:
 
   per-token decode cost = max(compute, memory):
     compute = 2*8e9 / (125e12*0.30)          = 4.26667e-4 s
-    memory  = (2*8e9) / (600e9*0.60)          = 4.44444e-2 s   <- memory-bound wins
+    memory  = (2*8e9) / (600e9*0.60)          = 4.44444e-2 s   <- memory-bound
   per-input-token prefill cost = 2*8e9 / (125e12*0.30) = 4.26667e-4 s
   gpu_capacity = 1695 * 9216 = 15_621_120
 """
@@ -30,7 +29,7 @@ from kavier.sdk.library.llm import LLM_SPEC_LIBRARY
 _LLM = LLM_SPEC_LIBRARY["Llama-3-8B"]
 _GPU = GPU_SPEC_LIBRARY["A10"]
 
-_GPU_CAPACITY = 15_621_120.0  # 1695 MHz * 9216 cores, independent of the engine
+_GPU_CAPACITY = 15_621_120.0  # 1695 MHz * 9216 cores
 
 
 def _run(n_in, n_out, kv=True, cache=None, cfg=None, in_tokens=None, sid="s"):
@@ -57,29 +56,25 @@ def _run(n_in, n_out, kv=True, cache=None, cfg=None, in_tokens=None, sid="s"):
 )
 @settings(max_examples=80, deadline=None)
 def test_total_tokens_is_input_plus_output(n_in, n_out) -> None:
-    # Contract: task carries n_in + n_out (the per-token energy step relies on it).
-    # Independent oracle: the sum itself. Falsifies under n_in*n_out, n_in only, etc.
+    # The per-token energy step reads total_tokens = n_in + n_out.
     task, *_ = _run(n_in, n_out)
     assert task["total_tokens"] == n_in + n_out
 
 
 def test_duration_matches_hand_derived_roofline_latency() -> None:
-    # n_in=1000, n_out=100, KV on. End-to-end latency through prefill + memory-bound decode.
+    # n_in=1000, n_out=100, KV on.
     #   t_prefill = 0.025 + 1000 * 4.26667e-4 = 0.45166667 s
     #   t_decode  = 100 * 0.04444444          = 4.44444444 s   (memory-bound)
     #   total     = 4.89611111 s -> round(4896.111) = 4896 ms
-    # Falsifies if the 1e12 TFLOPS scale, the efficiencies, the roofline max, or the
-    # 0.025 prefill overhead are perturbed (e.g. dropping the overhead gives 4871).
+    # Without the 0.025 s overhead: 4871 ms.
     task, *_ = _run(1000, 100, kv=True)
     assert task["duration"] == 4896
 
 
 def test_kv_off_applies_quadratic_decode_scaling() -> None:
-    # n_in=0, n_out=10. Prefill is just the 0.025 s overhead in both cases; only decode differs.
+    # n_in=0, n_out=10. Prefill is the 0.025 s overhead in both cases.
     #   KV on : t_decode = 10        * 0.04444444 = 0.44444 s -> total 0.46944 -> 469 ms
     #   KV off: t_decode = 10*11/2   * 0.04444444 = 2.44444 s -> total 2.46944 -> 2469 ms
-    # The n(n+1)/2 = 55 vs 10 factor is the quadratic-without-KV law. Falsifies if the KV
-    # branch is ignored (off would equal on) or the triangular sum is dropped.
     on = _run(0, 10, kv=True)[0]["duration"]
     off = _run(0, 10, kv=False)[0]["duration"]
     assert on == 469
@@ -92,20 +87,29 @@ def test_kv_off_applies_quadratic_decode_scaling() -> None:
 )
 @settings(max_examples=80, deadline=None)
 def test_fragments_tile_task_duration_exactly(n_in, n_out) -> None:
-    # Invariant: the emitted GPU-usage fragments partition the task duration with no gap
-    # or overlap. Falsifies if the final fragment stops absorbing the residual, or if
-    # fragment durations are computed from a rate inconsistent with the task duration.
+    # Fragments partition the task duration; the last fragment absorbs the residual.
     task, fragments, _tp, _td = _run(n_in, n_out)
     assert sum(f["duration"] for f in fragments) == task["duration"]
 
 
+@given(
+    n_in=st.integers(min_value=0, max_value=4000),
+    n_out=st.integers(min_value=0, max_value=200),
+    export_rate=st.floats(min_value=1e-4, max_value=2.0),
+)
+@settings(max_examples=100, deadline=None)
+def test_fragments_tile_task_duration_for_any_export_rate(n_in, n_out, export_rate) -> None:
+    task, fragments, _tp, _td = _run(n_in, n_out, cfg=SimConfig(export_rate=export_rate))
+    assert sum(f["duration"] for f in fragments) == task["duration"]
+    assert all(f["duration"] >= 1 for f in fragments)
+
+
 def test_gpu_usage_takes_only_the_two_piecewise_levels() -> None:
-    # The piecewise model yields exactly 0.5 (warm/cool) and MAX_GPU_UTILIZATION=0.95 (steady),
-    # scaled by capacity. For a ~4.9 s request the steady window (t in [0.2, total-0.2]) exists,
-    # so both levels appear; the very first fragment (t=0 < warm) must be the 0.5 level.
+    # Piecewise utilisation: 0.5 in warm/cool windows, MAX_GPU_UTILIZATION=0.95 in steady state,
+    # times capacity. A ~4.9 s request has a steady window t in [0.2, total-0.2]; the first
+    # fragment (t=0) is in the warm window.
     #   0.5  * 15_621_120 = 7_810_560
     #   0.95 * 15_621_120 = 14_840_064
-    # Falsifies if MAX_GPU_UTILIZATION changes, the warm level changes, or capacity is mis-scaled.
     _task, fragments, _tp, _td = _run(1000, 100)
     warm_level = 7_810_560.0
     steady_level = 14_840_064.0
@@ -117,11 +121,10 @@ def test_gpu_usage_takes_only_the_two_piecewise_levels() -> None:
 @pytest.mark.parametrize(
     ("action", "expected_second_duration"),
     [
-        # A repeated >=min_len prompt hits the prefix cache on the 2nd request. The hit
-        # zeroes stages per the action; the 1st request always pays full price (817 ms:
-        # t_prefill = 0.025 + 1024*4.26667e-4 = 0.461907 s, t_decode = 8*0.04444444 = 0.355556 s
-        # -> 0.817462 s -> 817 ms).
-        ("none", 817),  # no zeroing even on a hit -> same as first request
+        # The second identical prompt (>= min_len) is a cache hit; the action sets which stages drop.
+        # First request: t_prefill = 0.025 + 1024*4.26667e-4 = 0.461907 s,
+        # t_decode = 8*0.04444444 = 0.355556 s -> 0.817462 s -> 817 ms.
+        ("none", 817),  # hit changes nothing
         ("prefill", 356),  # t_prefill -> 0, decode stays: round(355.556) = 356 ms
         ("full", 1),  # both stages -> 0 s -> max(1, round(0)) = 1 ms (duration floor)
     ],
@@ -132,6 +135,6 @@ def test_prefix_cache_hit_zeroes_stages_per_action(action, expected_second_durat
     tokens = list(range(1024))
     first = _run(1024, 8, cache=cache, cfg=cfg, in_tokens=tokens)[0]["duration"]
     second = _run(1024, 8, cache=cache, cfg=cfg, in_tokens=tokens)[0]["duration"]
-    # First request is a cache miss (insert), so it always pays the full 817 ms.
+    # First request is a miss.
     assert first == 817
     assert second == expected_second_duration

@@ -1,8 +1,6 @@
-"""Behavioral tests for the LRU prefix cache (kavier.sdk.inference.core.cache.PrefixCache).
+"""Tests for the LRU prefix cache (kavier.sdk.inference.core.cache.PrefixCache).
 
-Oracles are derived independently from the documented contract: an LRU cache of capacity
-M keyed on the first ``min_len`` prompt tokens (optionally namespaced by session id). None of
-the expected values are copied from PrefixCache's own output.
+The cache holds M entries keyed on the first ``min_len`` prompt tokens, optionally per session id.
 """
 
 from hypothesis import given
@@ -17,18 +15,16 @@ def make_cache(max_entries=3, scope="session", min_len=2):
 
 
 def test_first_lookup_misses_second_lookup_hits():
-    # Contract: a never-seen key is a miss (returns False, gets inserted); the identical
-    # follow-up lookup is a hit (True). Oracle: exactly one hit, zero evictions occurred.
+    # A new key misses and is inserted; the same lookup then hits.
     c = make_cache()
     assert c.lookup("s1", [1, 2, 3]) is False  # cold key -> miss
     assert c.lookup("s1", [1, 2, 3]) is True  # same key -> hit
-    assert c.hits == 1  # exactly one hit was recorded (the miss must not count)
+    assert c.hits == 1  # the miss is not counted
     assert c.evictions == 0  # capacity 3, only one distinct key -> nothing evicted
 
 
 def test_key_uses_only_first_min_len_tokens():
-    # Contract: the key is tuple(tokens[:min_len]). With min_len=2, [1,2,3] and [1,2,99]
-    # collapse to the same prefix (1,2); [1,7,...] is a different prefix.
+    # Key is tuple(tokens[:min_len]). With min_len=2, [1,2,3] and [1,2,99] share prefix (1,2).
     c = make_cache(min_len=2)
     assert c.lookup("s", [1, 2, 3]) is False  # inserts prefix (1,2)
     assert c.lookup("s", [1, 2, 99]) is True  # same first-2 tokens -> prefix hit
@@ -36,8 +32,7 @@ def test_key_uses_only_first_min_len_tokens():
 
 
 def test_session_scope_namespaces_by_session_id():
-    # Contract: scope="session" folds the sid into the key, so identical tokens under a
-    # different session are a distinct key -> miss. Oracle: no hit despite equal tokens.
+    # scope="session" adds the sid to the key; equal tokens in another session miss.
     c = make_cache(scope="session")
     assert c.lookup("sessionA", [1, 2]) is False
     assert c.lookup("sessionB", [1, 2]) is False  # different session -> not a hit
@@ -45,8 +40,7 @@ def test_session_scope_namespaces_by_session_id():
 
 
 def test_global_scope_ignores_session_id():
-    # Contract: scope="global" drops the sid from the key, so identical tokens under a
-    # different session collide -> hit. This is the direct complement of session scope.
+    # scope="global" leaves the sid out of the key; equal tokens in another session hit.
     c = make_cache(scope="global")
     assert c.lookup("sessionA", [1, 2]) is False  # cold -> miss, inserts prefix (1,2)
     assert c.lookup("sessionB", [1, 2]) is True  # same tokens, sid ignored -> hit
@@ -54,31 +48,29 @@ def test_global_scope_ignores_session_id():
 
 
 def test_eviction_removes_least_recently_used_entry():
-    # Capacity 2. Insert (1,2) then (2,3); the 3rd distinct key must evict the LRU entry.
-    # Oracle (pure LRU accounting): (1,2) is oldest, so it is the one evicted; (2,3) survives.
+    # Capacity 2. Insert (1,2) then (2,3); a third key evicts the oldest, (1,2).
     c = make_cache(max_entries=2)
     c.lookup("s", [1, 2])  # store LRU->MRU: (1,2)
     c.lookup("s", [2, 3])  # store LRU->MRU: (1,2),(2,3)
     assert c.evictions == 0  # still within capacity
     c.lookup("s", [3, 4])  # full -> evict LRU (1,2), insert (3,4)
     assert c.evictions == 1
-    # Assert survivor before evicted: a miss re-inserts and would evict, perturbing state.
+    # Check the survivor first: a miss re-inserts and evicts.
     assert c.lookup("s", [2, 3]) is True  # (2,3) survived -> still a hit
     assert c.lookup("s", [1, 2]) is False  # (1,2) was the evicted one -> miss
 
 
 def test_hit_refreshes_recency_and_protects_from_eviction():
-    # A hit must move its key to most-recently-used, changing which key dies next.
-    # Capacity 2: insert A,B -> LRU order A,B. Hit A -> order becomes B,A. Insert C evicts B.
-    # Oracle: without recency-refresh A (oldest) would die; the refresh makes B die instead.
+    # A hit moves its key to most-recently-used.
+    # Capacity 2: insert A,B -> LRU order A,B. Hit A -> order B,A. Insert C evicts B.
     c = make_cache(max_entries=2)
     c.lookup("s", [1, 1])  # A
     c.lookup("s", [2, 2])  # B ; order A,B
     assert c.lookup("s", [1, 1]) is True  # hit A -> A becomes MRU ; order B,A
     c.lookup("s", [3, 3])  # C evicts LRU == B
     assert c.evictions == 1
-    # Assert survivor before evicted (a miss would re-insert and evict, perturbing state).
-    assert c.lookup("s", [1, 1]) is True  # A survived thanks to the recency refresh
+    # Check the survivor first: a miss re-inserts and evicts.
+    assert c.lookup("s", [1, 1]) is True  # A survived because of the hit
     assert c.lookup("s", [2, 2]) is False  # B was evicted despite being inserted after A
 
 
@@ -87,12 +79,10 @@ def test_hit_refreshes_recency_and_protects_from_eviction():
     capacity=st.integers(min_value=1, max_value=20),
 )
 def test_distinct_inserts_evict_count_equals_overflow(n_keys, capacity):
-    # Property: inserting n_keys *distinct*, never-before-seen keys into a capacity-M cache
-    # produces max(0, n_keys - M) evictions and zero hits (every lookup is a cold miss).
-    # Oracle is pure cache arithmetic, independent of the implementation's branch condition.
+    # n_keys distinct keys into a capacity-M cache: max(0, n_keys - M) evictions, zero hits.
     c = make_cache(max_entries=capacity, min_len=2)
     for i in range(n_keys):
         assert c.lookup("s", [i, i]) is False  # each prefix (i,i) is unique -> always a miss
     assert c.hits == 0
     assert c.evictions == max(0, n_keys - capacity)
-    assert len(c._store) == min(n_keys, capacity)  # cache never exceeds capacity
+    assert len(c._store) == min(n_keys, capacity)

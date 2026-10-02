@@ -22,8 +22,8 @@ from kavier.sdk.inference.core.config import CacheAction, CacheScope
 from kavier.sdk.inference.core.service import run_performance
 from kavier.sdk.library.lookup import UnknownSpecError
 
-#: Tiny example trace shipped inside the ``kavier.sdk.inference`` package (the uv_build wheel ships it);
-#: resolved via importlib.resources so a bare ``kavier inference`` works from any working directory.
+#: Example trace packaged in ``kavier.sdk.inference``; found via importlib.resources so
+#: ``kavier inference`` works from any directory.
 DEFAULT_TRACE = Path(str(files("kavier.sdk.inference").joinpath("data", "input", "input_example.csv")))
 
 #: Default output folder, created relative to the current working directory.
@@ -43,7 +43,7 @@ class PerfArgs(BaseModel):
     output_folder: Path = DEFAULT_OUTPUT_FOLDER
 
     kv_cache: str
-    export_rate: float = Field(gt=0)  # snapshot interval; runner divides by it (0 → ZeroDivisionError)
+    export_rate: float = Field(gt=0)  # snapshot interval [s]; the runner divides by it
     flush_size: int = Field(ge=0)  # 0 keeps the single-shot export
     prefix_cache_min_tokens: int = Field(ge=0)
     max_cached_prompts: int = Field(ge=1)  # LRUCache(maxsize=0) raises KeyError on first insert
@@ -81,7 +81,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--flush_size",
         type=int,
         default=1000,
-        help="Write intermediate Parquet files every N tasks (0 → keep the single-shot export).",
+        help="Write intermediate Parquet files every N tasks (0: write once at the end).",
     )
     parser.add_argument(
         "--prefix_cache_min_tokens",
@@ -116,7 +116,7 @@ def parse_args(argv: Sequence[str] | None = None) -> PerfArgs:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """Run the inference simulator: parse args, then simulate and export (OpenDC + spec outputs)."""
+    """Run the inference simulator and export the OpenDC and spec outputs."""
     args = parse_args(argv)
     try:
         run_performance(args)

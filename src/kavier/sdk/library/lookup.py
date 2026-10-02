@@ -14,11 +14,16 @@ class UnknownSpecError(KeyError):
     """Raised when a GPU/model name is absent; message lists available names."""
 
     def __init__(self, kind: str, name: str, available: list[str]) -> None:
+        self._kind, self._name, self._available = kind, name, available
         self._message = f"Unknown {kind} {name!r}. Available {kind}s ({len(available)}): {', '.join(available)}"
         super().__init__(self._message)
 
     def __str__(self) -> str:  # KeyError.__str__ would re-quote the message
         return self._message
+
+    def __reduce__(self) -> tuple[type[UnknownSpecError], tuple[str, str, list[str]]]:
+        # The default reduce calls cls(*self.args) with only the message, which fails when a process pool unpickles it.
+        return (type(self), (self._kind, self._name, self._available))
 
 
 def get_gpu(name: str) -> GPUSpec:

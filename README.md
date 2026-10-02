@@ -1,218 +1,64 @@
 # Kavier
 
-Simulating performance, sustainability, and efficiency of LLM Ecosystems under inference and training.
+Simulating the performance, sustainability, and efficiency of LLM ecosystems under inference and training.
 
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.txt)
-[![Documentation](https://img.shields.io/badge/docs-main-green.svg)](docs/)
-[![CI](https://github.com/atlarge-research/kavier/actions/workflows/ci.yml/badge.svg)](https://github.com/atlarge-research/kavier/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/atlarge-research/kavier/branch/master/graph/badge.svg)](https://codecov.io/gh/atlarge-research/kavier)
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/atlarge-research/Kavier/blob/master/LICENSE.txt)
+[![Documentation](https://img.shields.io/badge/docs-site-green.svg)](https://atlarge-research.github.io/Kavier/)
 
----
+Kavier is a physics-driven simulator. It predicts inference latency, training throughput, GPU utilization
+and MFU, energy, carbon emissions, and cost per token or sample.
 
-This repository is the home of Kavier, the first scientific instrument for
-predicting performance, sustainability, and efficiency of LLM ecosystems under
-inference and training.
+## Install
 
-Kavier helps operators, researchers, and engineers predict:
-* **Performance** — inference latencies, training throughput, GPU utilization + Model FLOPs Utilization (MFU)
-* **Sustainability** — energy consumption, carbon emissions (gCO2/Mtoken)
-* **Efficiency** — financial and energy cost per token/sample given GPU-hour prices
+```bash
+pip install kavier    # from PyPI
+uv add kavier         # into a uv project
+```
+
+Python 3.11 or newer.
 
 ## Quick start
 
-Kavier is developed with [uv](https://docs.astral.sh/uv/). Install uv, then:
+From a clone of this repository:
 
 ```bash
-git clone https://github.com/atlarge-research/kavier.git
-cd kavier
-
-uv sync            # create .venv and install Kavier + dev tools from uv.lock
-```
-
-Run your first simulation against the tiny bundled synthetic example trace:
-
-```bash
+uv sync
 uv run kavier inference --trace src/kavier/sdk/inference/data/input/input_example.csv
-```
-
-Congrats! You have just run your first simulation with Kavier! 🎉
-
-Kavier is one CLI with several subcommands — `inference`, `training`, `cluster`, `energy`, `carbon`:
-
-```bash
 uv run kavier --help
-uv run kavier training --help
 ```
 
-Or launch the **interactive UI** and pick a simulator, model and GPU from guided
-menus, then chain into energy/carbon or export OpenDC:
-
-```bash
-uv run kavier-ui
-```
-
-> The interactive UI is POSIX-only (Linux/macOS — it drives the terminal via `termios`);
-> on Windows, use the one-shot CLI (`kavier inference`, `kavier training`, …) instead.
-
-Both entrypoints are also reachable as modules: `python -m kavier` (CLI) and `python -m kavier.ui`.
-
-If you installed Kavier from PyPI (`pip install kavier`) you have no `src/`
-directory; the same synthetic example trace ships inside the package, so resolve
-its path via `importlib.resources`:
-
-```bash
-TRACE=$(python -c "from importlib.resources import files; print(files('kavier.sdk.inference')/'data/input/input_example.csv')")
-kavier inference --trace "$TRACE"
-```
-
-## Simulating a cluster
-
-`kavier cluster` is a FIFO/backfill **queuing simulator**: give it a CSV trace of jobs (arrival
-time, GPUs requested, GPU-locked duration) and a fixed cluster size, and it schedules them and
-reports per-job timings (wait, start/end, runtime, energy, per-job `goodput`) plus cluster metrics
-(makespan, utilization, peak queue, and two goodput measures). Note the two distinct "goodput"
-numbers: `goodput_jobs_per_s` is scheduling **throughput** (jobs completed per second), while
-`scheduling_goodput` is scheduling **efficiency** — `Σ runtime_s / Σ turnaround_s`, the fraction of
-wall-clock spent actually training vs. queued (mirrors the standard `train_runtime / elapsed`
-goodput measured on real job logs). A tiny example trace ships with Kavier — swap in your own:
-
-```bash
-# trace columns: submit_s,gpus,duration_s[,nodes,power_w_per_gpu]
-uv run kavier cluster --jobs src/kavier/sdk/cluster/data/input/trace_example.csv \
-  --policy consolidated-backfill --num-nodes 4 --node-gpus 8 \
-  --out per_jobs.csv --out-nodes per_nodes.csv --plot timeline.pdf
-```
-
-Four `--policy` values pick the scheduling discipline **and** the placement mode. `distributed-fcfs`
-(strict First-Come-First-Served) and `distributed-backfill` (FIFO + aggressive backfill so small jobs
-jump the queue) both **spread**-place tight-packed for a fast start and **ignore** the `nodes` column (a
-10-GPU job on 8-GPU nodes runs 8+2). `consolidated-fcfs` (the **default**) and `consolidated-backfill`
-add **consolidated (gang)**
-placement that **honours** each job's `nodes`: a job of `gpus` GPUs asking for `nodes` replicas lands
-on exactly that many distinct, co-located nodes (evenly split, one replica per node), never scattered
-wider — waiting until such a placement is free rather than fragmenting across nodes.
-
-The cluster is a homogeneous `--num-nodes × --node-gpus` datacenter (both required). Per-job results go
-to `--out` (CSV) — including a `node:gpus` column naming the node(s) each job was placed on and how many
-GPUs on each, e.g. `0:8;1:2`, plus a human-readable `placement` column (`8 GPUs on node 0 + 2 GPUs on
-node 1`).
-Per-node results go to `--out-nodes` (utilisation, jobs hosted, peak GPUs, idle time, energy). The
-cluster summary prints as JSON.
-`--plot timeline.pdf` renders the operational timeline — needs the `[plot]` extra (`uv sync --extra
-plot`). Programmatic use: `from kavier.sdk.cluster import schedule` — call
-`schedule(pd.read_csv("trace.csv"), policy="distributed-backfill", num_nodes=4, node_gpus=8)`, read `result.jobs` /
-`result.cluster` / `result.nodes`, and optionally `plot_timeline(result, "timeline.pdf")`.
-
-## Structure
-
-Kavier is a single importable package, `kavier`:
-
-```
-src/kavier/
-├── cli/              # the unified `kavier` CLI (subcommands: inference/training/cluster/energy/carbon)
-├── ui/               # the interactive REPL (the `kavier-ui` command)
-└── sdk/              # the functionality — one subpackage per domain
-    ├── inference/    # per-request inference simulator + the verb facade (facade.py)
-    ├── training/     # analytical training model + calibration + the verb facade (facade.py)
-    ├── cluster/      # FIFO/backfill cluster queuing simulator + the schedule() facade
-    ├── energy/       # GPU power / efficiency
-    ├── co2/          # carbon emissions
-    ├── io/           # trace I/O + OpenDC export (io/opendc/)
-    └── library/      # shared GPU & LLM specifications
-tests/                # test suites (run with `uv run pytest`)
-```
-
-The layout is layered:
-
-* **Public verbs** — `kavier.inference.performance / energy / efficiency / carbon` (and the training
-  equivalents) are the batch predictors; each takes a workload batch (DataFrame, `list[dict]`, or a
-  single `dict`) and returns the input rows plus predicted columns. `kavier.inference` /
-  `kavier.training` are convenience aliases for `kavier.sdk.inference` / `kavier.sdk.training`, where
-  the verbs live (in `facade.py`). `import kavier` is lazy, so it stays cheap until you touch a verb.
-* **Engines** — each `kavier.sdk.*` package holds the actual simulators, calibration, and specs. It's a
-  pure library: all argument parsing lives in `kavier.cli` (one module per subcommand), which calls into
-  these engines. The unified `kavier` command dispatches to those `cli/` modules.
-
-## Development
-
-`uv sync` (from [Quick start](#quick-start)) installs the project plus the dev tools (pytest, ruff,
-mypy). Before pushing, run the same gates CI enforces on every push/PR
-([.github/workflows/ci.yml](.github/workflows/ci.yml)):
-
-```bash
-uv run pytest                 # test suite
-uv run pytest --cov           # …with a coverage report (CI adds --cov-report=xml for Codecov)
-uv run ruff check .           # lint
-uv run ruff format --check .  # formatting (CI pins ruff==0.15.15; fix with: uv run ruff format .)
-
-# Strict typing is gated incrementally (the full tree is not strict-clean yet):
-uv run mypy --strict -p kavier.cli -p kavier.ui -p kavier.sdk.co2
-uv run mypy --strict --follow-imports=skip \
-  src/kavier/__init__.py src/kavier/__main__.py \
-  src/kavier/sdk/training/calibration/__init__.py \
-  src/kavier/sdk/training/core/engine.py
-```
-
-Run `uv run pre-commit install` once per clone and the ruff gates (plus whitespace hygiene) run on
-every commit; CI runs the same hooks with `uv run pre-commit run --all-files`.
-
-Add the `calibration` extra (`uv sync --extra calibration`) to run the scipy/scikit-learn
-calibration-refit tests; without it, `test_engine_regen.py` and friends `importorskip`-skip.
-
-A multi-stage [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml) are provided for
-containerized runs (they build a wheel and install it — no source tree, no `PYTHONPATH`), but Docker
-is optional — every tutorial and the workflow above use `uv`:
-
-```bash
-docker build --target cli -t kavier:cli .   # the unified CLI
-docker run --rm kavier:cli inference --help
-docker build --target ui -t kavier:ui .     # the interactive REPL
-docker run --rm -it kavier:ui
-```
-
-### Your first change
-
-A good starter task: add a GPU to the built-in spec library.
-
-1. Open [src/kavier/sdk/library/gpu.py](src/kavier/sdk/library/gpu.py) — `GPU_SPEC_LIBRARY` is a plain
-   dict of `GPUSpec` entries. Copy an existing entry, tweak the numbers, and make the dict key
-   match the `gpu_name` field.
-2. Run the library tests — they parametrize over every entry, so your GPU is validated
-   automatically (positive specs, `idle_power_w <= max_power_w`, key == name, unit conversions):
-
-   ```bash
-   uv run pytest tests/test_library
-   ```
-
-3. Simulate on your new GPU with the bundled example trace:
-
-   ```bash
-   uv run kavier inference --gpu "YourGPU" --trace src/kavier/sdk/inference/data/input/input_example.csv
-   ```
-
-Finish with the full gate set above, then open a PR.
+The subcommands are `inference`, `training`, `cluster`, `energy`, `carbon`, and `calibrate` (needs the
+`[calibration]` extra). Each documents its
+flags with `--help`.
 
 ## Documentation
 
-The reference for the CLI is the CLI itself — every subcommand documents its own flags:
+<https://atlarge-research.github.io/Kavier/>. Build it locally with `uv run --group docs mkdocs serve`.
+
+## Development
+
+`uv sync` installs the dev tools. CI runs these gates on every pull request
+([ci.yml](https://github.com/atlarge-research/Kavier/blob/master/.github/workflows/ci.yml)):
 
 ```bash
-uv run kavier --help
-uv run kavier inference --help   # likewise training / cluster / energy / carbon
+uv run pre-commit run --all-files --show-diff-on-failure   # ruff check, ruff format, whitespace
+uv run mypy --strict --show-error-codes \
+  -p kavier.cli -p kavier.sdk.co2 -p kavier.sdk.cluster
+uv run mypy --strict --follow-imports=skip --show-error-codes \
+  src/kavier/__init__.py src/kavier/__main__.py \
+  src/kavier/sdk/training/calibration/__init__.py \
+  src/kavier/sdk/training/core/engine.py
+uv run pytest --cov
+uv run --group docs mkdocs build --strict
 ```
 
-Two written guides live under [`docs/`](docs/):
+The calibration and plot tests are skipped unless you sync with `--extra calibration --extra plot`.
+Run `uv run pre-commit install` once per clone to get the ruff and whitespace hooks on commit.
 
-* [`docs/usage.py`](docs/usage.py) — the public Python API by example (the four predictors on both
-  the `inference` and `training` namespaces). It is a runnable script: `uv run python docs/usage.py`.
-* [`docs/cluster-usage.md`](docs/cluster-usage.md) — the cluster queuing simulator: trace columns,
-  policies, and the per-job/per-cluster metrics it reports.
+## Citation
 
-## Contributing
-
-Questions, suggestions and contributions are welcome and appreciated!
-Open an issue or a PR; the gates in [Development](#development) are what CI enforces.
+See [CITATION.cff](https://github.com/atlarge-research/Kavier/blob/master/CITATION.cff).
 
 ## License
 
-Kavier is distributed under the MIT license. See [LICENSE.txt](/LICENSE.txt).
+MIT. See [LICENSE.txt](https://github.com/atlarge-research/Kavier/blob/master/LICENSE.txt).

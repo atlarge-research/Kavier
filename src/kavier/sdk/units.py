@@ -1,8 +1,7 @@
-"""Shared unit-conversion constants: seconds/hour, watt-seconds/kWh, Wh/kWh, tokens/Mtoken, ms/second,
-grams/kg, and FLOPs/TFLOP.
+"""Unit-conversion constants.
 
-Stdlib-only (no imports beyond ``__future__``) — imported by :mod:`kavier.sdk.cluster.facade`, whose
-import-light contract (``tests/test_cluster/test_import_light.py``) forbids pulling in pandas/numpy.
+Stdlib-only: :mod:`kavier.sdk.cluster.facade` imports this module and must not load pandas or numpy
+(``tests/test_cluster/test_import_light.py``).
 """
 
 from __future__ import annotations
@@ -12,14 +11,13 @@ WS_PER_KWH = 3.6e6  # watt-seconds per kWh
 WH_PER_KWH = 1000.0
 TOKENS_PER_MTOKEN = 1_000_000.0
 MS_PER_SECOND = 1000.0
-G_PER_KG = 1000.0  # grams per kilogram
-FLOPS_PER_TFLOP = 1e12  # floating-point ops per teraflop
+G_PER_KG = 1000.0
+FLOPS_PER_TFLOP = 1e12
 
 
 def per_mtoken(value: float, total_tokens: float) -> float:
-    """``value`` scaled to a per-million-token rate; ``0.0`` when ``total_tokens`` is falsy.
+    """Return ``value`` per million tokens, or ``0.0`` when ``total_tokens`` is falsy.
 
-    Preserves the ``value * (TOKENS_PER_MTOKEN / total_tokens)`` operation order (division before
-    multiplication) used at every call site so results stay bit-identical to the pre-refactor code.
+    Divides before multiplying, as every call site does, so results are bit-identical.
     """
     return value * (TOKENS_PER_MTOKEN / total_tokens) if total_tokens else 0.0

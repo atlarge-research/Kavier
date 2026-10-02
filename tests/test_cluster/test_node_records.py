@@ -17,7 +17,7 @@ def test_one_row_per_node_including_idle_nodes() -> None:
 
 
 def test_node_busy_seconds_sum_to_total_gpu_seconds() -> None:
-    # Two 8-GPU jobs co-run on a 2x8 cluster for 10 s: each node busy 8x10 = 80 GPU·s; sum 160.
+    # Two 8-GPU jobs co-run on a 2x8 cluster for 10 s: each node busy 8 x 10 = 80 GPU-s; sum 160.
     jobs = [{"submit_s": 0, "gpus": 8, "duration_s": 10}, {"submit_s": 0, "gpus": 8, "duration_s": 10}]
     res = schedule(jobs, policy="distributed-backfill", num_nodes=2, node_gpus=8)
     assert sum(n.busy_gpu_s for n in res.nodes) == pytest.approx(sum(j.gpus * j.runtime_s for j in res.jobs))
@@ -47,7 +47,17 @@ def test_idle_node_has_no_energy() -> None:
 
 
 def test_full_node_utilization_is_one() -> None:
-    # One 8-GPU job holds node 0 fully for the whole (single-job) makespan: utilisation 1.0.
+    # One 8-GPU job holds node 0 fully for the whole makespan: utilisation 1.0.
     res = schedule([{"submit_s": 0, "gpus": 8, "duration_s": 10}], policy="distributed-fcfs", num_nodes=1, node_gpus=8)
     assert res.nodes[0].utilization == pytest.approx(1.0)
     assert res.nodes[0].idle_s == pytest.approx(0.0)
+
+
+def test_job_with_fewer_gpus_than_nodes_is_hosted_only_where_it_has_gpus() -> None:
+    # gpus=2, nodes=4 under consolidated-fcfs runs one GPU on each of 2 nodes. Nodes 2 and 3 host
+    # nothing, so they report no jobs and no energy.
+    job = {"submit_s": 0, "gpus": 2, "duration_s": 10, "nodes": 4, "power_w_per_gpu": 300}
+    res = schedule([job], policy="consolidated-fcfs", num_nodes=4, node_gpus=8)
+    assert res.jobs[0].nodes == ((0, 1), (1, 1))
+    assert [n.jobs_hosted for n in res.nodes] == [1, 1, 0, 0]
+    assert [n.energy_kwh is None for n in res.nodes] == [False, False, True, True]

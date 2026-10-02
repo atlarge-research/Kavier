@@ -1,0 +1,55 @@
+name: Deploy docs
+
+# Build the MkDocs site and publish it to GitHub Pages.
+# Pages source must be set to "GitHub Actions" (Settings -> Pages -> Build and deployment).
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "pyproject.toml"
+      - ".github/workflows/docs-deploy.yml"
+  workflow_dispatch:   # manual redeploy
+
+permissions:
+  contents: read
+
+# One deployment at a time; an in-flight deploy is not cancelled.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # --strict fails on warnings such as broken links.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Build docs (strict)
+        run: |
+          uv sync --locked --only-group docs --no-install-project
+          uv run --no-sync mkdocs build --strict
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site   # mkdocs.yml site_dir
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

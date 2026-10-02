@@ -1,23 +1,22 @@
 """``kavier calibrate`` subcommand: fit a training-calibration table from a profiling CSV.
 
-Exposes the dev-only from-scratch calibration fit (the two-tier Powell recipe behind
-calibration.json) as a command, so it can run on an arbitrary profiling trace. This is the backend
-for Coastline's ``coastline-tune --method kavier``.
+Runs the from-scratch calibration fit (the two-tier Powell recipe behind calibration.json) on any
+profiling trace. Backend for Coastline's ``coastline-tune --method kavier``.
 
     kavier calibrate <input.csv> [--output PATH] [--models m1,m2,...]
 
 ``<input.csv>`` carries the fms-hf-tuning columns (model_name, gpu_model, method, number_gpus,
 number_nodes, tokens_per_sample, batch_size, is_valid, dataset_tokens_per_second, ...). Unlike the
-shipped tables, the fit keeps valid rows at ANY GPU count (no <=8 cap), and if the input has no
->8-GPU rows it falls back to a sibling ``raw_trace.csv`` for them. ``--models`` restricts the fit;
-by default every model with enough valid rows is fit.
+shipped tables, the fit keeps valid rows at any GPU count (no <=8 cap); if the input has no >8-GPU
+rows, it reads them from a sibling ``raw_trace.csv``. ``--models`` restricts the fit; the default
+fits every model with enough valid rows.
 
-The JSON goes to ``--output`` (default stdout); the fit summary and held-out test MdAPE go to
-stderr, so ``kavier calibrate trace.csv > cal.json`` still yields a clean file. The fit needs the
-``[calibration]`` extra (scipy/scikit-learn), imported lazily; without it the command exits
-non-zero with an install hint.
+The JSON goes to ``--output`` (default stdout). The fit summary and held-out test MdAPE go to
+stderr, so ``kavier calibrate trace.csv > cal.json`` writes a clean file. The fit needs the
+``[calibration]`` extra (scipy, scikit-learn); without it the command exits non-zero with an
+install hint.
 
-Coastline then points Kavier at the output before predicting, via ``KAVIER_CALIBRATION=<path>`` or
+To use the output, set ``KAVIER_CALIBRATION=<path>`` or call
 ``kavier.sdk.training.calibration.use_calibration("<path>")``.
 """
 
@@ -59,9 +58,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _print_regime_breakdown(test: pd.DataFrame, cal: dict[str, Any], evaluate: Callable[..., float]) -> None:
-    """Print the held-out test MdAPE broken down by model and by total-GPU count over the same test
-    rows. ``evaluate`` is the engine's MdAPE function; ``test`` carries model_name and the ``total`` =
-    gpus*nodes column. An all-zero-measured group shows nan (evaluate's contract)."""
+    """Print the held-out test MdAPE per model and per total GPU count.
+
+    ``test`` needs ``model_name`` and ``total`` (number_gpus * number_nodes). ``evaluate`` is the
+    engine's MdAPE function; it returns nan for a group whose measured values are all zero.
+    """
     print("  test MdAPE by model:", file=sys.stderr)
     for model in sorted(test["model_name"].astype(str).unique()):
         sub = test[test["model_name"].astype(str) == model]
@@ -77,7 +78,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     """Fit a calibration table from a profiling CSV and write the JSON to --output (default stdout)."""
     args = _build_parser().parse_args(argv)
 
-    # Lazy, guarded import: engine.py pulls scipy/scikit-learn at module top, which are dev-only.
+    # engine.py imports scipy and scikit-learn, which are optional.
     try:
         from kavier.sdk.training.calibration.engine import (
             _dumps,
@@ -95,8 +96,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     cal = calibrate(args.input, models)
     text = _dumps(cal)
 
-    # Summary to stderr: models fit + valid row counts, then the held-out test MdAPE recomputed on the
-    # same seed-42 test split the fit used (overall, then by model and by GPU count).
+    # Held-out MdAPE on the seed-42 test split the fit used.
     import pandas as pd
 
     trace = pd.read_csv(args.input, low_memory=False)

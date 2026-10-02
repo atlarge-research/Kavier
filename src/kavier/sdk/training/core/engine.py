@@ -1,8 +1,9 @@
-"""Analytical training-step engine: FLOPs/MFU + comm/optimizer model -> throughput, runtime, GPU util and power."""
+"""Analytical training-step engine: FLOPs, MFU, comm and optimizer time -> throughput, runtime, util, power."""
 
 from __future__ import annotations
 
 import math
+from enum import Enum
 from typing import Any, Dict
 
 from kavier.sdk.energy.engine import mse_power
@@ -11,6 +12,7 @@ from kavier.sdk.library.lookup import get_gpu, get_llm
 from kavier.sdk.library.specs.GPUSpec import GPUSpec
 from kavier.sdk.library.specs.LLMSpec import LLMSpec
 from kavier.sdk.training.calibration import (
+    get_calibrated_methods,
     get_comm_scale,
     get_interaction_scale,
     get_method_scale,
@@ -29,15 +31,19 @@ from kavier.sdk.training.core.config import (
 )
 from kavier.sdk.units import FLOPS_PER_TFLOP, MS_PER_SECOND
 
-# Adam moves ~20 bytes/param per optimizer step (fp32 weight + grad + 2 moments ~16 B, plus working copies).
+# Adam traffic per optimizer step [bytes/param]: fp32 weight, grad and 2 moments (~16 B) plus working copies.
 _OPTIMIZER_BYTES_PER_PARAM = 20
-# A step touches each weight ~5x in memory (weight read, grad read/write, 2 moments read/write).
+# Memory passes per weight per step: weight read, grad read/write, 2 moments read/write.
 _MEMORY_PASSES_PER_STEP = 5
-# fp32 gradient width (bytes) sizing the all-reduce payload.
+# fp32 gradient width [bytes] for the all-reduce payload.
 _FP32_BYTES = 4
-# LoRA adapter shape: a rank-r update on `target_modules` projections per layer.
+# LoRA adapter: rank-r update on `target_modules` projections per layer.
 _LORA_RANK = 8
 _LORA_TARGET_MODULES = 4
+# Methods that train only the LoRA adapter. qlora and alora have no fitted method_scale, so calibrated runs
+# use 1.0.
+_ADAPTER_METHODS = frozenset({Method.LORA.value, Method.GPTQ_LORA.value, "qlora", "alora"})
+_KNOWN_METHODS = frozenset({m.value for m in Method} | _ADAPTER_METHODS)
 
 
 def _compute_mfu(batch_size: int, gpu: GPUSpec, calibrated: bool = True) -> float:
@@ -59,7 +65,7 @@ def _estimate_memory_bandwidth_usage(
     hidden_dim: int,
     bytes_per_param: int,
 ) -> float:
-    # Bytes use 1e9 (GB, not GiB) to match bandwidth_bps/1e9 in simulate_training_step; GiB understated util ~7%.
+    # GB = 1e9 bytes to match bandwidth_bps / 1e9 in simulate_training_step (GiB understates util by ~7%).
     param_traffic = model_params * bytes_per_param * _MEMORY_PASSES_PER_STEP
     activation_traffic = batch_size * seq_length * hidden_dim * bytes_per_param
     return (param_traffic + activation_traffic) / 1e9 / step_time_s
@@ -134,22 +140,41 @@ def _micro_step_time(
     backward_factor: float,
     calibrated: bool,
 ) -> tuple[float, float]:
-    """Forward+backward time for one micro-step, plus the physical MFU used for power. Returns (time_s, mfu)."""
+    """Return (time_s, mfu) for one forward+backward micro-step; mfu is the physical MFU used for power."""
     total_tokens = batch_size * tokens_per_sample
-    # Compute uses ACTIVE params (MoE runs only active experts); optimizer/comm/memory below use total m_params.
+    # Compute uses active params (MoE runs only active experts); optimizer, comm and memory use total m_params.
     flops = FLOPS_PER_PARAM_PER_TOKEN * llm.active_params * total_tokens
     mfu = _compute_mfu(batch_size, gpu, calibrated)
     achieved_flops = gpu.fp_16_tensor_core_tflops * FLOPS_PER_TFLOP * mfu
     overhead = get_training_overhead_s() if calibrated else 0.0
     forward_time = flops / achieved_flops + overhead
 
-    # backward ~2x forward FLOPs (standard rule of thumb; override via backward_factor).
+    # Backward ~2x forward FLOPs by default (backward_factor).
     backward_time = backward_factor * forward_time
     return forward_time + backward_time, mfu
 
 
+def known_methods() -> list[str]:
+    """Return the accepted methods: full, lora, gptq-lora, qlora, alora, and any the active calibration fits."""
+    try:
+        calibrated = get_calibrated_methods()
+    except ValueError:  # unknown KAVIER_CALIBRATION; running a simulation reports it
+        calibrated = frozenset()
+    return sorted(_KNOWN_METHODS | calibrated)
+
+
+def normalise_method(method: str) -> str:
+    """Return ``method`` as a plain string, an Enum member by its value; raise ValueError if unknown."""
+    value: object = method.value if isinstance(method, Enum) else method
+    if isinstance(value, str):
+        name = str.__str__(value)
+        if name in _KNOWN_METHODS or name in get_calibrated_methods():
+            return name
+    raise ValueError(f"unknown method {value!r}; valid methods: {', '.join(known_methods())}")
+
+
 def _trainable_params(llm: LLMSpec, method: str) -> int:
-    if method in (Method.LORA, Method.GPTQ_LORA):
+    if method in _ADAPTER_METHODS:
         return _lora_trainable_params(llm.d_model, llm.n_layers)
     return int(llm.m_params)
 
@@ -176,7 +201,7 @@ def _step_result(
         "step_time_ms": step_time_s * MS_PER_SECOND,
         "tokens_per_second": tokens_per_second,
         "tokens_per_step": tokens_per_step,
-        "gpu_compute_utilization": mfu * 100,  # raw physical MFU, not throughput_scale-adjusted
+        "gpu_compute_utilization": mfu * 100,  # physical MFU, before throughput_scale
         "gpu_memory_utilization": memory_util * 100,
         "gpu_power_watts": power,
     }
@@ -194,11 +219,12 @@ def simulate_training_step(
     backward_factor: float = 2.0,
     calibrated: bool = True,
 ) -> Dict[str, float]:
-    """Simulate one optimizer step; ``calibrated`` applies fitted scales/corrections, else raw physics. Util in %."""
+    """Simulate one optimizer step; ``calibrated=False`` gives raw physics. Utilizations are in %."""
     llm = get_llm(model_name)
     gpu = get_gpu(gpu_model)
 
     _validate_step_args(batch_size, grad_accum_steps, backward_factor, tokens_per_sample, num_gpus)
+    method = normalise_method(method)
 
     micro_step_time, mfu = _micro_step_time(llm, gpu, batch_size, tokens_per_sample, backward_factor, calibrated)
 
@@ -207,14 +233,16 @@ def simulate_training_step(
 
     comm_time = _comm_time(trainable, num_gpus, gpu.network_bandwidth_gbps, num_nodes, calibrated)
 
-    # One step = grad_accum_steps micro-steps + ONE optimizer update + all-reduce.
+    # One step: grad_accum_steps micro-steps, one optimizer update, one all-reduce.
     step_time_s = grad_accum_steps * micro_step_time + optimizer_time + comm_time
 
     mgc = get_multi_gpu_correction(num_gpus) if calibrated else 1.0
     throughput_scale = _throughput_scale(model_name, method, gpu_model, num_gpus, calibrated)
-    # Data-parallel: per-step tokens scale with TOTAL num_gpus.
-    tokens_per_step = grad_accum_steps * (batch_size * tokens_per_sample * num_gpus / mgc)
-    tokens_per_second = tokens_per_step / step_time_s * throughput_scale
+    # Data-parallel: per-step tokens scale with total num_gpus. mgc slows the step and leaves its token
+    # count alone. This operation order reproduces the thesis tokens_per_second exactly.
+    tokens_per_step = float(grad_accum_steps * batch_size * tokens_per_sample * num_gpus)
+    tokens_per_second = grad_accum_steps * (batch_size * tokens_per_sample * num_gpus / mgc) / step_time_s
+    tokens_per_second *= throughput_scale
 
     bw_used = _estimate_memory_bandwidth_usage(
         llm.m_params,
@@ -235,8 +263,10 @@ def _resolve_total_tokens(
     epochs: float | None,
     dataset_tokens: int | None,
 ) -> int | None:
-    """``total_tokens`` (wins) or round(epochs * dataset_tokens); ``None`` if neither."""
+    """Return ``total_tokens`` if given, else round(epochs * dataset_tokens), else None."""
     if total_tokens is not None:
+        if total_tokens < 0:
+            raise ValueError(f"total_tokens must be non-negative, got {total_tokens}")
         return total_tokens
     if epochs is None and dataset_tokens is None:
         return None
@@ -261,8 +291,16 @@ def simulate_full_training(
     grad_accum_steps: int = 1,
     backward_factor: float = 2.0,
 ) -> Dict[str, Any]:
-    """One step extrapolated over the whole job (total_gpus = number_gpus * number_nodes); job size sets runtime(s)."""
+    """Extrapolate one step over the whole job; total_gpus = number_gpus * number_nodes.
+
+    ``train_runtime`` is 0 when no job size (total_tokens, or epochs with dataset_tokens) is given.
+    """
     total_tokens = _resolve_total_tokens(total_tokens, epochs, dataset_tokens)
+    if number_gpus < 1:
+        raise ValueError(f"number_gpus must be >= 1, got {number_gpus}")
+    if number_nodes < 1:
+        raise ValueError(f"number_nodes must be >= 1, got {number_nodes}")
+    method = normalise_method(method)
     total_gpus = number_gpus * number_nodes
     step = simulate_training_step(
         model_name,
@@ -279,7 +317,7 @@ def simulate_full_training(
     tokens_per_step = step["tokens_per_step"]
     return {
         "train_tokens_per_second": tps,
-        # Divide by TOTAL gpus (gpus/node * nodes), not just gpus/node.
+        # Per GPU across all nodes.
         "train_tokens_per_gpu_per_second": tps / total_gpus,
         "train_samples_per_second": tps / tokens_per_sample,
         "train_steps_per_second": tps / tokens_per_step,

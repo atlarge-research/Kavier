@@ -1,10 +1,9 @@
-"""Consistency contract for the shipped GPU/LLM spec library and the two spec constructors.
+"""Consistency checks for the shipped GPU/LLM spec library and the two spec constructors.
 
-The spec objects do NO validation of their own, so this file is the whole validation layer: it
-enforces the physical invariants of every catalog entry (positive fields, ``idle <= max`` power,
-``key == name``, ``0 < active_params <= m_params``) AND pins the constructors' derived-value logic
-(GB/s -> bytes/s conversion, power-envelope defaults, ``active_params`` default) with hand-derived
-oracles that are independent of the catalog numbers.
+The spec objects do no validation, so this file is the validation layer: physical invariants of every
+catalog entry (positive fields, ``idle <= max`` power, ``key == name``, ``0 < active_params <= m_params``)
+and the constructors' derived values (GB/s -> bytes/s, power-envelope defaults, ``active_params``
+default), checked with values that do not come from the catalog.
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ from kavier.sdk.library.specs.LLMSpec import LLMSpec
 
 
 def _make_gpu(**overrides) -> GPUSpec:
-    """A GPUSpec with sensible required args; override one field per constructor-behavior test."""
+    """Return a GPUSpec with fixed required arguments and the given overrides."""
     kwargs = dict(
         gpu_name="TEST",
         memory_bandwidth_gbps=1000,
@@ -33,41 +32,38 @@ def _make_gpu(**overrides) -> GPUSpec:
 
 
 # --------------------------------------------------------------------------------------
-# Constructor behavior: derived values (independent hand-derived oracles, no catalog data)
+# Constructor behavior: derived values (no catalog data)
 # --------------------------------------------------------------------------------------
 
 
 def test_gpuspec_converts_gbps_to_bytes_per_second() -> None:
     # 1 GB/s = 1e9 bytes/s, so 1000 GB/s -> 1000 * 1e9 = 1e12 bytes/s.
-    # Falsifies a wrong scale factor (e.g. *1e6 or *1e12) in the constructor.
     gpu = _make_gpu(memory_bandwidth_gbps=1000)
     assert gpu.bandwidth_bps == 1e12
 
 
 def test_gpuspec_power_envelope_defaults_to_quarter_base_and_base() -> None:
-    # Docstringed default model: idle = base * 0.25, max = base (TDP).
-    # base=200 -> idle=50, max=200. Falsifies a changed 0.25 fraction or a non-base max default.
+    # Default: idle = base * 0.25, max = base (TDP); base=200 -> idle=50, max=200.
     gpu = _make_gpu(base_power_w=200, idle_power_w=None, max_power_w=None)
     assert gpu.idle_power_w == 50.0
     assert gpu.max_power_w == 200.0
 
 
 def test_gpuspec_explicit_power_values_override_defaults() -> None:
-    # When given, idle/max are stored verbatim (not recomputed from base).
-    # base=200 would default idle to 50; explicit 30/150 must win.
+    # Given idle/max values are stored as is; base=200 would default idle to 50.
     gpu = _make_gpu(base_power_w=200, idle_power_w=30, max_power_w=150)
     assert gpu.idle_power_w == 30
     assert gpu.max_power_w == 150
 
 
 def test_llmspec_active_params_defaults_to_total_when_omitted() -> None:
-    # Dense default: active_params falls back to m_params when not supplied.
+    # Dense default: active_params falls back to m_params.
     llm = LLMSpec(llm_name="T", n_layers=1, d_model=8, p_bytes=2, m_params=8e9, n_heads=2, d_head=4)
     assert llm.active_params == 8e9
 
 
 def test_llmspec_active_params_preserved_when_supplied() -> None:
-    # MoE case: an explicit active_params (< total) is stored verbatim, not overwritten by m_params.
+    # MoE: an explicit active_params below the total is kept.
     llm = LLMSpec(
         llm_name="T",
         n_layers=1,
@@ -82,23 +78,22 @@ def test_llmspec_active_params_preserved_when_supplied() -> None:
 
 
 # --------------------------------------------------------------------------------------
-# Catalog invariants: physical laws every shipped entry must obey (property oracles)
+# Catalog invariants for every shipped entry
 # --------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("key", list(GPU_SPEC_LIBRARY))
 def test_gpu_catalog_entry_is_physically_sane(key) -> None:
     gpu = GPU_SPEC_LIBRARY[key]
-    # Lookup contract: dict key must equal the spec's own name (get_gpu relies on this).
+    # get_gpu relies on the dict key equal to the spec name
     assert gpu.name == key
-    # Every hardware quantity is strictly positive (a zero/negative would silently break the physics).
     assert gpu.cores > 0
     assert gpu.fp_16_tensor_core_tflops > 0
     assert gpu.bandwidth_bps > 0
     assert gpu.memory_gb > 0
     assert gpu.core_max_mhz > 0
     assert gpu.network_bandwidth_gbps > 0
-    # MFU is a fraction of peak FLOPs: must lie in (0, 1].
+    # MFU is a fraction of peak FLOPs, in (0, 1]
     assert 0.0 < gpu.mfu_factor <= 1.0
     # Power envelope ordering assumed by the mse_power model: 0 < idle <= max.
     assert 0 < gpu.idle_power_w <= gpu.max_power_w
@@ -107,7 +102,7 @@ def test_gpu_catalog_entry_is_physically_sane(key) -> None:
 @pytest.mark.parametrize("key", list(LLM_SPEC_LIBRARY))
 def test_llm_catalog_entry_is_physically_sane(key) -> None:
     llm = LLM_SPEC_LIBRARY[key]
-    # Lookup contract: dict key must equal the spec's own name (get_llm relies on this).
+    # get_llm relies on the dict key equal to the spec name
     assert llm.name == key
     assert llm.m_params > 0
     assert llm.n_layers > 0
@@ -115,23 +110,20 @@ def test_llm_catalog_entry_is_physically_sane(key) -> None:
     assert llm.n_heads > 0
     assert llm.d_head > 0
     assert llm.p_bytes > 0
-    # Active params (MoE-aware) must be positive and never exceed total params.
     assert 0 < llm.active_params <= llm.m_params
 
 
 def test_moe_models_expose_fewer_active_than_total_params() -> None:
-    # The two shipped MoE models carry architecture-derived active_params STRICTLY below total.
-    # mixtral-8x7b: 2 of 8 experts active ~= 13B active of 47B total.
-    # granite-3.1-3b-a800m: the "a800m" in the name means 800M active of 3.3B total.
-    # Falsifies a catalog typo that sets active_params == m_params (erasing the MoE saving).
+    # MoE models have architecture-derived active_params below the total.
+    # mixtral-8x7b: 2 of 8 experts active, ~13B active of 47B total.
+    # granite-3.1-3b-a800m: "a800m" means 800M active of 3.3B total.
     mixtral = LLM_SPEC_LIBRARY["mixtral-8x7b-instruct-v0.1"]
     granite_moe = LLM_SPEC_LIBRARY["granite-3.1-3b-a800m-instruct"]
     assert mixtral.active_params == 13e9
     assert mixtral.active_params < mixtral.m_params
     assert granite_moe.active_params == 800e6
     assert granite_moe.active_params < granite_moe.m_params
-    # Granite-4.0 hybrid MoE, from IBM's published total/active figures (independent of the catalog):
-    #   H Small = 9B active of 32B total; H Tiny = 1B active of 7B total.
+    # Granite 4.0 hybrid MoE, from IBM's published figures: H Small 9B active of 32B, H Tiny 1B of 7B.
     h_small = LLM_SPEC_LIBRARY["granite-4.0-h-small"]
     h_tiny = LLM_SPEC_LIBRARY["granite-4.0-h-tiny"]
     assert h_small.active_params == 9e9 and h_small.active_params < h_small.m_params
@@ -139,7 +131,7 @@ def test_moe_models_expose_fewer_active_than_total_params() -> None:
 
 
 def test_dense_models_have_active_params_equal_to_total() -> None:
-    # Every non-MoE catalog entry must default active_params to m_params (no accidental override).
+    # Every non-MoE entry has active_params equal to m_params.
     moe_keys = {
         "mixtral-8x7b-instruct-v0.1",
         "granite-3.1-3b-a800m-instruct",
@@ -153,7 +145,24 @@ def test_dense_models_have_active_params_equal_to_total() -> None:
 
 
 def test_catalog_contains_documented_shipped_keys() -> None:
-    # Guards against an empty catalog (which would make the parametrized invariants vacuous) and
-    # pins the exact-match lookup keys documented as shipped for both engines (case-sensitive, no aliases).
+    # A non-empty catalog keeps the parametrized invariants meaningful; these exact-match keys are
+    # documented as shipped for both engines (case-sensitive, no aliases).
     assert {"A100-80GB", "NVIDIA-A100-SXM4-80GB"} <= set(GPU_SPEC_LIBRARY)
     assert {"Llama-3-8B", "granite-3-8b"} <= set(LLM_SPEC_LIBRARY)
+
+
+@pytest.mark.parametrize("name, tflops", [("L4", 121), ("H100-PCIe", 756), ("H100-SXM", 989), ("H200 SXM", 989)])
+def test_uncalibrated_gpus_carry_dense_fp16_peaks(name: str, tflops: float) -> None:
+    # NVIDIA datasheets give these peaks with and without 2:4 sparsity; the catalog uses the dense figure.
+    assert GPU_SPEC_LIBRARY[name].fp_16_tensor_core_tflops == tflops
+
+
+def test_h100_pcie_keeps_the_effective_rate_of_its_calibrated_entry() -> None:
+    short, full = GPU_SPEC_LIBRARY["H100-PCIe"], GPU_SPEC_LIBRARY["NVIDIA-H100-PCIe"]
+    effective = short.fp_16_tensor_core_tflops * short.mfu_factor
+    assert effective == pytest.approx(full.fp_16_tensor_core_tflops * full.mfu_factor)
+
+
+@pytest.mark.parametrize("name", ["H100-SXM", "H200 SXM"])
+def test_hopper_sxm_gpus_use_the_nvlink_rate(name: str) -> None:
+    assert GPU_SPEC_LIBRARY[name].network_bandwidth_gbps == 7200.0  # NVLink 4, 900 GB/s

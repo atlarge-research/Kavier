@@ -7,10 +7,9 @@ from kavier.sdk.units import FLOPS_PER_TFLOP
 
 
 def get_decode_time_s(n_out: int, llm: LLMSpec, gpu: GPUSpec, kv_cache: bool) -> float:
-    """Decode time (s) for ``n_out`` tokens: linear with KV cache, quadratic (n(n+1)/2) without it."""
-    # Per-token cost is set by the parameters a token actually touches: active_params
-    # (== m_params for dense models; only the routed experts for MoE). This holds for the
-    # memory-bound term too — a MoE decode step reads just the active-expert weights.
+    """Return decode time (s) for ``n_out`` tokens: linear with KV cache, n(n+1)/2 token steps without it."""
+    # Both roofline terms scale with active_params: m_params for dense models, the routed experts for MoE.
+    # A MoE decode step reads only the active-expert weights.
     f_tok = FLOPS_PER_PARAM_PER_TOKEN * llm.active_params
     b = llm.p_bytes
 

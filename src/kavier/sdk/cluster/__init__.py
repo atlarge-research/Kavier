@@ -1,8 +1,7 @@
-"""Cluster simulation: a fixed-size GPU cluster running jobs of known duration under a simple
-scheduling policy (FCFS / backfill), reporting per-job and per-cluster metrics.
+"""Simulate a fixed-size GPU cluster running jobs of known duration under FCFS or backfill scheduling.
 
-Exports are re-exported lazily (PEP 562 ``__getattr__``) so a bare ``import kavier.sdk.cluster``
-stays light and pulls in neither ``pandas`` nor ``matplotlib``. ``kavier.cluster`` aliases this package.
+Exports load lazily (PEP 562 ``__getattr__``), so ``import kavier.sdk.cluster`` imports neither pandas
+nor matplotlib. ``kavier.cluster`` is an alias of this package.
 """
 
 from __future__ import annotations
@@ -11,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from kavier._lazy import lazy_getattr
 
-if TYPE_CHECKING:  # type-checkers only; never imported at runtime
+if TYPE_CHECKING:
     from kavier.sdk.cluster.facade import (
         ClusterMetrics as ClusterMetrics,
     )
@@ -31,7 +30,7 @@ if TYPE_CHECKING:  # type-checkers only; never imported at runtime
         plot_timeline as plot_timeline,
     )
 
-# Which submodule each export lazily comes from. ``plot`` imports matplotlib only when called.
+# Export name -> submodule; ``plot`` imports matplotlib inside plot_timeline.
 _LAZY_EXPORTS = {
     "schedule": "facade",
     "ClusterSimResult": "facade",

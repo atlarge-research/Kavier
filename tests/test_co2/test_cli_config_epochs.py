@@ -1,9 +1,7 @@
-"""``kavier carbon`` CLI plumbing: token-source resolution, ``--config`` folding, and the carbon integral.
+"""Tests for ``kavier carbon`` token-source resolution, ``--config`` folding, and the carbon integral.
 
-These exercise ``kavier.cli.carbon.main`` (argument wiring + error paths) plus a cross-check of the CLI's
-carbon integration against a closed-form energy/CO2 computation. The training-sim sizing (power_w, runtime_s)
-is read back from ``fragments_from_training`` and used only as the *input* to an independent oracle — the
-windowed integrator in ``compute_emissions`` is what is under test here.
+The CLI's windowed integral in ``compute_emissions`` is compared with a closed-form energy/CO2 value.
+Power and runtime come from ``fragments_from_training`` and serve only as inputs to that reference.
 """
 
 from __future__ import annotations
@@ -16,8 +14,7 @@ import pytest
 from kavier.cli.carbon import main
 from kavier.sdk.co2.fragments import fragments_from_training
 
-# Constant carbon intensity of the synthetic trace (gCO2/kWh). With a flat trace the down-estimation
-# min(own, next) collapses to this single value, so the CLI's per-window integral has an exact closed form.
+# gCO2/kWh. On a flat trace min(own, next) is this value, so the per-window integral has a closed form.
 _INTENSITY = 150.0
 
 _BASE_ARGS = [
@@ -42,8 +39,7 @@ _BASE_ARGS = [
 
 @pytest.fixture()
 def small_trace(tmp_path):
-    # 4000 half-hour windows from the run start => ~83 days of coverage, far longer than any runtime here,
-    # so every fragment lands fully inside the trace and no coverage error is raised.
+    # 4000 half-hour windows, ~83 days: covers every runtime in this module.
     ts = pd.date_range("2025-06-01 00:00", periods=4000, freq="30min")
     df = pd.DataFrame({"timestamp": ts, "carbon_intensity": [_INTENSITY] * len(ts)})
     p = tmp_path / "carbon.parquet"
@@ -58,10 +54,9 @@ def _co2_grams(out: str) -> float:
 
 
 def _closed_form_co2_grams(total_tokens: int) -> float:
-    """Independent CO2 oracle: single fragment fully inside a flat-intensity trace.
+    """Return the closed-form CO2 in grams for one fragment inside the flat trace.
 
-    Uses the training-sim fragment (power, runtime) as input, then applies the carbon integral in closed
-    form — NOT the windowed accumulation ``compute_emissions`` uses. Physical reference: 1 kWh = 3.6e6 W*s.
+    Power and runtime come from the training fragment; the integral is closed form. 1 kWh = 3.6e6 W*s.
     """
     frag = fragments_from_training(
         model_name="mistral-7b-v0.1",
@@ -74,25 +69,22 @@ def _closed_form_co2_grams(total_tokens: int) -> float:
         total_tokens=total_tokens,
         start_time=pd.Timestamp("2025-06-01 00:00"),
     )[0]
-    energy_kwh = frag.power_w * frag.duration_s / 3.6e6  # W * s / (W*s per kWh)
+    energy_kwh = frag.power_w * frag.duration_s / 3.6e6
     return energy_kwh * _INTENSITY
 
 
 def test_from_training_co2_matches_closed_form(small_trace, capsys):
-    # Cross-check the CLI's windowed carbon integral against the flat-trace closed form. A /1000 (Wh<->kWh)
-    # or an off-by-one in the window accumulation would move the printed grams away from this oracle.
+    # A /1000 (Wh<->kWh) slip or an off-by-one in window accumulation moves the printed grams.
     main(["--from-training", "--carbon_trace", small_trace, *_BASE_ARGS, "--total_tokens", "10000000"])
     printed = _co2_grams(capsys.readouterr().out)
 
     expected = _closed_form_co2_grams(10_000_000)
-    # Printed value is rounded to 2 decimals (".2f"); abs=0.01 covers that rounding, nothing looser.
+    # Printed value is rounded to 2 decimals.
     assert printed == pytest.approx(expected, abs=0.01)
 
 
 def test_epochs_dataset_tokens_parity_with_total_tokens(small_trace, capsys):
-    # epochs * dataset_tokens = 2 * 5_000_000 = 10_000_000, resolved to the same job size as --total_tokens.
-    # Falsifier: dropping --epochs/--dataset_tokens wiring (or a rounding bug in _resolve_total_tokens)
-    # makes the two runs diverge or the epochs run error out.
+    # epochs * dataset_tokens = 2 * 5_000_000 = 10_000_000, the same job size as --total_tokens.
     main(["--from-training", "--carbon_trace", small_trace, *_BASE_ARGS, "--total_tokens", "10000000"])
     by_total = _co2_grams(capsys.readouterr().out)
 
@@ -105,8 +97,7 @@ def test_epochs_dataset_tokens_parity_with_total_tokens(small_trace, capsys):
 
 
 def test_co2_scales_linearly_with_total_tokens(small_trace, capsys):
-    # Runtime = total_tokens / tokens_per_second and energy = power * runtime, so CO2 is linear in tokens:
-    # halving the job halves the emissions. Falsifier: a constant/clamped runtime, or a quadratic term.
+    # runtime = total_tokens / tokens_per_second and energy = power * runtime, so CO2 is linear in tokens.
     main(["--from-training", "--carbon_trace", small_trace, *_BASE_ARGS, "--total_tokens", "10000000"])
     co2_10m = _co2_grams(capsys.readouterr().out)
 
@@ -117,8 +108,7 @@ def test_co2_scales_linearly_with_total_tokens(small_trace, capsys):
 
 
 def test_missing_token_source_errors(small_trace, capsys):
-    # No --total_tokens and no --epochs/--dataset_tokens => parser.error => SystemExit naming the token flag.
-    # Falsifier: removing the required-token-source check lets the run proceed with total_tokens=None.
+    # No --total_tokens and no --epochs/--dataset_tokens: parser.error names the token flag.
     with pytest.raises(SystemExit):
         main(["--from-training", "--carbon_trace", small_trace, *_BASE_ARGS])
     err = capsys.readouterr().err
@@ -126,9 +116,7 @@ def test_missing_token_source_errors(small_trace, capsys):
 
 
 def test_epochs_without_dataset_tokens_errors(small_trace, capsys):
-    # --epochs alone is not a complete token source (needs --dataset_tokens too). Falsifier: turning the
-    # "epochs AND dataset_tokens" guard into an OR would accept this and then raise an *uncaught* ValueError
-    # instead of the clean SystemExit — so pytest.raises(SystemExit) would go red.
+    # --epochs needs --dataset_tokens. An OR in the guard would accept this and raise an uncaught ValueError.
     with pytest.raises(SystemExit):
         main(["--from-training", "--carbon_trace", small_trace, *_BASE_ARGS, "--epochs", "2"])
     err = capsys.readouterr().err
@@ -136,8 +124,7 @@ def test_epochs_without_dataset_tokens_errors(small_trace, capsys):
 
 
 def test_config_yaml_matches_flags(small_trace, tmp_path, capsys):
-    # A config file supplying the same values as the flags must produce the same emissions.
-    # Falsifier: if --config were ignored, the config run would error on missing required args.
+    # A config file with the same values as the flags gives the same emissions.
     main(["--from-training", "--carbon_trace", small_trace, *_BASE_ARGS, "--total_tokens", "10000000"])
     by_flags = _co2_grams(capsys.readouterr().out)
 
@@ -159,8 +146,7 @@ def test_config_yaml_matches_flags(small_trace, tmp_path, capsys):
 
 
 def test_explicit_flag_overrides_config(small_trace, tmp_path, capsys):
-    # Config is folded as *defaults*; an explicit flag must win. Config says 5M, flag says 10M => 10M result.
-    # Falsifier: if config values overrode explicit flags, we'd get the 5M number (~half), not the 10M one.
+    # Config values are defaults; the explicit flag (10M) wins over the config (5M).
     main(["--from-training", "--carbon_trace", small_trace, *_BASE_ARGS, "--total_tokens", "10000000"])
     by_flags_10m = _co2_grams(capsys.readouterr().out)
 
@@ -182,8 +168,7 @@ def test_explicit_flag_overrides_config(small_trace, tmp_path, capsys):
 
 
 def test_config_unknown_key_errors(small_trace, tmp_path, capsys):
-    # A key that is not a parser dest must be rejected (not silently ignored), naming the offending key.
-    # Falsifier: dropping the unknown-key validation would let this parse and run.
+    # A key that is not a parser dest is rejected by name.
     cfg = tmp_path / "bad.yaml"
     cfg.write_text("model_name: mistral-7b-v0.1\nbogus_key: 1\n")
     with pytest.raises(SystemExit):

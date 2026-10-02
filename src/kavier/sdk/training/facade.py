@@ -1,7 +1,7 @@
-"""Training predictors: ``performance / energy / efficiency / carbon`` over a batch of fine-tuning jobs.
+"""Training predictors ``performance``, ``energy``, ``efficiency`` and ``carbon`` for fine-tuning jobs.
 
-Each verb accepts a batch (DataFrame, list[dict], or single dict) and returns the input rows plus
-predicted columns as a DataFrame.
+Each accepts a DataFrame, a list of dicts or a single dict, and returns the input rows plus predicted
+columns as a DataFrame.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from kavier.sdk.inference.facade import (
     DEFAULT_GPU_HOUR_PRICE,
     DEFAULT_INTENSITY_G_KWH,
     _flat_trace,
+    _index_of,
     _normalise,
     _with_columns,
 )
@@ -26,39 +27,33 @@ from kavier.sdk.units import FLOPS_PER_TFLOP, SECONDS_PER_HOUR, WH_PER_KWH, per_
 
 DEFAULT_NUM_NODES = 1
 
-# Training does a forward + backward pass, ~3x the forward FLOPs, so per parameter per token it is
-# 3 x FLOPS_PER_PARAM_PER_TOKEN (=2) = 6 FLOPs — the canonical "6N" of the PaLM/Chowdhery MFU
-# definition, and exactly the multiplier the supervisors' mfu_calculator.py uses.
+# Forward + backward ~3x forward FLOPs: 3 x FLOPS_PER_PARAM_PER_TOKEN (2) = 6 per parameter per token.
+# The "6N" of the PaLM MFU definition (Chowdhery et al., 2022).
 _TRAINING_FLOPS_PER_PARAM_PER_TOKEN = 6.0
 
 
 def _train_params(row: dict[str, Any]) -> dict[str, Any]:
-    """Default ``num_nodes`` (the only training key a batch commonly omits)."""
+    """Return ``row`` with ``num_nodes`` defaulted, the training key batches most often omit."""
     return {**row, "num_nodes": row.get("num_nodes", DEFAULT_NUM_NODES)}
 
 
 def _mean_flops_utilization(model_name: str, gpu_name: str, train_tokens_per_second: float, total_gpus: int) -> float:
-    """Realized per-GPU Model FLOPs Utilization (%), backed out of the predicted throughput.
+    """Return the realized per-GPU Model FLOPs Utilization [%] implied by the predicted throughput.
 
-    ``MFU = (6 · N_active · tokens/s) / (total_gpus · peak_flops) · 100`` — the standard hardware MFU
-    (Chowdhery et al. 2022), computed from Kavier's predicted ``train_tokens_per_second`` using the
-    catalog's active-parameter count (MoE-aware) and its fp16/bf16 tensor-core peak.
+    ``MFU = 6 * N_active * tokens/s / (total_gpus * peak_flops) * 100`` (Chowdhery et al., 2022), with
+    the catalog's active-parameter count (MoE-aware) and its fp16/bf16 tensor-core peak.
 
-    This is DISTINCT from ``gpu_compute_utilization``: that column is the raw *assumed* efficiency the
-    engine uses to *derive* throughput, whereas this is the efficiency *implied by* the resulting
-    throughput. The denominator is the SAME ``fp_16_tensor_core_tflops`` the engine derives throughput
-    against, so the two share one basis — but they are NOT ordered in general, because throughput also
-    carries the fitted calibration multipliers that ``gpu_compute_utilization`` omits. Realized MFU
-    falls BELOW assumed when comm/optimizer overhead or a method_scale < 1 dominates (e.g. full or
-    qlora fine-tuning) and rises ABOVE it when a method_scale > 1 (lora ≈ 1.11, gptq-lora ≈ 1.22)
-    outweighs the negligible LoRA overhead. Only on the uncalibrated path (which the facade never
-    exercises — ``run_training`` always calls the calibrated ``simulate_full_training``) is realized ≤
-    assumed strict.
+    ``gpu_compute_utilization`` is the assumed efficiency the engine uses to derive throughput; this is
+    the efficiency implied by the resulting throughput. Both use ``fp_16_tensor_core_tflops`` as the peak,
+    but throughput also carries the calibration multipliers, so the two are not ordered in general.
+    Realized MFU falls below assumed when comm/optimizer overhead or a method_scale < 1 dominates (e.g.
+    full fine-tuning) and rises above it when a method_scale > 1 (lora ~1.11, gptq-lora ~1.22)
+    outweighs the small LoRA overhead. Realized <= assumed holds only on the uncalibrated path, which the
+    facade does not use (``run_training`` calls the calibrated ``simulate_full_training``).
 
-    Caveat: for Hopper (H100/H200) the catalog figure is NVIDIA's with-sparsity peak (~2× dense bf16),
-    so read Hopper MFU as a fraction of that inflated peak, not of dense bf16 — it reads ~2× lower than
-    the supervisors' ``mfu_calculator.py`` (which uses a dense peak). A100/L40S carry dense figures and
-    need no such caveat. Returns NaN if the denominator is degenerate (``total_gpus`` or peak ≤ 0).
+    Catalog peaks are dense figures, except the calibrated NVIDIA-H100-PCIe entry, which keeps the
+    with-sparsity figure (1513) its calibration was fitted against; its MFU reads ~2x lower than with a
+    dense peak. Returns NaN if ``total_gpus`` or the peak is <= 0.
     """
     peak_flops = get_gpu(gpu_name).fp_16_tensor_core_tflops * FLOPS_PER_TFLOP
     denom = total_gpus * peak_flops
@@ -69,7 +64,7 @@ def _mean_flops_utilization(model_name: str, gpu_name: str, train_tokens_per_sec
 
 
 def run_training(p: dict[str, Any]) -> dict[str, Any]:
-    """Aggregate throughput/runtime (``simulate_full_training``) + per-step metrics (``simulate_training_step``)."""
+    """Return one job's ``simulate_full_training`` and ``simulate_training_step`` outputs, merged."""
     full = simulate_full_training(
         model_name=p["model"],
         method=p["method"],
@@ -78,9 +73,9 @@ def run_training(p: dict[str, Any]) -> dict[str, Any]:
         batch_size=int(p["batch_size"]),
         number_gpus=int(p["num_gpus"]),
         number_nodes=int(p["num_nodes"]),
-        total_tokens=int(p["total_tokens"]) if p.get("total_tokens") else None,
-        epochs=float(p["epochs"]) if p.get("epochs") else None,
-        dataset_tokens=int(p["dataset_tokens"]) if p.get("dataset_tokens") else None,
+        total_tokens=int(p["total_tokens"]) if p.get("total_tokens") is not None else None,
+        epochs=float(p["epochs"]) if p.get("epochs") is not None else None,
+        dataset_tokens=int(p["dataset_tokens"]) if p.get("dataset_tokens") is not None else None,
     )
     total_gpus = int(p["num_gpus"]) * int(p["num_nodes"])
     step = simulate_training_step(
@@ -101,11 +96,11 @@ def run_training(p: dict[str, Any]) -> dict[str, Any]:
 
 
 def run_carbon_from_training(p: dict[str, Any]) -> dict[str, Any]:
-    """Bill one training-engine power fragment against a flat carbon intensity."""
+    """Return the emissions of one training run billed against a flat carbon intensity."""
     tr = run_training(p)
     runtime_s = float(tr["train_runtime"])
     if runtime_s <= 0:
-        raise ValueError("training runtime is 0 — set a job size (total tokens or epochs) to bill carbon")
+        raise ValueError("training runtime is 0; set a job size (total tokens or epochs) to bill carbon")
     power_w = float(tr["aggregate_power_w"])
     start = pd.Timestamp("2026-01-01 00:00:00")
     trace = _flat_trace(start, runtime_s / SECONDS_PER_HOUR, p["intensity"])
@@ -126,8 +121,7 @@ def run_carbon_from_training(p: dict[str, Any]) -> dict[str, Any]:
 
 
 def performance(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.DataFrame:
-    """Per-job throughput/util: + train_tokens_per_second, train_runtime, gpu_compute_utilization,
-    mean_flops_utilization, gpu_power_watts."""
+    """Return ``batch`` with per-job throughput, runtime, utilization and power columns."""
     rows = _normalise(batch)
     cols = (
         "train_tokens_per_second",
@@ -143,11 +137,14 @@ def performance(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> 
     for row in rows:
         r = run_training(_train_params(row))
         predicted.append({k: r[k] for k in cols})
-    return _with_columns(rows, predicted)
+    return _with_columns(rows, predicted, _index_of(batch))
 
 
 def energy(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.DataFrame:
-    """Per-job energy (self-contained GPU-power estimate): + energy_wh, energy_per_mtoken_wh, aggregate_power_w."""
+    """Return ``batch`` with per-job energy_wh, energy_kwh, energy_per_mtoken_wh and aggregate_power_w.
+
+    Power comes from the training engine's own GPU power estimate.
+    """
     rows = _normalise(batch)
     predicted: list[dict[str, Any]] = []
     for row in rows:
@@ -163,11 +160,14 @@ def energy(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.Da
                 "total_tokens": total_tokens,
             }
         )
-    return _with_columns(rows, predicted)
+    return _with_columns(rows, predicted, _index_of(batch))
 
 
 def efficiency(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.DataFrame:
-    """Per-job cost: + financial_per_mtoken ($/Mtoken). GPU $/hour from a ``gpu_hour_price`` column else 2.5."""
+    """Return ``batch`` with per-job financial_per_mtoken [$/Mtoken] and gpu_hours.
+
+    GPU price [$/hour] comes from a ``gpu_hour_price`` column, else DEFAULT_GPU_HOUR_PRICE (2.5).
+    """
     rows = _normalise(batch)
     predicted: list[dict[str, Any]] = []
     for row in rows:
@@ -175,7 +175,7 @@ def efficiency(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> p
         total_tokens = tr["total_tokens"]
         runtime_s = float(tr["train_runtime"])
         price = float(row.get("gpu_hour_price", DEFAULT_GPU_HOUR_PRICE))
-        # GPU-hours = wall-clock runtime x total GPUs (matches the inference $/Mtoken basis).
+        # GPU-hours = wall-clock runtime x total GPUs, the same basis as inference $/Mtoken.
         gpu_hours = runtime_s / SECONDS_PER_HOUR * int(tr["total_gpus"])
         predicted.append(
             {
@@ -183,11 +183,14 @@ def efficiency(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> p
                 "gpu_hours": gpu_hours,
             }
         )
-    return _with_columns(rows, predicted)
+    return _with_columns(rows, predicted, _index_of(batch))
 
 
 def carbon(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.DataFrame:
-    """Per-job emissions: + total_co2_g, carbon_per_mtoken_g. Intensity from an ``intensity`` column else 400."""
+    """Return ``batch`` with per-job total_co2_g, total_co2_kg, carbon_per_mtoken_g and total_energy_kwh.
+
+    Carbon intensity [gCO2/kWh] comes from an ``intensity`` column, else DEFAULT_INTENSITY_G_KWH (400).
+    """
     rows = _normalise(batch)
     predicted: list[dict[str, Any]] = []
     for row in rows:
@@ -202,4 +205,4 @@ def carbon(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.Da
                 "total_energy_kwh": c["total_energy_kwh"],
             }
         )
-    return _with_columns(rows, predicted)
+    return _with_columns(rows, predicted, _index_of(batch))

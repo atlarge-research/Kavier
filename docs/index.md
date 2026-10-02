@@ -1,0 +1,36 @@
+# Kavier
+
+Kavier is a physics-driven simulator able to simulate LLM ecosystems under inference workloads[^bsc],
+extended to support physics-driven simulation of LLM fine-tuning workloads[^msc].
+
+It predicts the performance, sustainability, and efficiency of LLM ecosystems:
+
+* **Performance**: inference latencies, training throughput, GPU utilization and Model FLOPs Utilization (MFU)
+* **Sustainability**: energy consumption, carbon emissions
+* **Efficiency**: financial and energy cost per token or sample
+
+Kavier ports one of OpenDC's energy models and reproduces OpenDC's energy predictions, four orders of
+magnitude faster than OpenDC[^msc].
+
+## Install
+
+```bash
+pip install kavier
+kavier --help
+```
+
+## Pages
+
+* [Fine-tuning model](training.md): the analytical model and its calibration.
+* [Usage](usage.md): CLI and Python API.
+* [Cluster simulator](cluster-usage.md): FIFO/backfill queuing over a fixed cluster.
+
+## Cite
+
+See [`CITATION.cff`](https://github.com/atlarge-research/Kavier/blob/master/CITATION.cff).
+
+[^bsc]: R. Nicolae, A. Iosup, A. Trivedi, J. Donkervliet. *Kavier: Exploring Performance, Sustainability, and
+    Efficiency of LLM Ecosystems under Inference through Cache-Aware Discrete-Event Simulation.* BSc thesis,
+    Vrije Universiteit Amsterdam, 2025. [PDF](https://atlarge-research.com/pdfs/2025-15-07_bsc_thesis_radu_nicolae.pdf)
+[^msc]: R. Nicolae. *Infrastructure recommenders for large-scale fine-tuning workloads.* MSc thesis,
+    Vrije Universiteit Amsterdam, 2026.

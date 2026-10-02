@@ -10,8 +10,8 @@ abstract: >-
   throughput, GPU utilization and Model FLOPs Utilization, energy consumption,
   carbon emissions, and cost per token or sample.
 type: software
-version: 0.5.1
-date-released: "2026-09-16"
+version: 0.5.3
+date-released: "2026-10-02"
 license: MIT
 repository-code: "https://github.com/atlarge-research/kavier"
 url: "https://github.com/atlarge-research/kavier"
@@ -52,3 +52,13 @@ preferred-citation:
   month: 7
   url: >-
     https://atlarge-research.com/pdfs/2025-15-07_bsc_thesis_radu_nicolae.pdf
+references:
+  - type: thesis
+    title: "Infrastructure recommenders for large-scale fine-tuning workloads"
+    authors:
+      - given-names: Radu
+        family-names: Nicolae
+    institution:
+      name: Vrije Universiteit Amsterdam
+    thesis-type: "MSc thesis"
+    year: 2026

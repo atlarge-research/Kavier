@@ -8,6 +8,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-02
+
+### Added
+
+- A short MkDocs site (`mkdocs.yml`, `docs/`), aligned with the MSc thesis: the fine-tuning model, its
+  calibration, usage, and the cluster simulator. `docs-deploy.yml` publishes it to GitHub Pages.
+
+### Changed
+
+- The GitHub release no longer waits for the PyPI publish, so the Zenodo archive does not depend on it.
+- `docs/cluster-usage.md` uses the current policy names and `num_nodes` / `node_gpus`.
+
 ## [0.5.2] - 2026-09-19
 
 ### Added
@@ -80,5 +92,7 @@ never publishes it.
 - Codebase hygiene pass: dead code removed, enums introduced, units and defaults homed in one
   place, docstrings rewritten and long functions split. No behaviour change.
 
-[Unreleased]: https://github.com/atlarge-research/kavier/compare/v0.5.1-thesis...HEAD
+[Unreleased]: https://github.com/atlarge-research/kavier/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/atlarge-research/kavier/compare/v0.5.2...v0.5.3
+[0.5.2]: https://github.com/atlarge-research/kavier/compare/v0.5.1-thesis...v0.5.2
 [0.5.1]: https://github.com/atlarge-research/kavier/releases/tag/v0.5.1-thesis

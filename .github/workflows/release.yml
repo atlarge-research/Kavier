@@ -117,9 +117,10 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  # Only after PyPI + Docker both succeed: cut the GitHub release with auto notes and the artifacts.
+  # After the gates, build and Docker: cut the GitHub release with auto notes and the artifacts. It does
+  # not wait for PyPI, so the Zenodo archive (triggered by this release) never hinges on the PyPI publisher.
   github-release:
-    needs: [pypi, docker]
+    needs: [build, docker]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

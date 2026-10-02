@@ -66,3 +66,6 @@ plan.md
 # CLI output (see README): regenerate with `kavier cluster --out ...`
 per_jobs.csv
 per_nodes.csv
+
+# MkDocs build output
+site/

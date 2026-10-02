@@ -3,7 +3,7 @@
 Simulating performance, sustainability, and efficiency of LLM Ecosystems under inference and training.
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.txt)
-[![Documentation](https://img.shields.io/badge/docs-main-green.svg)](docs/)
+[![Documentation](https://img.shields.io/badge/docs-site-green.svg)](https://atlarge-research.github.io/Kavier/)
 [![CI](https://github.com/atlarge-research/kavier/actions/workflows/ci.yml/badge.svg)](https://github.com/atlarge-research/kavier/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/atlarge-research/kavier/branch/master/graph/badge.svg)](https://codecov.io/gh/atlarge-research/kavier)
 
@@ -193,6 +193,9 @@ A good starter task: add a GPU to the built-in spec library.
 Finish with the full gate set above, then open a PR.
 
 ## Documentation
+
+The site, aligned with the thesis: <https://atlarge-research.github.io/Kavier/>
+(`uv run --group docs mkdocs serve`).
 
 The reference for the CLI is the CLI itself — every subcommand documents its own flags:
 

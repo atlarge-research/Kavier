@@ -149,3 +149,20 @@ def test_catalog_contains_documented_shipped_keys() -> None:
     # documented as shipped for both engines (case-sensitive, no aliases).
     assert {"A100-80GB", "NVIDIA-A100-SXM4-80GB"} <= set(GPU_SPEC_LIBRARY)
     assert {"Llama-3-8B", "granite-3-8b"} <= set(LLM_SPEC_LIBRARY)
+
+
+@pytest.mark.parametrize("name, tflops", [("L4", 121), ("H100-PCIe", 756), ("H100-SXM", 989), ("H200 SXM", 989)])
+def test_uncalibrated_gpus_carry_dense_fp16_peaks(name: str, tflops: float) -> None:
+    # NVIDIA datasheets give these peaks with and without 2:4 sparsity; the catalog uses the dense figure.
+    assert GPU_SPEC_LIBRARY[name].fp_16_tensor_core_tflops == tflops
+
+
+def test_h100_pcie_keeps_the_effective_rate_of_its_calibrated_entry() -> None:
+    short, full = GPU_SPEC_LIBRARY["H100-PCIe"], GPU_SPEC_LIBRARY["NVIDIA-H100-PCIe"]
+    effective = short.fp_16_tensor_core_tflops * short.mfu_factor
+    assert effective == pytest.approx(full.fp_16_tensor_core_tflops * full.mfu_factor)
+
+
+@pytest.mark.parametrize("name", ["H100-SXM", "H200 SXM"])
+def test_hopper_sxm_gpus_use_the_nvlink_rate(name: str) -> None:
+    assert GPU_SPEC_LIBRARY[name].network_bandwidth_gbps == 7200.0  # NVLink 4, 900 GB/s

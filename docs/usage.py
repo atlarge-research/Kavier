@@ -8,7 +8,7 @@ four predictors:
 
 A predictor takes a batch, one row per workload, as a pandas DataFrame, a list of
 dicts, or a single dict. It returns the input rows plus the predicted columns.
-The `kavier` CLI and UI call the same API and give the same numbers.
+The `kavier` CLI calls the same API and gives the same numbers.
 
 Run with: python docs/usage.py
 """
@@ -33,7 +33,7 @@ inference_batch = pd.DataFrame(
     ]
 )
 
-performance = kavier.inference.performance(inference_batch)  # + p50_ms, throughput_tok_s, gpu util
+performance = kavier.inference.performance(inference_batch)  # + p50_ms, p95_ms, throughput_tok_s
 energy = kavier.inference.energy(inference_batch)  # + energy_wh, energy_per_mtoken_wh
 efficiency = kavier.inference.efficiency(inference_batch)  # + financial_per_mtoken ($/Mtoken)
 carbon = kavier.inference.carbon(inference_batch)  # + carbon_per_mtoken_g (gCO2)
@@ -56,13 +56,13 @@ training_batch = pd.DataFrame(
             "dataset_tokens": 5_000_000,
         },
         {
-            "model": "Llama-2-13B",
+            "model": "granite-3.3-8b",
             "gpu": "NVIDIA-A100-SXM4-80GB",
             "method": "full",
             "batch_size": 2,
             "seq_len": 2048,
-            "num_gpus": 16,
-            "num_nodes": 2,
+            "num_gpus": 8,  # GPUs per node
+            "num_nodes": 1,
             "total_tokens": 50_000_000,
         },
     ]

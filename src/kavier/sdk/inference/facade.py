@@ -89,12 +89,14 @@ _KV_CACHE_STRINGS = {"on": True, "true": True, "off": False, "false": False}
 
 
 def _kv_cache_flag(value: Any) -> bool:
-    """Return ``value`` as a bool; accepts bools and the strings on, off, true and false in any case."""
+    """Return ``value`` as a bool; accepts bools, 0 and 1, and the strings on, off, true and false in any case."""
     if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, (int, np.integer)) and value in (0, 1):
         return bool(value)
     if isinstance(value, str) and value.lower() in _KV_CACHE_STRINGS:
         return _KV_CACHE_STRINGS[value.lower()]
-    raise ValueError(f"kv_cache must be a bool or one of on, off, true, false; got {value!r}")
+    raise ValueError(f"kv_cache must be a bool, 0 or 1, or one of on, off, true, false; got {value!r}")
 
 
 def _prefix_policy(value: Any) -> CacheAction:

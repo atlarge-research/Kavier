@@ -19,6 +19,16 @@ _EXAMPLE_CMD = (
 )
 
 
+_CSV_COLUMNS = ("model_name", "method", "gpu_model", "tokens_per_sample", "batch_size", "number_gpus", "number_nodes")
+
+
+def _check_columns(path: str, fieldnames: Sequence[str] | None) -> None:
+    """Raise ValueError naming the training columns the CSV header lacks."""
+    missing = [c for c in _CSV_COLUMNS if c not in (fieldnames or [])]
+    if missing:
+        raise ValueError(f"{path}: missing column(s): {', '.join(missing)}")
+
+
 def _check_methods(path: str, rows: list[dict[str, str]]) -> None:
     """Raise ValueError giving the line of the first row whose method the engine does not accept."""
     for line, row in enumerate(rows, start=2):  # line 1 is the header
@@ -31,7 +41,9 @@ def _check_methods(path: str, rows: list[dict[str, str]]) -> None:
 def _run_csv(path: str, total_tokens: int | None, epochs: float | None, dataset_tokens: int | None) -> None:
     # utf-8-sig drops the byte-order mark Excel writes at the start of a UTF-8 CSV.
     with open(path, newline="", encoding="utf-8-sig") as f:
-        rows = list(csv.DictReader(f))
+        reader = csv.DictReader(f)
+        rows = list(reader)
+    _check_columns(path, reader.fieldnames)
     _check_methods(path, rows)
     header = (
         f"{'model':<28} {'method':<10} {'gpu':<22} {'seq':>5} {'bs':>3} {'gpus':>4} {'tok/s':>12} {'runtime_s':>10}"

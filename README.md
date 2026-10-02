@@ -27,7 +27,8 @@ uv run kavier inference --trace src/kavier/sdk/inference/data/input/input_exampl
 uv run kavier --help
 ```
 
-The subcommands are `inference`, `training`, `cluster`, `energy`, and `carbon`. Each documents its
+The subcommands are `inference`, `training`, `cluster`, `energy`, `carbon`, and `calibrate` (needs the
+`[calibration]` extra). Each documents its
 flags with `--help`.
 
 ## Documentation

@@ -227,3 +227,15 @@ def test_identical_calls_give_identical_tasks() -> None:
     assert first == second
     # 2026-01-01 00:00 UTC in ms since the Unix epoch.
     assert {t["submission_time"] for t in first} == {1_767_225_600_000}
+
+
+@pytest.mark.parametrize("flag", [0, 1, np.int64(0), np.int64(1)])
+def test_kv_cache_accepts_zero_and_one(flag) -> None:
+    as_int = kavier.inference.performance({**ROW_A, "kv_cache": flag})
+    as_bool = kavier.inference.performance({**ROW_A, "kv_cache": bool(flag)})
+    assert as_int["total_s"].iloc[0] == as_bool["total_s"].iloc[0]
+
+
+def test_kv_cache_rejects_other_numbers() -> None:
+    with pytest.raises(ValueError, match="kv_cache"):
+        kavier.inference.performance({**ROW_A, "kv_cache": 2})

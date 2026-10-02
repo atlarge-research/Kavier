@@ -51,6 +51,13 @@ def test_method_flag_accepts_every_method_the_engine_accepts(capsys, method):
     assert f"Method: {method}" in capsys.readouterr().out
 
 
+def test_csv_without_a_required_column_is_rejected(tmp_path, capsys):
+    csv_path = tmp_path / "rows.csv"
+    csv_path.write_text(_HEADER.replace("method,", "") + "mistral-7b-v0.1,NVIDIA-A100-SXM4-80GB,1024,4,8,1\n")
+    assert _exit_code(["--input_csv", str(csv_path)]) == 2
+    assert "missing column(s): method" in capsys.readouterr().err
+
+
 def test_csv_saved_with_utf8_bom_is_read(tmp_path, capsys):
     csv_path = tmp_path / "rows.csv"
     csv_path.write_bytes(b"\xef\xbb\xbf" + (_HEADER + _ROW.format(method="lora")).encode())

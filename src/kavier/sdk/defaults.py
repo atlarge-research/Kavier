@@ -1,6 +1,6 @@
-"""Default values shared by the CLI, the UI, and the SDK facades.
+"""Default values shared by the CLI and the SDK facades.
 
-Imports only the stdlib-only ``StrEnum`` vocabularies, so the inference facade and the CLI/UI arg
+Imports only the stdlib-only ``StrEnum`` vocabularies, so the inference facade and the CLI arg
 builders can use these values without loading pandas or numpy.
 """
 

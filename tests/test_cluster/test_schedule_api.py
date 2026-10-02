@@ -142,6 +142,8 @@ def test_dataframe_blank_nodes_cell_defaults_to_one_node() -> None:
         {"submit_s": 0, "gpus": 1, "duration_s": float("-inf")},
         {"submit_s": 0, "gpus": 1, "duration_s": -5},
         {"submit_s": 0, "gpus": -2, "duration_s": 5},
+        {"submit_s": 0, "gpus": float("inf"), "duration_s": 5},
+        {"submit_s": 0, "gpus": float("nan"), "duration_s": 5},
     ],
 )
 def test_infinite_or_negative_job_values_raise_value_error(bad_job: dict[str, float]) -> None:

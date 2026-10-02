@@ -33,7 +33,7 @@ AdamW, dominated by memory traffic: 20 bytes moved per trainable parameter, each
 
 $$T_o = \frac{20 \times P_t}{B_m}
 \qquad
-P_t = \begin{cases} P_{all} & \text{full fine-tuning} \\ 2 \times r \times d \times k \times L & \text{LoRA / GPTQ-LoRA} \end{cases}$$
+P_t = \begin{cases} P_{all} & \text{full fine-tuning} \\ 2 \times r \times d \times k \times L & \text{LoRA, GPTQ-LoRA, QLoRA, aLoRA} \end{cases}$$
 
 $B_m$ is the GPU memory bandwidth, $P_{all}$ the total number of model parameters, $r = 8$ the LoRA rank,
 $d$ the hidden size, $k = 4$ the number of target modules per layer, and $L$ the number of transformer layers.
@@ -47,7 +47,7 @@ $$T_c = \begin{cases} 0 & G = 1 \\ c_c \times T_r(G, W_n) & N = 1 \\ c_c \times 
 \qquad
 T_r(p, W) = \ell \log_2 p + o\,(p - 1) + \frac{D\,(p - 1)}{p \times W / 8}$$
 
-$G$ is the total number of GPUs, $N$ the number of nodes, and $G_n = G / N$ the GPUs per node. $W_n$ is the
+$G$ is the total number of GPUs, $N$ the number of nodes, and $G_n = \max(1, \lfloor G / N \rfloor)$ the GPUs per node. $W_n$ is the
 GPU interconnect rate and $W_i = 200$ Gbit/s the InfiniBand rate. $D = 4 \times P_t$ is the gradient size in
 bytes, $\ell$ the per-hop latency, $o$ the per-message overhead, and $c_c$ a calibrated communication scale.
 

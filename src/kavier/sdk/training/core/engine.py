@@ -156,7 +156,11 @@ def _micro_step_time(
 
 def known_methods() -> list[str]:
     """Return the accepted methods: full, lora, gptq-lora, qlora, alora, and any the active calibration fits."""
-    return sorted(_KNOWN_METHODS | get_calibrated_methods())
+    try:
+        calibrated = get_calibrated_methods()
+    except ValueError:  # unknown KAVIER_CALIBRATION; running a simulation reports it
+        calibrated = frozenset()
+    return sorted(_KNOWN_METHODS | calibrated)
 
 
 def normalise_method(method: str) -> str:

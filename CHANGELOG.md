@@ -32,9 +32,10 @@ Training and calibration predictions for the four calibrated GPUs are unchanged 
   workloads; a second run in the same second gets its own output folder.
 - `tokens_per_step` is the full data-parallel product and `train_steps_per_second` includes the
   multi-GPU correction; throughput is unchanged.
-- GPU catalog: dense FP16 peaks for L4 (121 TFLOPS), H100-SXM and H200 SXM (989), and H100-PCIe (756,
-  with MFU factor 0.311 so its training throughput is unchanged); NVLink rates for H100-SXM and H200 SXM.
-  The calibrated entries are unchanged.
+- GPU catalog: dense FP16 peaks for L4 (121 TFLOPS), H100-SXM and H200 SXM (989), and H100-PCIe (756), and
+  NVLink rates for H100-SXM and H200 SXM. Inference latency, energy, cost and carbon predictions change for
+  these GPUs. The H100-PCIe MFU factor doubles, so its single-GPU training throughput is unchanged while its
+  reported compute utilization and power rise. The calibrated entries are unchanged.
 - `python -m kavier.sdk.training.calibration.engine --check` compares the values the model uses and
   ignores the >8-GPU multi-GPU corrections, which move with the catalog.
 - CI runs on Linux only, on pull requests, with a time cap on every job and `uv sync --locked`;
@@ -56,17 +57,18 @@ Training and calibration predictions for the four calibrated GPUs are unchanged 
 - `kavier energy` and other parquet readers could abort at exit with "terminate called without an
   active exception" (apache/arrow#34314); parquet files are now read by Arrow on one thread.
 - Cluster simulator: a crash under `distributed-fcfs` when a zero-duration job tied with a later job;
-  blank `nodes` cells in DataFrame input; zero-GPU replicas counted as hosted; infinite or negative job
-  values; `plot_timeline` changing the matplotlib backend; tuple rows ignoring power and job id.
+  blank `nodes` cells in DataFrame input; zero-GPU replicas counted as hosted; infinite, NaN or negative
+  job values; `plot_timeline` changing the matplotlib backend; tuple rows ignoring power and job id.
 - Inference: prefix-cache token lists now load whenever `input_tokens` is present; fragments add up to the
   task duration for any export rate; `_sim_results.txt` is written as UTF-8; parquet traces with list
-  token columns; invalid `prefix_policy` and `kv_cache` values are rejected; `gpu_hour_price=0` gives a
-  cost of 0; verbs keep the input DataFrame's index; small export rates show in the run summary.
+  token columns; invalid `prefix_policy` values are rejected, and `kv_cache` accepts booleans, 0 and 1,
+  and on/off/true/false; `gpu_hour_price=0` gives a cost of 0; verbs keep the input DataFrame's index;
+  small export rates show in the run summary.
 - Training: enum method values get their interaction scale; zero epochs or tokens are no longer dropped;
   negative GPU, node and token counts are rejected; `calibrate --models ... --write` no longer overwrites
   the shipped tables; the multi-GPU gap fill is anchored at 1 GPU; NaN GPU counts in invalid rows.
-- CLI: input errors are reported as usage errors instead of tracebacks, and CSVs saved with a UTF-8
-  byte-order mark are read.
+- CLI: input errors, including a CSV without a required column, are reported as usage errors instead of
+  tracebacks, and CSVs saved with a UTF-8 byte-order mark are read.
 - `UnknownSpecError` can be pickled, so it reaches the caller from a process pool.
 
 ## [0.5.2] - 2026-09-19

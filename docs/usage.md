@@ -5,7 +5,7 @@
 Every subcommand documents its own flags.
 
 ```bash
-kavier --help           # inference, training, cluster, energy, carbon
+kavier --help           # inference, training, cluster, energy, carbon, calibrate
 kavier training --help
 ```
 

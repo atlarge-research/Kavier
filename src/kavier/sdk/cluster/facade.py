@@ -180,8 +180,8 @@ def _normalise(jobs: Any) -> list[dict[str, Any]]:
             raise ValueError(f"job {index} needs submit_s, gpus and duration_s")
         submit_f = float(submit_s)
         duration_f = float(duration_s)
-        if not (math.isfinite(submit_f) and math.isfinite(duration_f)):
-            raise ValueError(f"job {index}: submit_s and duration_s must be finite numbers")
+        if not all(math.isfinite(v) for v in (submit_f, duration_f, float(gpus))):
+            raise ValueError(f"job {index}: submit_s, gpus and duration_s must be finite numbers")
         gpus_i = int(gpus)
         if duration_f < 0 or gpus_i < 0:
             raise ValueError(f"job {index}: duration_s and gpus must be >= 0, got {duration_f} and {gpus_i}")

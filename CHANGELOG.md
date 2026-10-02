@@ -19,6 +19,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - The GitHub release no longer waits for the PyPI publish, so the Zenodo archive does not depend on it.
 - `docs/cluster-usage.md` uses the current policy names and `num_nodes` / `node_gpus`.
+- CI time caps: Linux only, no job over 5 min (so no step over 5 min), and a release's longest job
+  chain is budgeted to 15 min of execution (guard 1 + lint 3 + test 5 + docker 4 + release 2).
+- mypy `python_version` 3.11 -> 3.12: the merged numpy 2.5 stubs use 3.12-only syntax. The 3.11 test
+  leg and ruff's `py311` target still guard the floor.
 
 ## [0.5.2] - 2026-09-19
 

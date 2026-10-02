@@ -134,7 +134,9 @@ source = ["kavier"]
 show_missing = true
 
 [tool.mypy]
-python_version = "3.11"
+# 3.12, not the 3.11 floor: numpy >= 2.5 (resolved on Python >= 3.12) ships stubs with 3.12-only `type`
+# statements, which mypy cannot parse in 3.11 mode. The 3.11 test leg and ruff's py311 target guard the floor.
+python_version = "3.12"
 strict = true
 mypy_path = "src"
 # Strict-clean packages (the full tree is gated incrementally — see .github/workflows/ci.yml).

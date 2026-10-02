@@ -149,12 +149,10 @@ Some accuracy/determinism tests skip on a clean checkout (they need the `[calibr
 
 ## Where the model/limitations are documented
 
-The documentation is a MkDocs (Material) site under `docs/` (`docs/mkdocs.yml`, pages in
-`docs/content/`; build with `cd docs && mkdocs build`). The per-component pages
-(`docs/content/performance.md`, `docs/content/energy.md`, `docs/content/co2.md`,
-`docs/content/efficiency.md`, `docs/content/library.md`) state the intended math for every engine in
-their Formulas sections (with paper citations). `docs/content/known-weaknesses.md` enumerates the
-project's own admitted limits (e.g. inference has no measured-accuracy validation; most models run
-uncalibrated; MoE/scaling caveats) — read it before trusting or "improving" a number, and keep it in sync
-when you change modelling behaviour. Only the training model has a published accuracy figure, and it is
-validated only on internal data for its calibrated model/GPU set; treat all outputs as planning estimates.
+The documentation is a short MkDocs (Material) site, `mkdocs.yml` at the repo root and pages in
+`docs/` (build with `uv run --group docs mkdocs build --strict`; `docs-deploy.yml` publishes it to GitHub
+Pages from master). Its text is taken from the MSc thesis (§3.4 2-PA, §4.4 calibration), so keep it
+aligned with the thesis rather than extending it. The longer pre-0.5.1 site (per-component formulas,
+`known-weaknesses.md`) was deleted in 4ede6cb and is recoverable from tag `v0.5.0.2`. Only the training
+model has a published accuracy figure, and it is validated only on internal data for its calibrated
+model/GPU set; treat all outputs as planning estimates.

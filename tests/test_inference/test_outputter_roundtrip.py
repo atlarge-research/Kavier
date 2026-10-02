@@ -1,11 +1,7 @@
-"""Behavior tests for the OpenDC parquet exporter (kavier.sdk.io.opendc.adapter).
+"""Tests for the OpenDC parquet exporter (kavier.sdk.io.opendc.adapter).
 
-The adapter's job is to coerce Kavier task/fragment frames into the OpenDC
-workload schema and write them as parquet. The meaningful behaviors are the
-*semantic* coercions (ms-epoch int -> UTC timestamp, ms int -> timedelta),
-column subsetting (schema columns only), the optional total_tokens branch, and
-the OpenDC dtype contract. Oracles are hand-derived from those conversions, not
-snapshots of adapter output.
+Covers the ms-epoch -> timestamp and ms -> timedelta conversions, the subset to schema columns,
+the optional total_tokens column, and the OpenDC column types.
 """
 
 from datetime import datetime, timedelta
@@ -24,8 +20,7 @@ from kavier.sdk.io.opendc.adapter import (
 
 
 def _tasks_df(**overrides):
-    """One valid tasks row covering every TASKS_SCHEMA column, with distinct
-    values per column so a column mix-up would surface as a wrong value."""
+    """Return one tasks row with a distinct value in every TASKS_SCHEMA column."""
     row = {
         "id": 7,
         "submission_time": 0,  # ms since epoch
@@ -54,30 +49,24 @@ def _fragments_df(**overrides):
 
 
 def test_tasks_submission_time_ms_epoch_to_utc_timestamp():
-    # submission_time is a ms-since-epoch integer; the adapter reinterprets it
-    # via to_datetime(unit="ms"). 86_400_000 ms = 86_400 s = exactly one day,
-    # so the wall-clock oracle is 1970-01-02 00:00:00. The schema is tz-naive
-    # timestamp[ms], so the read-back value is a naive datetime.
+    # 86_400_000 ms = one day -> 1970-01-02 00:00:00. The schema is tz-naive timestamp[ms].
     df = _tasks_df(submission_time=86_400_000)
     with TemporaryDirectory() as td:
         path = f"{td}/tasks.parquet"
         write_tasks_opendc(df, path)
         ts = pq.read_table(path).column("submission_time").to_pylist()
-    # Falsify: unit="s" -> year ~4700; no conversion -> raw int / raises.
+    # unit="s" would give a year near 4700.
     assert ts == [datetime(1970, 1, 2, 0, 0)]
 
 
 def test_tasks_scalar_values_roundtrip_and_extra_columns_dropped():
-    # Distinct per-column values catch a swapped/duplicated column; the extra
-    # column proves the adapter subsets to the schema instead of dumping df.
+    # Distinct values catch a swapped column; extra_col checks the subset to schema columns.
     df = _tasks_df(extra_col=999)
     with TemporaryDirectory() as td:
         path = f"{td}/tasks.parquet"
         write_tasks_opendc(df, path)
         table = pq.read_table(path)
-    # Falsify: writing df directly would keep "extra_col".
     assert "extra_col" not in table.column_names
-    # Falsify: any constant-return / column mix-up changes one of these.
     assert table.column("id").to_pylist() == [7]
     assert table.column("duration").to_pylist() == [1234]
     assert table.column("cpu_count").to_pylist() == [3]
@@ -88,10 +77,8 @@ def test_tasks_scalar_values_roundtrip_and_extra_columns_dropped():
 
 
 def test_tasks_written_dtypes_match_opendc_contract():
-    # OpenDC's workload reader requires these exact physical types. Hand-listed
-    # from the OpenDC contract (independent of schema.py): a drift in schema.py
-    # away from the contract, or dropping the int32 coercion, goes red here.
-    # Pass id as a plain python int (pandas -> int64) to prove it is narrowed.
+    # Physical types required by the OpenDC workload reader, listed apart from schema.py.
+    # id enters as int64 and must be narrowed to int32.
     df = _tasks_df(id=7)
     with TemporaryDirectory() as td:
         path = f"{td}/tasks.parquet"
@@ -108,36 +95,31 @@ def test_tasks_written_dtypes_match_opendc_contract():
 
 
 def test_tasks_total_tokens_absent_by_default():
-    # total_tokens is inference-only; a training-style frame lacks it and the
-    # export must not invent the column.
+    # total_tokens is inference-only; a training frame has no such column.
     with TemporaryDirectory() as td:
         path = f"{td}/tasks.parquet"
         write_tasks_opendc(_tasks_df(), path)
         cols = pq.read_table(path).column_names
-    # Falsify: unconditionally appending total_tokens.
     assert "total_tokens" not in cols
 
 
 def test_tasks_total_tokens_preserved_when_present():
-    # When present, the optional branch must append it and keep the value.
     with TemporaryDirectory() as td:
         path = f"{td}/tasks.parquet"
         write_tasks_opendc(_tasks_df(total_tokens=42), path)
         table = pq.read_table(path)
-    # Falsify: dropping the branch -> column missing; wrong cast -> wrong value.
     assert table.column("total_tokens").to_pylist() == [42]
     assert table.schema.field("total_tokens").type == pa.int64()
 
 
 def test_fragments_duration_ms_to_timedelta():
-    # Fragment duration is a ms integer reinterpreted as a duration[ms]. 1500 ms
-    # = 1.5 s, read back as a timedelta. Independent of the adapter's own math.
+    # 1500 ms read back as a duration[ms] timedelta.
     df = _fragments_df(duration=1500)
     with TemporaryDirectory() as td:
         path = f"{td}/fragments.parquet"
         write_fragments_opendc(df, path)
         dur = pq.read_table(path).column("duration").to_pylist()
-    # Falsify: unit="s" -> timedelta of 1500 s; no conversion -> raw int.
+    # unit="s" would give 1500 s.
     assert dur == [timedelta(milliseconds=1500)]
 
 
@@ -147,7 +129,6 @@ def test_fragments_values_roundtrip_and_extra_columns_dropped():
         path = f"{td}/fragments.parquet"
         write_fragments_opendc(df, path)
         table = pq.read_table(path)
-    # Falsify: dumping df keeps "extra".
     assert "extra" not in table.column_names
     assert table.column("id").to_pylist() == [9]
     assert table.column("cpu_usage").to_pylist() == [0.25]
@@ -155,7 +136,7 @@ def test_fragments_values_roundtrip_and_extra_columns_dropped():
 
 
 def test_fragments_written_dtypes_match_opendc_contract():
-    # OpenDC fragment contract: int32 id, duration[ms], double usage columns.
+    # OpenDC fragments: int32 id, duration[ms], float64 usage columns.
     with TemporaryDirectory() as td:
         path = f"{td}/fragments.parquet"
         write_fragments_opendc(_fragments_df(), path)
@@ -169,29 +150,25 @@ def test_fragments_written_dtypes_match_opendc_contract():
 
 
 def test_prepare_opendc_input_writes_both_workload_files():
-    # Contract: a complete workload = tasks.parquet + fragments.parquet under a
-    # freshly-created dst dir, both readable and carrying the input rows.
+    # A workload is tasks.parquet + fragments.parquet in a newly created directory.
     tasks = pd.concat([_tasks_df(id=1), _tasks_df(id=2)], ignore_index=True)
     frags = _fragments_df()
     with TemporaryDirectory() as td:
-        dst = f"{td}/nested/workload"  # not yet created -> exercises makedirs
+        dst = f"{td}/nested/workload"  # does not exist yet
         prepare_opendc_input(tasks, frags, dst)
         t = pq.read_table(f"{dst}/tasks.parquet")
         f = pq.read_table(f"{dst}/fragments.parquet")
-    # Falsify: writing only one file, or not creating the nested dir, raises;
-    # a row-count regression changes these.
     assert t.num_rows == 2
     assert t.column("id").to_pylist() == [1, 2]
     assert f.num_rows == 1
 
 
 def test_output_kavier_specs_roundtrip():
-    # The sidecar dump must land at _sim_results.txt verbatim.
+    # The text is written unchanged to _sim_results.txt.
     payload = "latency=1.5ms\nthroughput=42tok/s\n"
     with TemporaryDirectory() as td:
         dst = f"{td}/out"
         output_kavier_specs(dst, payload)
         with open(f"{dst}/_sim_results.txt") as fh:
             written = fh.read()
-    # Falsify: wrong filename, truncation, or mangling the text.
     assert written == payload

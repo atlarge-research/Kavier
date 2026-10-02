@@ -2,7 +2,7 @@
 
 Reads a jobs CSV (``submit_s,gpus,duration_s[,nodes,power_w_per_gpu,job_id]``), runs the FIFO/backfill
 cluster simulator, prints the per-cluster summary as JSON to stdout, and optionally writes the per-job
-schedule to a CSV. All modelling lives in :mod:`kavier.sdk.cluster`; this module is CLI glue only.
+schedule to a CSV. The model is in :mod:`kavier.sdk.cluster`.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from kavier.cli._shared import FriendlyParser, apply_config
+from kavier.cli._shared import FriendlyParser, parse_args_with_config
 from kavier.sdk.cluster import schedule
 from kavier.sdk.cluster.facade import ClusterSimResult
 from kavier.sdk.cluster.vocab import Oversized, Policy
@@ -86,7 +86,8 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
 
 def _load_jobs(path: Path) -> list[dict[str, Any]]:
     """Parse the jobs CSV into canonical job dicts for :func:`kavier.sdk.cluster.schedule`."""
-    with path.open(newline="", encoding="utf-8") as handle:
+    # utf-8-sig drops the byte-order mark Excel writes at the start of a UTF-8 CSV.
+    with path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
         missing = {"submit_s", "gpus", "duration_s"} - set(reader.fieldnames or [])
         if missing:
@@ -109,7 +110,7 @@ def _load_jobs(path: Path) -> list[dict[str, Any]]:
 
 
 def _summary(result: ClusterSimResult) -> dict[str, Any]:
-    """Per-cluster summary for stdout (JSON-serialisable)."""
+    """Return the per-cluster summary as a JSON-serialisable dict."""
     cluster = result.cluster
     return {
         "policy": result.policy,
@@ -131,12 +132,12 @@ def _summary(result: ClusterSimResult) -> dict[str, Any]:
 
 
 def _format_nodes(nodes: tuple[tuple[int, int], ...]) -> str:
-    """Render a node assignment as ``"0:8;1:2"`` (node_id:gpus, semicolon-separated)."""
+    """Return a node assignment as ``"0:8;1:2"`` (node_id:gpus, semicolon-separated)."""
     return ";".join(f"{node_id}:{gpus}" for node_id, gpus in nodes)
 
 
 def _describe_nodes(nodes: tuple[tuple[int, int], ...]) -> str:
-    """Human-readable placement, e.g. ``"8 GPUs on node 1 + 1 GPU on node 2"``."""
+    """Return a readable placement, e.g. ``"8 GPUs on node 1 + 1 GPU on node 2"``."""
     return " + ".join(f"{gpus} GPU{'s' if gpus != 1 else ''} on node {node_id}" for node_id, gpus in nodes)
 
 
@@ -167,8 +168,7 @@ def _write_per_node(result: ClusterSimResult, path: Path) -> None:
 def main(argv: Sequence[str] | None = None) -> None:
     """Run the cluster simulator over a jobs CSV and print the summary (JSON) to stdout."""
     parser = add_cluster_args(FriendlyParser(prog="kavier cluster", example=_EXAMPLE_CMD))
-    apply_config(parser, argv)
-    args = parser.parse_args(argv)
+    args = parse_args_with_config(parser, argv)
 
     jobs_path = Path(args.jobs).expanduser()
     if not jobs_path.exists():
@@ -191,11 +191,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.out:
         out_path = Path(args.out).expanduser()
         _write_per_job(result, out_path)
-        print(f"Per-job schedule → {out_path}", file=sys.stderr)
+        print(f"Per-job schedule written to {out_path}", file=sys.stderr)
     if args.out_nodes:
         out_nodes_path = Path(args.out_nodes).expanduser()
         _write_per_node(result, out_nodes_path)
-        print(f"Per-node schedule → {out_nodes_path}", file=sys.stderr)
+        print(f"Per-node schedule written to {out_nodes_path}", file=sys.stderr)
     if args.plot:
         from kavier.sdk.cluster import plot_timeline
 
@@ -205,7 +205,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             plot_timeline(result, str(plot_path))
         except ImportError as exc:
             parser.error(str(exc))
-        print(f"Cluster timeline → {plot_path}", file=sys.stderr)
+        print(f"Cluster timeline written to {plot_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
-"""Training functionality: the analytical training engine + calibration plus the public verbs.
+"""Analytical training engine, its calibration layer, and the batch predictors.
 
-The first-principles step/full-run engine lives in ``core/``, wrapped by the ``calibration/``
-correction layer. The batch predictors (``performance`` / ``energy`` / ``efficiency`` / ``carbon``)
-live in ``facade.py`` and are re-exported here lazily. Keeping this ``__init__`` import-light is
-load-bearing: a bare ``import kavier.sdk.training.calibration`` executes it, and the calibration
-accessor must stay stdlib-only (no scipy/sklearn/numpy/pandas). ``kavier.training`` aliases this package.
+``core/`` holds the step and full-run engine, corrected by the fitted tables in ``calibration/``.
+``facade.py`` defines ``performance``, ``energy``, ``efficiency`` and ``carbon``; they are re-exported
+here lazily. This ``__init__`` stays import-light because ``import kavier.sdk.training.calibration``
+runs it, and the calibration accessor has to stay stdlib-only (no scipy, sklearn, numpy or pandas).
+``kavier.training`` aliases this package.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from kavier._lazy import lazy_getattr
 
-if TYPE_CHECKING:  # type-checkers only; never imported at runtime
+if TYPE_CHECKING:
     from kavier.sdk.training.facade import (
         DEFAULT_INTENSITY_G_KWH as DEFAULT_INTENSITY_G_KWH,
     )
@@ -39,9 +39,8 @@ if TYPE_CHECKING:  # type-checkers only; never imported at runtime
         run_training as run_training,
     )
 
-# Public names re-exported (lazily) from facade.py. Listed explicitly so real submodules
-# (facade / cli / core / calibration) are left to the normal import machinery — never delegated,
-# and so this __init__ never imports the facade's heavy deps at module load (calibration contract).
+# Facade names resolved lazily. Submodules (facade, cli, core, calibration) are not listed, so they load
+# through the normal import machinery and this module never imports the facade's dependencies.
 _FACADE_EXPORTS = frozenset(
     {
         "performance",

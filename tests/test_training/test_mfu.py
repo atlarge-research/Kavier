@@ -1,9 +1,8 @@
-"""Predicted Mean FLOPs Utilization (MFU) surfaced by the training facade.
+"""Predicted mean FLOPs utilization (MFU) reported by the training facade.
 
-MFU is the standard hardware definition ``6 · N_active · tokens/s / (total_gpus · peak_flops) · 100``
-(Chowdhery et al. 2022), matching the supervisors' ``mfu_calculator.py`` reference. Every expected
-value is hand-derived from first principles (param count from the spec library, peak from the NVIDIA
-datasheet) with the arithmetic shown beside the assert — never copied from an engine run.
+MFU = ``6 * N_active * tokens/s / (total_gpus * peak_flops) * 100`` (Chowdhery et al. 2022). Expected
+values use the parameter count from the spec library and the peak from the NVIDIA datasheet, with the
+arithmetic next to each assert.
 """
 
 from __future__ import annotations
@@ -17,27 +16,26 @@ from kavier.sdk.training.facade import _mean_flops_utilization, performance
 
 def test_mean_flops_utilization_hand_derived_value() -> None:
     # Llama-3-8B active_params = 8e9 (spec library); A100-80GB peak = 312 TFLOP/s (NVIDIA datasheet).
-    # MFU = 6 · 8e9 · 15600 / (4 · 312e12) · 100 = 7.488e14 / 1.248e15 · 100 = 60.0 %.
+    # MFU = 6 * 8e9 * 15600 / (4 * 312e12) * 100 = 7.488e14 / 1.248e15 * 100 = 60.0 %.
     assert _mean_flops_utilization("Llama-3-8B", "A100-80GB", 15600.0, 4) == pytest.approx(60.0)
 
 
 def test_mean_flops_utilization_uses_active_not_total_params_for_moe() -> None:
-    # mixtral-8x7b: active_params = 1.3e10 (2 of 8 experts), total m_params = 4.7e10. MFU must use
-    # ACTIVE: 6 · 1.3e10 · 8000 / (2 · 312e12) · 100 = 6.24e14 / 6.24e14 · 100 = 100.0 %.
+    # mixtral-8x7b: active_params = 1.3e10 (2 of 8 experts), total m_params = 4.7e10. MFU uses
+    # active: 6 * 1.3e10 * 8000 / (2 * 312e12) * 100 = 6.24e14 / 6.24e14 * 100 = 100.0 %.
     result = _mean_flops_utilization("mixtral-8x7b-instruct-v0.1", "A100-80GB", 8000.0, 2)
     assert result == pytest.approx(100.0)
-    # Using TOTAL params would give 6 · 4.7e10 · 8000 / 6.24e14 · 100 = 361.5 % — guard the regression.
+    # Total params would give 6 * 4.7e10 * 8000 / 6.24e14 * 100 = 361.5 %.
     assert result != pytest.approx(361.5)
 
 
 def test_mean_flops_utilization_uses_catalog_peak_directly() -> None:
-    # The denominator is the catalog's fp_16_tensor_core_tflops as-is (A100 = 312, H100-SXM = 1979),
-    # the SAME figure the engine derives throughput against, so MFU stays self-consistent. For
-    # identical N/tokens/gpus, MFU_A100 / MFU_H100 = peak_H100 / peak_A100 = 1979 / 312. (No per-GPU
-    # sparsity fudge is applied here: the engine and this metric must share one peak or the ratio breaks.)
+    # The denominator is the catalog fp_16_tensor_core_tflops (A100 = 312, H100-SXM = 989), the peak
+    # the engine uses for throughput. For equal N, tokens and GPUs,
+    # MFU_A100 / MFU_H100 = peak_H100 / peak_A100 = 989 / 312.
     a100 = _mean_flops_utilization("Llama-3-8B", "A100-80GB", 10000.0, 4)
     h100 = _mean_flops_utilization("Llama-3-8B", "H100-SXM", 10000.0, 4)
-    assert a100 / h100 == pytest.approx(1979 / 312)
+    assert a100 / h100 == pytest.approx(989 / 312)
 
 
 def test_mean_flops_utilization_scales_linearly_with_throughput() -> None:
@@ -49,17 +47,14 @@ def test_mean_flops_utilization_scales_linearly_with_throughput() -> None:
 
 
 def test_mean_flops_utilization_is_nan_for_degenerate_denominator() -> None:
-    # Guard, not a crash: total_gpus = 0 (or a zero peak) zeroes the denominator, so the helper returns
-    # NaN rather than raising ZeroDivisionError. The facade validates num_gpus >= 1 so this is only
-    # reachable by calling the helper directly, but the guard must hold.
+    # total_gpus = 0 (or a zero peak) zeroes the denominator; the helper returns NaN instead of raising
+    # ZeroDivisionError. The facade requires num_gpus >= 1, so only a direct call reaches this.
     assert math.isnan(_mean_flops_utilization("Llama-3-8B", "A100-80GB", 15600.0, 0))
 
 
 def test_performance_mfu_uses_total_gpus_across_nodes() -> None:
-    # Wiring guard: run_training must feed total_gpus = num_gpus × num_nodes into the MFU denominator,
-    # not num_gpus alone. With num_gpus=2, num_nodes=2 the denominator must reflect 4 GPUs; using
-    # num_gpus (2) would DOUBLE the reported MFU. Pin the identity against total_gpus=4 (Llama-3-8B
-    # N=8e9, A100 peak=312 TFLOP/s) — a num_gpus/total_gpus swap in run_training breaks it.
+    # run_training puts total_gpus = num_gpus x num_nodes in the MFU denominator: 2 x 2 = 4 GPUs here;
+    # num_gpus alone (2) would double the MFU. Llama-3-8B N = 8e9, A100 peak = 312 TFLOP/s.
     out = performance(
         {
             "model": "Llama-3-8B",
@@ -77,11 +72,10 @@ def test_performance_mfu_uses_total_gpus_across_nodes() -> None:
 
 
 def test_realized_mfu_can_exceed_assumed_under_lora_calibration_boost() -> None:
-    # The facade always runs CALIBRATED: train_tokens_per_second carries the fitted method_scale while
-    # gpu_compute_utilization does not. For lora/gptq-lora method_scale > 1 (≈1.11 / ≈1.22) and the LoRA
-    # optimizer/comm overhead is negligible, so realized MFU rises ABOVE assumed; for full fine-tuning
-    # (method_scale < 1) it stays below. Pin BOTH directions on a calibrated pair so the ordering is a
-    # tested contract — the two are deliberately NOT ordered in general (guards the docstring).
+    # The facade always runs calibrated: train_tokens_per_second includes the fitted method_scale and
+    # gpu_compute_utilization does not. For lora/gptq-lora method_scale > 1 (~1.11 / ~1.22) and LoRA
+    # optimizer and comm overhead is negligible, so realized MFU exceeds assumed; for full fine-tuning
+    # (method_scale < 1) it stays below. The two are therefore not ordered in general.
     def row(method: str) -> dict[str, object]:
         return {
             "model": "granite-3-8b",
@@ -102,12 +96,10 @@ def test_realized_mfu_can_exceed_assumed_under_lora_calibration_boost() -> None:
 
 @pytest.mark.parametrize("gpu", ["A100-80GB", "L40S", "H100-SXM"])
 def test_realized_mfu_is_below_assumed_compute_utilization(gpu: str) -> None:
-    # gpu_compute_utilization is the *assumed* efficiency the engine uses to derive throughput;
-    # mean_flops_utilization is the efficiency *implied by* the resulting throughput after
-    # comm + optimizer-step overhead lengthens the step. Those overheads only reduce throughput, so
-    # the realized MFU must sit strictly below the assumed one (single GPU: no comm/mgc confounders).
-    # Because both use the SAME catalog peak, this self-consistency holds on every GPU, Hopper included
-    # (proving the sparsity peak is not double-counted in the denominator).
+    # gpu_compute_utilization is the assumed efficiency the engine uses to derive throughput;
+    # mean_flops_utilization is the efficiency implied by that throughput after comm and optimizer time
+    # lengthen the step, so realized < assumed (one GPU, so no comm or mgc effects). Both use the same
+    # catalog peak, so this holds on Hopper too and the sparsity peak is not counted twice.
     row = {
         "model": "Llama-3-8B",
         "gpu": gpu,

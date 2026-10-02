@@ -1,7 +1,6 @@
-"""``kavier.cluster`` is a convenience alias for the ``kavier.sdk.cluster`` package (not a copy).
+"""``kavier.cluster`` is an alias of the ``kavier.sdk.cluster`` package and the same module object.
 
-Mirrors the inference/training alias contract: a typo in ``_LAZY_ALIASES`` (pointing elsewhere, or a
-missing entry) breaks the ``is`` identity below.
+A wrong or missing entry in ``_LAZY_ALIASES`` breaks the ``is`` identity below.
 """
 
 from __future__ import annotations

@@ -8,9 +8,9 @@ import json
 from collections.abc import Sequence
 
 from kavier.cli._args import add_training_args
-from kavier.cli._shared import FriendlyParser, apply_config
+from kavier.cli._shared import FriendlyParser, parse_args_with_config
 from kavier.sdk.library.lookup import UnknownSpecError
-from kavier.sdk.training.core.engine import simulate_full_training
+from kavier.sdk.training.core.engine import normalise_method, simulate_full_training
 
 _EXAMPLE_CMD = (
     "kavier training --model_name mistral-7b-v0.1 --method lora "
@@ -19,9 +19,20 @@ _EXAMPLE_CMD = (
 )
 
 
+def _check_methods(path: str, rows: list[dict[str, str]]) -> None:
+    """Raise ValueError giving the line of the first row whose method the engine does not accept."""
+    for line, row in enumerate(rows, start=2):  # line 1 is the header
+        try:
+            normalise_method(row["method"])
+        except ValueError as exc:
+            raise ValueError(f"{path} line {line}: {exc}") from None
+
+
 def _run_csv(path: str, total_tokens: int | None, epochs: float | None, dataset_tokens: int | None) -> None:
-    with open(path, newline="", encoding="utf-8") as f:
+    # utf-8-sig drops the byte-order mark Excel writes at the start of a UTF-8 CSV.
+    with open(path, newline="", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
+    _check_methods(path, rows)
     header = (
         f"{'model':<28} {'method':<10} {'gpu':<22} {'seq':>5} {'bs':>3} {'gpus':>4} {'tok/s':>12} {'runtime_s':>10}"
     )
@@ -77,8 +88,10 @@ def _print_config_banner(args: argparse.Namespace, total_gpus: int) -> None:
 
 
 def _run_single_config(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
-    """Validate the single-config flags, simulate one config, and print the banner + JSON result."""
+    """Simulate one config and print the banner and the JSON result."""
     _require_single_config_args(parser, args)
+    if args.total_tokens is None and (args.epochs is None) != (args.dataset_tokens is None):
+        parser.error("--epochs and --dataset_tokens go together (or use --total_tokens)")
 
     total_gpus = args.number_gpus * args.number_nodes
     _print_config_banner(args, total_gpus)
@@ -110,18 +123,15 @@ def main(argv: Sequence[str] | None = None) -> None:
             example=_EXAMPLE_CMD,
         ),
     )
-    # Fold --config YAML in as defaults BEFORE parsing, so explicit flags still override.
-    apply_config(parser, argv)
-    args = parser.parse_args(argv)
+    args = parse_args_with_config(parser, argv)
 
-    if args.input_csv:
-        try:
+    try:
+        if args.input_csv:
             _run_csv(args.input_csv, args.total_tokens, args.epochs, args.dataset_tokens)
-        except UnknownSpecError as exc:
-            parser.error(str(exc))
-        return
-
-    _run_single_config(parser, args)
+        else:
+            _run_single_config(parser, args)
+    except (UnknownSpecError, ValueError) as exc:
+        parser.error(str(exc))
 
 
 if __name__ == "__main__":

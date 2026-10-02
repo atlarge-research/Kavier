@@ -7,7 +7,7 @@ from enum import StrEnum
 
 
 class CacheAction(StrEnum):
-    """What a prefix-cache hit skips. ``StrEnum`` members are ``str`` (``CacheAction.FULL == "full"``)."""
+    """What a prefix-cache hit skips. Members compare equal to their string values."""
 
     NONE = "none"
     PREFILL = "prefill"
@@ -33,7 +33,7 @@ class CacheCfg:
 
 @dataclass(frozen=True)
 class SimConfig:
-    """Top-level sim config; export_rate in seconds."""
+    """Simulation config; export_rate in seconds."""
 
     export_rate: float = 0.1
     kv_cache: bool = True
@@ -46,7 +46,7 @@ class SimConfig:
             kv_cache=(args.kv_cache == "on"),
             cache=CacheCfg(
                 min_len=args.prefix_cache_min_tokens,
-                # argparse choices already restrict these to valid members, so coercion never raises.
+                # argparse choices restrict these to valid members.
                 action=CacheAction(args.prefix_cache_policy),
                 scope=CacheScope(args.cache_scope),
                 max_entries=args.max_cached_prompts,

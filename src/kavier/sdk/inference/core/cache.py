@@ -25,7 +25,7 @@ class PrefixCache:
         return (sid, core) if self.cfg.scope == CacheScope.SESSION else core
 
     def lookup(self, sid, tokens) -> bool:
-        """True on a prefix hit; else insert the key (evicting LRU if full) and return False."""
+        """Return True on a prefix hit; otherwise insert the key, evicting the LRU entry if full, and return False."""
         k = self._key(sid, tokens)
         if k in self._store:
             _ = self._store[k]

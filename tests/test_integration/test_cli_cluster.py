@@ -1,7 +1,7 @@
-"""End-to-end contract for ``kavier cluster`` (shells out to the real CLI).
+"""End-to-end tests for ``kavier cluster``, run through the real CLI.
 
-Oracles are hand-derived from the schedule, never copied from a run: two 4-GPU jobs on a 4-GPU pool
-serialize to [0,10] and [10,20] s, so makespan = 20 s and average wait = (0+10)/2 = 5 s.
+Expected values follow from the schedule: two 4-GPU jobs on a 4-GPU pool serialize to [0,10] and
+[10,20] s, so makespan = 20 s and average wait = (0+10)/2 = 5 s.
 """
 
 from __future__ import annotations
@@ -55,11 +55,11 @@ def test_cluster_cli_renders_timeline_plot(tmp_path: Path) -> None:
     out = tmp_path / "timeline.pdf"
     proc = _run(["--jobs", str(jobs), "--num-nodes", "1", "--node-gpus", "4", "--plot", str(out)])
     assert proc.returncode == 0, proc.stderr
-    assert out.exists() and out.stat().st_size > 0  # the figure was rendered by the CLI
+    assert out.exists() and out.stat().st_size > 0  # figure written by the CLI
 
 
 def test_backfill_with_node_topology_runs(tmp_path: Path) -> None:
-    jobs = _write_jobs(tmp_path)  # reuse the file-writing helper already in this module
+    jobs = _write_jobs(tmp_path)
     proc = _run(["--jobs", str(jobs), "--policy", "distributed-backfill", "--num-nodes", "2", "--node-gpus", "8"])
     assert proc.returncode == 0
     summary = json.loads(proc.stdout)
@@ -103,3 +103,31 @@ def test_missing_topology_errors_friendly(tmp_path: Path) -> None:
     proc = _run(["--jobs", str(jobs)])  # no --num-nodes/--node-gpus
     assert proc.returncode == 2
     assert "num_nodes" in proc.stderr
+
+
+def test_jobs_csv_saved_with_utf8_bom_is_read(tmp_path: Path) -> None:
+    jobs = tmp_path / "jobs.csv"
+    jobs.write_bytes(b"\xef\xbb\xbfsubmit_s,gpus,duration_s\n0,4,10\n0,4,10\n")
+    proc = _run(["--jobs", str(jobs), "--num-nodes", "1", "--node-gpus", "4"])
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["n_jobs"] == 2
+
+
+def test_config_can_supply_required_jobs_and_dashed_flags(tmp_path: Path) -> None:
+    jobs = _write_jobs(tmp_path)
+    cfg = tmp_path / "cluster.yaml"
+    cfg.write_text(f"jobs: {jobs}\nnum_nodes: 1\nnode_gpus: 4\npolicy: distributed-fcfs\n")
+    proc = _run(["--config", str(cfg)])
+    assert proc.returncode == 0, proc.stderr
+    summary = json.loads(proc.stdout)
+    assert summary["capacity_gpus"] == 4
+    assert summary["makespan_s"] == pytest.approx(20.0)
+
+
+def test_config_policy_outside_choices_is_rejected(tmp_path: Path) -> None:
+    jobs = _write_jobs(tmp_path)
+    cfg = tmp_path / "cluster.yaml"
+    cfg.write_text("policy: round-robin\n")
+    proc = _run(["--config", str(cfg), "--jobs", str(jobs), "--num-nodes", "1", "--node-gpus", "4"])
+    assert proc.returncode == 2
+    assert "invalid choice" in proc.stderr and "round-robin" in proc.stderr

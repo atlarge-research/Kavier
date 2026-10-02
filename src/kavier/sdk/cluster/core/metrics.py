@@ -1,18 +1,13 @@
-"""Timeline step-series and per-node activity helpers for the cluster simulator (stdlib-only).
-
-``cumulative_steps`` builds a single staircase from events; ``build_timeline`` builds the aligned
-GPUs-in-use and queue-depth staircases the timeline figure draws (on one shared time axis).
-``node_activity`` reduces one node's busy intervals to peak concurrent GPUs and idle wall-time.
-"""
+"""Timeline step series and per-node activity for the cluster simulator (stdlib-only)."""
 
 from __future__ import annotations
 
 
 def cumulative_steps(events: list[tuple[float, float]], t_end: float) -> tuple[list[float], list[float]]:
-    """Turn ``(time, change)`` events into a step line ``(times, values)``.
+    """Return the step line ``(times, values)`` of ``(time, change)`` events.
 
-    Same-instant events are netted so a zero-net instant (e.g. a job that starts the moment it is
-    submitted) never makes the line dip. Anchored at ``(0, 0)`` and closed at ``(t_end, final)``.
+    Events at the same instant are netted, so a zero-net instant such as a job starting at its submit
+    time adds no dip. The line starts at ``(0, 0)`` and ends at ``(t_end, final)``.
     """
     net: dict[float, float] = {}
     for time, change in events:
@@ -39,11 +34,10 @@ def build_timeline(
     queue_events: list[tuple[float, float]],
     t_end: float,
 ) -> tuple[list[float], list[float], list[float]]:
-    """Aligned ``(times, gpus_in_use, queue_depth)`` staircases on one shared time axis.
+    """Return aligned ``(times, gpus_in_use, queue_depth)`` step series on one time axis.
 
-    Both series are netted per instant and stepped together, so the three returned lists have equal
-    length. Anchored at ``t=0`` and closed at ``t_end``; instants where neither series changes are
-    skipped.
+    Both series are netted per instant and stepped together, so the three lists have equal length.
+    Instants where neither series changes are skipped. The series start at ``t=0`` and end at ``t_end``.
     """
     net_gpu: dict[float, float] = {}
     net_queue: dict[float, float] = {}
@@ -77,11 +71,10 @@ def build_timeline(
 
 
 def node_activity(intervals: list[tuple[float, float, int]], t0: float, t_end: float) -> tuple[int, float]:
-    """Peak concurrent GPUs and idle wall-seconds for one node over ``[t0, t_end]``.
+    """Return peak concurrent GPUs and idle wall-seconds for one node over ``[t0, t_end]``.
 
-    ``intervals`` are ``(start_s, end_s, gpus_on_node)`` for the jobs that placed GPUs on this node.
-    ``idle_s`` is the wall-clock time in the window during which the node had zero GPUs in use. A
-    node with no intervals is idle for the whole window.
+    ``intervals`` are ``(start_s, end_s, gpus_on_node)`` of the jobs placed on this node. Idle time is
+    the wall time with zero GPUs in use; a node with no intervals is idle for the whole window.
     """
     if not intervals:
         return 0, max(0.0, t_end - t0)

@@ -1,14 +1,8 @@
-"""Contract tests for the validation-CSV simulatability filter and its resolution.
+"""Tests for the validation-CSV simulatability filter (conftest.simulatable_mask).
 
-The original single test filtered rows with ``simulatable_mask`` (which itself does
-``model_name.isin(LLM_SPEC_LIBRARY) & gpu_model.isin(GPU_SPEC_LIBRARY)``) and then
-asserted ``set(sim.model_name) - set(LLM_SPEC_LIBRARY) == set()``. That subtraction is
-empty *by construction* of the mask, so the assert could never go red — a tautology.
-
-This rebuild instead pins the falsifiable behaviors: the four constraints the mask
-applies (both library memberships, the total-GPU product cap, and throughput > 0), the
-throughput-column precedence, and — when the internal CSV is present — that every row the
-mask keeps actually resolves through the engine to a positive, finite throughput.
+Covers the four constraints of the mask (both library memberships, the total-GPU product cap,
+throughput > 0), the throughput-column precedence, and, when the internal CSV is present, that every
+row the mask keeps runs through the engine to a positive, finite throughput.
 """
 
 import math
@@ -25,7 +19,7 @@ from .conftest import simulatable_mask, throughput_column
 # The (unvendored) internal validation CSV, if present, ships under the training package's data dir.
 CSV = Path(str(files("kavier.sdk.training").joinpath("data", "input", "validation_clean.csv")))
 
-# Two catalogue keys that are guaranteed present (see kavier/sdk/library/{llm,gpu}.py).
+# Two catalog keys defined in kavier/sdk/library/{llm,gpu}.py.
 KNOWN_MODEL = "Llama-3-8B"
 KNOWN_GPU = "A100-80GB"
 
@@ -43,9 +37,7 @@ def _base_row(**overrides: object) -> dict:
 
 
 def test_mask_rejects_each_constraint_violation_independently():
-    # Row 0 satisfies every constraint; rows 1-4 each break exactly one. Hand-derived
-    # expected selection: only row 0 survives. Falsifies dropping any of the four filter
-    # terms (an unknown model/GPU or a non-positive throughput would leak through).
+    # Row 0 meets every constraint; rows 1-4 each break one, so only row 0 is kept.
     df = pd.DataFrame(
         [
             _base_row(),  # all-pass
@@ -61,7 +53,7 @@ def test_mask_rejects_each_constraint_violation_independently():
 def test_mask_total_gpu_cap_uses_product_and_is_inclusive_at_32():
     # total_gpus = number_gpus * number_nodes, capped at <= 32 (conftest MAX_TOTAL_GPUS).
     # 8*4 = 32 (in), 8*5 = 40 (out), 16*2 = 32 (in), 33*1 = 33 (out), 4*4 = 16 (in).
-    # Falsifies: using number_gpus alone would keep (8,5); a strict "< 32" would drop 32.
+    # number_gpus alone would keep (8,5); a strict "< 32" would drop 32.
     df = pd.DataFrame(
         [
             _base_row(number_gpus=8, number_nodes=4),  # 32 -> in
@@ -79,27 +71,23 @@ def test_throughput_column_prefers_measured_then_actual_then_raises():
     only_actual = pd.DataFrame({"actual_throughput": [2.0]})
     neither = pd.DataFrame({"throughput": [3.0]})
 
-    # measured wins when both exist; actual is the documented fallback name.
+    # measured_throughput wins when both exist; actual_throughput is the fallback
     assert throughput_column(both) == "measured_throughput"
     assert throughput_column(only_actual) == "actual_throughput"
-    # Neither present is an error, not a silent pick of an arbitrary column.
+    # neither column present raises
     with pytest.raises(KeyError):
         throughput_column(neither)
 
 
 @pytest.mark.skipif(not CSV.exists(), reason="validation_clean.csv not present")
 def test_validation_csv_simulatable_rows_run_to_positive_throughput():
-    # The real contract behind "models resolve": every (model, gpu) pair the mask keeps
-    # must actually drive the engine to a positive, finite training throughput. Oracle is
-    # an invariant — a real training run cannot produce <= 0 or non-finite tokens/s.
-    # Falsifies: renaming/removing a catalogue key the CSV uses (get_* raises), or the
-    # engine yielding 0/NaN for a shipped model.
+    # Every (model, gpu) pair the mask keeps must run through the engine to a positive, finite
+    # throughput. A renamed or removed catalog key (get_* raises) or a 0/NaN result fails.
     df = pd.read_csv(CSV)
     sim = df.loc[simulatable_mask(df)]
     assert len(sim) > 0, "expected at least one simulatable row in validation_clean.csv"
 
-    # One representative row per distinct (model, gpu) pair keeps this a resolution check
-    # (not a re-run of the accuracy suite) while covering every catalogue key in the CSV.
+    # One row per distinct (model, gpu) pair covers every catalog key in the CSV.
     seen = sim.drop_duplicates(subset=["model_name", "gpu_model"])
     for row in seen.itertuples(index=False):
         pred = simulate_full_training(

@@ -1,16 +1,14 @@
-"""Public ``kavier.sdk.cluster`` verb: ``schedule(jobs, ...) -> ClusterSimResult``.
+"""Public ``kavier.sdk.cluster`` entry point: ``schedule(jobs, ...) -> ClusterSimResult``.
 
-Simulates a fixed-size GPU cluster running jobs of known duration under a scheduling policy
-(``"distributed-fcfs"``, ``"distributed-backfill"``, ``"consolidated-fcfs"``, or
-``"consolidated-backfill"``) and returns per-job metrics (wait, start/end, runtime, energy, goodput),
-per-cluster metrics (makespan, utilisation, two goodput measures — ``goodput_jobs_per_s`` throughput and
-``scheduling_goodput`` efficiency — and peaks), and a GPUs-in-use / queue-depth timeline.
-The ``consolidated-*`` policies honour each job's ``nodes`` request (gang placement: exactly ``nodes``
-distinct co-located nodes); the ``distributed-*`` policies ignore it (tight-pack).
+Simulates a fixed-size GPU cluster running jobs of known duration under the ``"distributed-fcfs"``,
+``"distributed-backfill"``, ``"consolidated-fcfs"`` or ``"consolidated-backfill"`` policy. Returns
+per-job metrics (wait, start/end, runtime, energy, goodput), per-cluster metrics (makespan,
+utilisation, peaks, ``goodput_jobs_per_s`` throughput and ``scheduling_goodput`` efficiency), per-node
+metrics, and a GPUs-in-use / queue-depth timeline. ``consolidated-*`` policies gang-place each job on
+exactly ``nodes`` distinct nodes; ``distributed-*`` policies ignore ``nodes`` and tight-pack.
 
-The scheduling kernels live in :mod:`kavier.sdk.cluster.core.engine`; this facade adds input
-normalisation, energy, and metrics. ``pandas`` is imported lazily (only for a DataFrame input) so a
-bare import stays light.
+The scheduling kernels are in :mod:`kavier.sdk.cluster.core.engine`; this module adds input
+normalisation, energy and metrics. A DataFrame input is duck-typed, so pandas is not imported here.
 """
 
 from __future__ import annotations
@@ -25,26 +23,25 @@ from kavier.sdk.cluster.core import metrics as _metrics
 from kavier.sdk.cluster.vocab import Oversized, Policy
 from kavier.sdk.units import SECONDS_PER_HOUR, WS_PER_KWH
 
-# Valid string values, derived from the enums (single home) — used for the membership guards and their
-# error messages, which render these tuples verbatim (e.g. ``('cap', 'drop')``).
+# Valid policy and oversized strings; error messages print these tuples, e.g. ``('cap', 'drop')``.
 _POLICIES = tuple(p.value for p in Policy)
 _OVERSIZED = tuple(o.value for o in Oversized)
 
 
 @dataclass(frozen=True)
 class JobRecord:
-    """Per-job simulation outcome. Canonical unit is seconds; ``*_h`` helpers give hours."""
+    """Per-job simulation outcome in seconds; ``*_h`` properties give hours."""
 
     job_id: Any
-    gpus: int  # GPUs actually placed (after any oversized cap)
+    gpus: int  # GPUs placed, after any oversized cap
     submit_s: float
     start_s: float
     end_s: float
-    wait_s: float  # start - submit (time queued)
-    runtime_s: float  # end - start (equals the job's duration)
-    turnaround_s: float  # end - submit (wait + runtime)
+    wait_s: float  # start - submit
+    runtime_s: float  # end - start, equal to the job's duration
+    turnaround_s: float  # end - submit = wait + runtime
     energy_kwh: float | None  # None when no per-GPU power is known
-    nodes: tuple[tuple[int, int], ...]  # ((node_id, gpus_on_node), ...) the job was placed on
+    nodes: tuple[tuple[int, int], ...]  # ((node_id, gpus_on_node), ...) of the placement
 
     @property
     def submit_h(self) -> float:
@@ -72,7 +69,7 @@ class JobRecord:
 
     @property
     def goodput(self) -> float:
-        """Fraction of this job's wall-clock spent training: ``runtime_s / turnaround_s`` (0 if none)."""
+        """Return the share of turnaround spent running, ``runtime_s / turnaround_s``; 0 if turnaround is 0."""
         return self.runtime_s / self.turnaround_s if self.turnaround_s > 0 else 0.0
 
 
@@ -86,9 +83,9 @@ class ClusterMetrics:
     avg_wait_s: float
     avg_run_s: float
     avg_turnaround_s: float
-    utilization: float  # GPU·s used / (capacity × makespan)
-    goodput_jobs_per_s: float  # scheduling THROUGHPUT: jobs completed per second
-    scheduling_goodput: float  # scheduling EFFICIENCY: Σ runtime_s / Σ turnaround_s (training time / wall-clock)
+    utilization: float  # GPU-s used / (capacity x makespan)
+    goodput_jobs_per_s: float  # throughput: jobs completed per second
+    scheduling_goodput: float  # efficiency: sum runtime_s / sum turnaround_s
     total_energy_kwh: float | None
     peak_gpus: int
     peak_queue: int
@@ -112,13 +109,13 @@ class ClusterMetrics:
 
 @dataclass(frozen=True)
 class NodeRecord:
-    """Per-node aggregate over the scheduled jobs. Canonical time unit is seconds."""
+    """Per-node aggregate over the scheduled jobs, in seconds."""
 
     node_id: int
-    gpus: int  # GPUs on this node (= node_gpus)
+    gpus: int  # = node_gpus
     jobs_hosted: int  # jobs that placed >=1 GPU on this node
-    busy_gpu_s: float  # Σ (gpus-on-node × runtime_s) over hosted jobs
-    utilization: float  # busy_gpu_s / (gpus × makespan_s)
+    busy_gpu_s: float  # sum of gpus_on_node x runtime_s over hosted jobs
+    utilization: float  # busy_gpu_s / (gpus x makespan_s)
     peak_gpus_used: int  # max concurrent GPUs in use on this node
     idle_s: float  # wall-seconds with zero GPUs in use over the makespan window
     energy_kwh: float | None  # apportioned per-job energy; None when no hosted job had power
@@ -126,7 +123,7 @@ class NodeRecord:
 
 @dataclass(frozen=True)
 class Timeline:
-    """Aligned step-series over one shared time axis (seconds); ``*_h`` gives hours."""
+    """Aligned step series on one time axis in seconds; ``times_h`` gives hours."""
 
     times_s: list[float]
     gpus_in_use: list[float]
@@ -172,28 +169,37 @@ def _normalise(jobs: Any) -> list[dict[str, Any]]:
         elif isinstance(row, (Sequence, tuple)) and not isinstance(row, (str, bytes)):
             submit_s, gpus, duration_s = row[0], row[1], row[2]
             nodes = row[3] if len(row) > 3 else 1
-            power = None
-            job_id = index
+            power = row[4] if len(row) > 4 else None
+            job_id = row[5] if len(row) > 5 else index
         else:
-            raise TypeError(f"job {index} must be a mapping or a (submit_s, gpus, duration_s[, nodes]) tuple")
+            raise TypeError(
+                f"job {index} must be a mapping or a "
+                "(submit_s, gpus, duration_s[, nodes, power_w_per_gpu, job_id]) tuple"
+            )
         if submit_s is None or gpus is None or duration_s is None:
             raise ValueError(f"job {index} needs submit_s, gpus and duration_s")
         submit_f = float(submit_s)
         duration_f = float(duration_s)
-        if math.isnan(submit_f) or math.isnan(duration_f):
+        if not (math.isfinite(submit_f) and math.isfinite(duration_f)):
             raise ValueError(f"job {index}: submit_s and duration_s must be finite numbers")
-        # A blank/NaN power means "unknown" (energy stays None), not a NaN poisoning the total.
+        gpus_i = int(gpus)
+        if duration_f < 0 or gpus_i < 0:
+            raise ValueError(f"job {index}: duration_s and gpus must be >= 0, got {duration_f} and {gpus_i}")
+        # NaN power means unknown: energy stays None and the cluster total stays finite.
         power_f = None if power is None else float(power)
         if power_f is not None and math.isnan(power_f):
             power_f = None
+        # A blank nodes cell in a DataFrame arrives as NaN and means the default of one node.
+        if not nodes or (isinstance(nodes, float) and math.isnan(nodes)):
+            nodes = 1
         out.append(
             {
                 "index": index,
                 "job_id": job_id,
                 "submit_s": submit_f,
-                "gpus": int(gpus),
+                "gpus": gpus_i,
                 "duration_s": duration_f,
-                "nodes": int(nodes) if nodes else 1,
+                "nodes": int(nodes),
                 "power_w_per_gpu": power_f,
             }
         )
@@ -209,19 +215,20 @@ def schedule(
     oversized: str = Oversized.CAP,
     default_watts_per_gpu: float | None = None,
 ) -> ClusterSimResult:
-    """Simulate ``jobs`` on a homogeneous ``num_nodes × node_gpus`` datacenter and return per-job,
-    per-cluster, and per-node metrics.
+    """Simulate ``jobs`` on a homogeneous ``num_nodes x node_gpus`` cluster.
 
-    ``jobs`` is a ``list[dict]`` / ``list[tuple]`` / ``pandas.DataFrame`` of
-    ``submit_s, gpus, duration_s[, nodes, power_w_per_gpu, job_id]``. ``policy="distributed-fcfs"`` is
-    strict FCFS timing and ``policy="distributed-backfill"`` is FIFO+backfill, both tight-pack (the
-    ``nodes`` column is ignored); ``policy="consolidated-fcfs"`` / ``"consolidated-backfill"`` add
-    consolidated (gang) placement that honours ``nodes`` — a ``gpus``/``nodes`` job lands on exactly
-    ``nodes`` distinct
-    co-located nodes, never scattered wider. ``oversized`` is ``"cap"`` (clamp a too-big job to the
-    cluster) or ``"drop"`` (skip it; for the consolidated policies a job whose per-node share exceeds
-    ``node_gpus`` is the too-big case). Energy per job is ``(power_w_per_gpu or default_watts_per_gpu)
-    × gpus × runtime_s / 3.6e6`` kWh (``None`` if no power).
+    Returns per-job, per-cluster and per-node metrics. ``jobs`` is a ``list[dict]``, ``list[tuple]`` or
+    ``pandas.DataFrame`` with ``submit_s, gpus, duration_s[, nodes, power_w_per_gpu, job_id]``.
+
+    ``policy="distributed-fcfs"`` is strict FCFS and ``"distributed-backfill"`` is FIFO with backfill;
+    both tight-pack and ignore ``nodes``. ``"consolidated-fcfs"`` and ``"consolidated-backfill"``
+    gang-place a ``gpus``/``nodes`` job on exactly ``nodes`` distinct nodes. ``oversized="cap"`` clamps
+    a job larger than the cluster and ``"drop"`` skips it. Under the consolidated policies, a job that
+    fits the cluster but whose per-node share exceeds ``node_gpus`` is widened to more nodes with
+    either setting.
+
+    Energy per job in kWh is ``(power_w_per_gpu or default_watts_per_gpu) * gpus * runtime_s / 3.6e6``,
+    or ``None`` without power.
     """
     if policy not in _POLICIES:
         raise ValueError(f"policy must be one of {_POLICIES}, got {policy!r}")
@@ -283,11 +290,10 @@ def schedule(
 
 
 def _node_records(records: list[JobRecord], num_nodes: int, node_gpus: int) -> list[NodeRecord]:
-    """Per-node aggregates over the makespan window ``[min start, max end]``.
+    """Return per-node aggregates over the makespan window ``[min start, max end]``.
 
-    Node energy is the per-job energy apportioned by GPU fraction (``energy_kwh × gpus_on_node /
-    gpus``), so per-node energies sum to the cluster total and a job with unknown power contributes
-    nothing (never a poisoned NaN).
+    Node energy is job energy split by GPU share (``energy_kwh x gpus_on_node / gpus``), so node
+    energies sum to the cluster total. A job with unknown power adds nothing.
     """
     if not records:
         return [
@@ -339,7 +345,7 @@ def _node_records(records: list[JobRecord], num_nodes: int, node_gpus: int) -> l
 
 
 def _summarise(records: list[JobRecord], capacity_gpus: int) -> tuple[ClusterMetrics, Timeline]:
-    """Per-cluster metrics + the aligned GPUs-in-use / queue-depth timeline over the scheduled jobs."""
+    """Return cluster metrics and the aligned GPUs-in-use / queue-depth timeline of the scheduled jobs."""
     if not records:
         empty = ClusterMetrics(
             n_jobs=0,
@@ -365,23 +371,23 @@ def _summarise(records: list[JobRecord], capacity_gpus: int) -> tuple[ClusterMet
     gpu_seconds = sum(r.gpus * r.runtime_s for r in records)  # area under the GPUs-in-use curve
     utilization = gpu_seconds / (capacity_gpus * makespan_s) if capacity_gpus > 0 and makespan_s > 0 else 0.0
     goodput = n / makespan_s if makespan_s > 0 else 0.0
-    # Scheduling goodput = training time / total wall-clock (incl. queue wait), aggregated over jobs.
-    # Mirrors the supervisors' overall goodput (Σ train_runtime / Σ (completed − submission_time)).
+    # Scheduling goodput: sum runtime / sum turnaround, queue wait included. Same as the overall
+    # goodput sum train_runtime / sum (completed - submission_time).
     total_runtime_s = sum(r.runtime_s for r in records)
     total_turnaround_s = sum(r.turnaround_s for r in records)
     scheduling_goodput = total_runtime_s / total_turnaround_s if total_turnaround_s > 0 else 0.0
     energies = [r.energy_kwh for r in records if r.energy_kwh is not None]
     total_energy = sum(energies) if energies else None
 
-    # Timeline events, shifted so the axis starts at the first arrival.
+    # Timeline axis starts at the first arrival.
     t0 = min(r.submit_s for r in records)
     gpu_events: list[tuple[float, float]] = []
     queue_events: list[tuple[float, float]] = []
     for r in records:
-        gpu_events.append((r.start_s - t0, float(r.gpus)))  # claim GPUs at start
-        gpu_events.append((r.end_s - t0, -float(r.gpus)))  # release them at end
-        queue_events.append((r.submit_s - t0, 1.0))  # enter the queue at submit
-        queue_events.append((r.start_s - t0, -1.0))  # leave it at start
+        gpu_events.append((r.start_s - t0, float(r.gpus)))
+        gpu_events.append((r.end_s - t0, -float(r.gpus)))
+        queue_events.append((r.submit_s - t0, 1.0))
+        queue_events.append((r.start_s - t0, -1.0))
     t_end = max(r.end_s for r in records) - t0
     times, gpus_series, queue_series = _metrics.build_timeline(gpu_events, queue_events, t_end)
     peak_gpus = int(max(gpus_series)) if gpus_series else 0

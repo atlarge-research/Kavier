@@ -1,7 +1,9 @@
-"""Property-based invariants for kavier.sdk.co2 emissions (general laws complementing
-test_emissions.py's pinned cases): energy=power*time/3.6e6, CO2 non-negative, down-estimate
-never exceeds left-step, billed intensity is always a real trace value, co2_kg==co2_g/1000,
-weighted-mean intensity stays inside the billed range, zero/negative-duration edges."""
+"""Property-based tests for kavier.sdk.co2 emissions.
+
+Covers energy = power * time / 3.6e6, non-negative CO2, min-rule total <= left-step total,
+billed intensities taken from the trace, co2_kg = co2_g / 1000, average intensity within the
+billed range, and zero or negative durations.
+"""
 
 from __future__ import annotations
 
@@ -25,9 +27,7 @@ def _trace(intensities: list[float]) -> CarbonTrace:
 
 
 def _left_step_total(frag, trace) -> float:
-    # Reference 'hold-the-left-point' total: bill every segment at its OWN window intensity,
-    # with no min(self, next) down-estimation. An independent second method; because the code
-    # bills min(own, next) <= own, its total must never exceed this reference.
+    # Left-step reference: bill each segment at its own window intensity, no min(own, next).
     total = 0.0
     cursor = frag.start_time
     end = frag.start_time + pd.Timedelta(seconds=frag.duration_s)
@@ -53,15 +53,12 @@ def test_energy_is_power_times_time_conserved_across_window_splits(intensities, 
     frag = Fragment(pd.Timestamp("2025-01-01 00:00"), minutes * 60.0, power_w)
     result = compute_emissions([frag], trace)
 
-    # 1 kWh = 1000 W * 3600 s = 3.6e6 W*s (unit-definition oracle, independent of the impl).
-    # Total must equal power*duration/3.6e6 no matter how the fragment is split across windows,
-    # so this also asserts segmentation conserves energy (no double-count / dropped segment).
+    # 1 kWh = 1000 W * 3600 s = 3.6e6 W*s. Holds for any split across windows.
     expected_kwh = power_w * (minutes * 60.0) / 3.6e6
     assert result.total_energy_kwh == pytest.approx(expected_kwh)
-    # Physical floor: energy and emissions are never negative.
     assert result.total_energy_kwh >= 0.0
     assert result.total_co2_g >= 0.0
-    # Per-window breakdown must partition the total (conservation, not a snapshot).
+    # The per-window breakdown sums to the totals.
     assert sum(b["co2_g"] for b in result.breakdown) == pytest.approx(result.total_co2_g)
     assert sum(b["energy_kwh"] for b in result.breakdown) == pytest.approx(result.total_energy_kwh)
 
@@ -73,13 +70,12 @@ def test_energy_is_power_times_time_conserved_across_window_splits(intensities, 
 @settings(max_examples=100, deadline=None)
 def test_down_estimate_never_exceeds_left_step(intensities, power_w) -> None:
     trace = _trace(intensities)
-    # Span the whole trace so every min(self, next) decision fires.
+    # Span the whole trace so every window applies min(own, next).
     total_seconds = len(intensities) * _STEP.total_seconds()
     frag = Fragment(pd.Timestamp("2025-01-01 00:00"), total_seconds, power_w)
     result = compute_emissions([frag], trace)
     left = _left_step_total(frag, trace)
-    # min(own, next) <= own, so the down-estimated total can only be <= the hold-left total.
-    # A mutation billing max(own, next) (or plain own on a falling window) would exceed `left`.
+    # min(own, next) <= own; billing max(own, next) would exceed `left`.
     assert result.total_co2_g <= left + 1e-6
 
 
@@ -90,8 +86,7 @@ def test_billed_intensity_is_always_a_real_trace_value(intensities) -> None:
     frag = Fragment(pd.Timestamp("2025-01-01 00:00"), len(intensities) * 1800.0, 1000.0)
     result = compute_emissions([frag], trace)
     real = set(intensities)
-    # min(own, next) picks one of the two adjacent trace values (never an average/blend), so
-    # every billed intensity must appear verbatim in the trace. Mutating to (own+next)/2 fails.
+    # min(own, next) picks one of two trace values; an average such as (own+next)/2 would fail.
     for b in result.breakdown:
         assert any(abs(b["carbon_intensity"] - v) < 1e-9 for v in real)
 
@@ -106,8 +101,7 @@ def test_average_intensity_within_billed_range(intensities, power_w) -> None:
     frag = Fragment(pd.Timestamp("2025-01-01 00:00"), len(intensities) * 1800.0, power_w)
     result = compute_emissions([frag], trace)
     billed = [b["carbon_intensity"] for b in result.breakdown]
-    # An energy-weighted mean is bounded by the extremes of the values averaged. A mutation
-    # computing co2*energy (or an unweighted sum) instead of co2/energy would escape [min,max].
+    # An energy-weighted mean lies within [min, max] of the averaged values.
     assert min(billed) - 1e-9 <= result.average_intensity <= max(billed) + 1e-9
 
 
@@ -115,7 +109,6 @@ def test_co2_kg_is_grams_over_1000() -> None:
     trace = _trace([100.0, 300.0, 50.0])
     frag = Fragment(pd.Timestamp("2025-01-01 00:00"), 3 * 1800.0, 2000.0)
     result = compute_emissions([frag], trace)
-    # 1 kg == 1000 g by definition (unit oracle). Mutating the divisor to /100 makes this fail.
     assert result.total_co2_kg == pytest.approx(result.total_co2_g / 1000.0)
 
 
@@ -126,15 +119,14 @@ def test_zero_duration_fragment_contributes_nothing() -> None:
     assert result.total_energy_kwh == 0.0
     assert result.total_co2_g == 0.0
     assert result.breakdown == []
-    # No-energy branch must return 0.0, not attempt total_co2_g/total_energy_kwh (0/0 -> nan/raise).
+    # Zero energy returns 0.0 instead of dividing 0/0.
     assert result.average_intensity == 0.0
 
 
 def test_negative_duration_fragment_raises() -> None:
     trace = _trace([100.0, 200.0])
     frag = Fragment(pd.Timestamp("2025-01-01 00:00"), -60.0, 1000.0)
-    # The duration guard must fire *specifically* (message mentions duration). Without the guard,
-    # end = start - 60s < coverage_start, which would instead raise the "outside coverage" error,
-    # so matching on "duration" pins that this branch — not the coverage check — is responsible.
+    # Without the duration guard, end = start - 60 s < coverage_start would raise the coverage error;
+    # matching "duration" pins the duration guard.
     with pytest.raises(ValueError, match="duration"):
         compute_emissions([frag], trace)

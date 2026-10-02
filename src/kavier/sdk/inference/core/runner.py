@@ -1,9 +1,10 @@
-"""Per-request simulation: prefill/decode latency + prefix-cache hits -> one OpenDC task and its GPU-usage fragments."""
+"""Per-request simulation: prefill and decode latency with prefix-cache hits -> one OpenDC task and its fragments."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, List
 
 from tqdm.auto import tqdm
@@ -17,6 +18,10 @@ from kavier.sdk.inference.stages.prefill import get_prefill_time_s
 from kavier.sdk.library.specs.GPUSpec import GPUSpec
 from kavier.sdk.library.specs.LLMSpec import LLMSpec
 from kavier.sdk.units import MS_PER_SECOND
+
+# Submission time of exported tasks [ms since the Unix epoch]: 2026-01-01 00:00 UTC, the start the facade
+# carbon path also uses. A fixed origin makes identical runs write identical OpenDC workloads.
+TASK_ORIGIN_MS = int(datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp() * MS_PER_SECOND)
 
 
 def simulate_one(
@@ -32,7 +37,10 @@ def simulate_one(
     export_rate_s: float,
     t0_ms: int,
 ) -> tuple[dict, list[dict], float, float]:
-    """One request -> ``(task, fragments, t_prefill_s, t_decode_s)``; latencies in s, emitted durations in ms."""
+    """Simulate one request and return ``(task, fragments, t_prefill_s, t_decode_s)``.
+
+    Latencies are in s; task and fragment durations in ms.
+    """
     t_prefill = get_prefill_time_s(n_in_tokens, llm, gpu)
     t_decode = get_decode_time_s(n_out_tokens, llm, gpu, cfg.kv_cache)
 
@@ -44,8 +52,7 @@ def simulate_one(
             t_decode = 0.0
 
     total_s = t_prefill + t_decode
-    # Store duration in ms (fragments and kavier.sdk.energy expect ms); floor at 1 so a request that
-    # rounds below 1ms still gets a non-zero duration.
+    # ms, as fragments and kavier.sdk.energy expect; floored at 1 so no task has zero duration.
     total_ms = max(1, int(round(total_s * MS_PER_SECOND)))
     gpu_capacity = float(gpu.core_max_mhz * gpu.cores)
     task = {
@@ -61,12 +68,13 @@ def simulate_one(
     }
 
     fragments: List[dict] = []
-    num_snaps = max(1, int(total_s / export_rate_s))
+    # Count fragments in whole ms, the unit of the durations they must sum to.
     fragment_duration_ms = max(1, int(round(export_rate_s * MS_PER_SECOND)))
+    num_snaps = max(1, total_ms // fragment_duration_ms)
     t_sec = 0.0
     for i in range(num_snaps):
         gpu_use = get_gpu_utilization(t_sec, t_prefill, t_decode)
-        # Final fragment absorbs the residual so fragments sum EXACTLY to the task duration.
+        # The last fragment takes the remainder so fragments sum to the task duration.
         if i == num_snaps - 1:
             duration_ms = max(1, total_ms - i * fragment_duration_ms)
         else:
@@ -81,14 +89,14 @@ def simulate_one(
                 "gpu_usage": gpu_use * gpu_capacity,
             }
         )
-        t_sec += export_rate_s
+        t_sec += fragment_duration_ms / MS_PER_SECOND
 
     return task, fragments, t_prefill, t_decode
 
 
 @dataclass(frozen=True)
 class RequestInput:
-    """One request's varying inputs for the simulation loop (per-request session/token counts)."""
+    """Per-request inputs to the simulation loop: session id, token counts, optional prompt tokens."""
 
     session_id: Any
     n_in_tokens: int
@@ -110,9 +118,8 @@ def run_request_loop(
 ) -> Iterator[tuple[int, dict, list[dict], float, float]]:
     """Drive ``simulate_one`` over ``requests``, accumulating into ``metrics`` and yielding each result.
 
-    Shared by the CLI/service streaming path (``core.engine.simulate``) and the in-memory facade
-    (``facade.run_inference``); each caller consumes the yielded
-    ``(idx, task, fragments, t_prefill_s, t_decode_s)`` for its own I/O (streaming vs. list-building).
+    Yields ``(idx, task, fragments, t_prefill_s, t_decode_s)``. Used by ``core.engine.simulate``, which
+    streams to parquet, and ``facade.run_inference``, which collects in memory.
     """
     seq: Iterable[RequestInput] = requests
     if progress_desc is not None:

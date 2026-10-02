@@ -5,9 +5,9 @@ extended to support physics-driven simulation of LLM fine-tuning workloads[^msc]
 
 It predicts the performance, sustainability, and efficiency of LLM ecosystems:
 
-* **Performance**: inference latencies, training throughput, GPU utilization and Model FLOPs Utilization (MFU)
-* **Sustainability**: energy consumption, carbon emissions
-* **Efficiency**: financial and energy cost per token or sample
+* Performance: inference latencies, training throughput, GPU utilization and Model FLOPs Utilization (MFU)
+* Sustainability: energy consumption, carbon emissions
+* Efficiency: financial and energy cost per token or sample
 
 Kavier ports one of OpenDC's energy models and reproduces OpenDC's energy predictions, four orders of
 magnitude faster than OpenDC[^msc].
@@ -27,7 +27,16 @@ kavier --help
 
 ## Cite
 
-See [`CITATION.cff`](https://github.com/atlarge-research/Kavier/blob/master/CITATION.cff).
+```bibtex
+@software{kavier,
+  author = {Nicolae, Radu and Lotito, Daniele and Trivedi, Animesh and Donkervliet, Jesse and Iosup, Alexandru},
+  title  = {Kavier: Simulating the Performance, Sustainability, and Efficiency of LLM Ecosystems under Inference and Training},
+  year   = {2026},
+  url    = {https://github.com/atlarge-research/Kavier}
+}
+```
+
+The metadata is in [`CITATION.cff`](https://github.com/atlarge-research/Kavier/blob/master/CITATION.cff).
 
 [^bsc]: R. Nicolae, A. Iosup, A. Trivedi, J. Donkervliet. *Kavier: Exploring Performance, Sustainability, and
     Efficiency of LLM Ecosystems under Inference through Cache-Aware Discrete-Event Simulation.* BSc thesis,

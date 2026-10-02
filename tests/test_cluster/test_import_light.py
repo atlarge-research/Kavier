@@ -1,8 +1,7 @@
-"""Import-light contract: a bare ``import kavier.sdk.cluster`` must not pull heavy deps.
+"""A bare ``import kavier.sdk.cluster`` does not import heavy dependencies.
 
-Mirrors the training package's contract — the lazy ``__init__`` re-exports the verb via PEP-562
-``__getattr__`` so importing the package (or a sibling that transitively imports it) stays cheap and
-stdlib-light. Run in a fresh interpreter so it is not masked by pandas already imported elsewhere.
+As in the training package, ``__init__`` re-exports the verb lazily through PEP 562 ``__getattr__``.
+Each check runs in a fresh interpreter so pandas imported by other tests cannot hide a failure.
 """
 
 from __future__ import annotations
@@ -25,8 +24,8 @@ def test_bare_import_does_not_import_heavy_deps() -> None:
 
 
 def test_importing_plot_timeline_does_not_import_matplotlib() -> None:
-    # plot_timeline imports matplotlib lazily INSIDE the function, so referencing the symbol must not
-    # pull matplotlib (nor its numpy) until the function is actually called.
+    # plot_timeline imports matplotlib inside the function body, so importing the name loads neither
+    # matplotlib nor numpy.
     code = (
         "import sys\n"
         "from kavier.sdk.cluster import plot_timeline\n"

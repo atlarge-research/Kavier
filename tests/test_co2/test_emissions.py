@@ -1,6 +1,8 @@
-"""kavier.sdk.co2 emission joins. Billing rule (conservative): each split sub-interval bills at
-min(own window, NEXT window); the last window has no successor so bills at its own value.
-Deviates from OpenDC's pure left-step. Tiny synthetic traces, hand-computed answers."""
+"""Tests for kavier.sdk.co2 emissions on small synthetic traces.
+
+Each sub-interval bills at min(own window, next window); the last window bills at its own value.
+OpenDC uses a plain left step instead.
+"""
 
 from __future__ import annotations
 
@@ -39,7 +41,7 @@ def test_single_window_billed_at_min_of_self_and_next() -> None:
 
 
 def test_single_window_next_is_lower_uses_next() -> None:
-    # min(300, 120) = 120: down-estimate uses the lower next window.
+    # min(300, 120) = 120
     trace = _trace([("2025-01-01 00:00", 300.0), ("2025-01-01 00:30", 120.0)])
     frag = Fragment(pd.Timestamp("2025-01-01 00:00"), 1800.0, 3600.0)  # 1.8 kWh
     result = compute_emissions([frag], trace)
@@ -48,11 +50,10 @@ def test_single_window_next_is_lower_uses_next() -> None:
 
 
 def test_last_window_uses_own_value_no_successor() -> None:
-    # Last window has no successor -> bills at own value.
     trace = _trace([("2025-01-01 00:00", 100.0), ("2025-01-01 00:30", 200.0)])
     frag = Fragment(pd.Timestamp("2025-01-01 00:30"), 1800.0, 1000.0)  # 0.5 kWh, last window
     result = compute_emissions([frag], trace)
-    assert result.total_co2_g == pytest.approx(0.5 * 200.0)  # own value, no min
+    assert result.total_co2_g == pytest.approx(0.5 * 200.0)
 
 
 def test_fragment_spanning_two_windows_next_higher() -> None:
@@ -74,7 +75,7 @@ def test_fragment_spanning_two_windows_next_higher() -> None:
 
 
 def test_fragment_spanning_two_windows_next_lower_underestimates() -> None:
-    # w1=300,w2=100,w3=100: both pieces down-estimate to 100, below the naive 300/100 split.
+    # w1=300,w2=100,w3=100: both pieces bill at 100.
     trace = _trace(
         [
             ("2025-01-01 00:00", 300.0),
@@ -86,7 +87,7 @@ def test_fragment_spanning_two_windows_next_lower_underestimates() -> None:
     result = compute_emissions([frag], trace)
     expected = 0.25 * 100.0 + 0.25 * 100.0  # both pieces -> 100
     assert result.total_co2_g == pytest.approx(expected)  # 50 g
-    # w1 bucket records the down-estimated intensity (100, not 300).
+    # w1 bucket records the billed intensity 100.
     assert result.breakdown[0]["carbon_intensity"] == pytest.approx(100.0)
 
 
@@ -108,7 +109,7 @@ def test_fragment_spanning_three_windows_min_rule() -> None:
 
 
 def test_min_rule_never_exceeds_left_step() -> None:
-    # Invariant: min-rule total <= old left-step total.
+    # min-rule total <= left-step total
     trace = _trace(
         [
             ("2025-01-01 00:00", 250.0),
@@ -159,15 +160,15 @@ def _compute_with_hang_guard(fragments: list[Fragment], trace: CarbonTrace) -> E
     assert not worker.is_alive(), "compute_emissions did not terminate (irregular-step hang regression)"
     error = box.get("error")
     if isinstance(error, BaseException):
-        raise error  # re-surface the worker's exception
+        raise error
     result = box["result"]
     assert isinstance(result, EmissionResult)
     return result
 
 
 def test_irregular_step_gap_fragment_terminates_and_bills_gap() -> None:
-    # Regression (issue #4): trace 00:00, 01:00, 03:00 (missing 02:00 row) infers step=1h from the
-    # FIRST interval only; a fragment inside the 01:00->03:00 gap used to spin forever at 02:00.
+    # Regression, issue #4: trace 00:00, 01:00, 03:00 infers step=1h from the first interval;
+    # a fragment inside the 01:00->03:00 gap looped forever at 02:00.
     df = pd.DataFrame(
         {
             "timestamp": pd.to_datetime(["2025-01-01 00:00", "2025-01-01 01:00", "2025-01-01 03:00"]),
@@ -178,7 +179,7 @@ def test_irregular_step_gap_fragment_terminates_and_bills_gap() -> None:
     frag = Fragment(pd.Timestamp("2025-01-01 01:00"), 2 * 3600.0, 1000.0)  # exactly spans the gap
     result = _compute_with_hang_guard([frag], trace)
     assert result.total_energy_kwh == pytest.approx(2.0)
-    # The whole gap lies in the (extended) 01:00 window: billed at min(200, 400) = 200.
+    # The gap belongs to the extended 01:00 window: min(200, 400) = 200.
     assert result.total_co2_g == pytest.approx(2.0 * 200.0)
     assert len(result.breakdown) == 1
     assert result.breakdown[0]["window_start"] == pd.Timestamp("2025-01-01 01:00")
@@ -230,7 +231,6 @@ def test_fragment_after_trace_raises_with_coverage() -> None:
 
 
 def test_fragment_exactly_to_last_window_end_ok() -> None:
-    # Ending exactly at the last window's end is in range.
     trace = _trace([("2025-01-01 00:00", 100.0), ("2025-01-01 00:30", 200.0)])
     frag = Fragment(pd.Timestamp("2025-01-01 00:30"), 30 * 60.0, 1000.0)
     result = compute_emissions([frag], trace)
@@ -268,7 +268,6 @@ def test_tz_aware_fragment_against_naive_trace_raises() -> None:
 
 
 def test_negative_duration_raises() -> None:
-    # Guard at engine.py:116 rejects duration < 0 before any integration.
     trace = _trace([("2025-01-01 00:00", 100.0), ("2025-01-01 00:30", 200.0)])
     frag = Fragment(pd.Timestamp("2025-01-01 00:00"), -60.0, 1000.0)  # inside coverage, but negative
     with pytest.raises(ValueError, match="duration must be >= 0"):
@@ -276,8 +275,7 @@ def test_negative_duration_raises() -> None:
 
 
 def test_no_energy_gives_zero_totals_and_zero_average() -> None:
-    # Empty workload: totals are 0 and average_intensity short-circuits to 0.0 rather than
-    # dividing 0/0 (would raise ZeroDivisionError / return nan without the guard at engine.py:84).
+    # average_intensity returns 0.0 for zero energy instead of dividing 0/0.
     trace = _trace([("2025-01-01 00:00", 100.0), ("2025-01-01 00:30", 200.0)])
     result = compute_emissions([], trace)
     assert result.total_energy_kwh == 0.0
@@ -287,8 +285,7 @@ def test_no_energy_gives_zero_totals_and_zero_average() -> None:
 
 
 def test_zero_duration_fragment_contributes_nothing() -> None:
-    # A zero-length fragment (inside coverage) opens no window bucket: the while-loop guard is
-    # `cursor < end` with cursor == end. Weakening it to `<=` would spin / spawn a spurious bucket.
+    # Loop guard is `cursor < end`; with cursor == end no bucket opens. `<=` would loop or add a bucket.
     trace = _trace([("2025-01-01 00:00", 100.0), ("2025-01-01 00:30", 200.0)])
     frag = Fragment(pd.Timestamp("2025-01-01 00:10"), 0.0, 1000.0)
     result = compute_emissions([frag], trace)
@@ -297,17 +294,16 @@ def test_zero_duration_fragment_contributes_nothing() -> None:
 
 
 def test_total_co2_kg_is_grams_over_thousand() -> None:
-    # 1.8 kWh at 100 gCO2/kWh = 180 g = 0.180 kg. Guards the classic g<->kg /1000 slip.
+    # 1.8 kWh at 100 gCO2/kWh = 180 g = 0.180 kg
     trace = _trace([("2025-01-01 00:00", 100.0), ("2025-01-01 00:30", 200.0)])
     frag = Fragment(pd.Timestamp("2025-01-01 00:00"), 1800.0, 3600.0)  # 1.8 kWh, min(100,200)=100
     result = compute_emissions([frag], trace)
     assert result.total_co2_g == pytest.approx(180.0)
     assert result.total_co2_kg == pytest.approx(0.180)
-    assert result.total_co2_kg != pytest.approx(180.0)  # not grams; not the missing-/1000 bug
+    assert result.total_co2_kg != pytest.approx(180.0)
 
 
 def test_from_dataframe_single_row_without_step_raises() -> None:
-    # One row and no explicit step: nothing to infer an interval from.
     df = pd.DataFrame({"timestamp": [pd.Timestamp("2025-01-01 00:00")], "carbon_intensity": [100.0]})
     with pytest.raises(ValueError, match="infer step"):
         CarbonTrace.from_dataframe(df)
@@ -325,8 +321,7 @@ def test_from_dataframe_rejects_timezone_aware_trace() -> None:
 
 
 def test_load_carbon_trace_step_minutes_overrides_inferred_step(tmp_path) -> None:
-    # Rows are 30 min apart (inferred step would be 30 min), but step_minutes=60 must win:
-    # coverage_end = last_ts (01:00) + 60 min = 02:00, not the inferred 01:30.
+    # Rows are 30 min apart; step_minutes=60 gives coverage_end = 01:00 + 60 min = 02:00.
     df = pd.DataFrame(
         {
             "timestamp": pd.to_datetime(["2025-01-01 00:00", "2025-01-01 00:30", "2025-01-01 01:00"]),

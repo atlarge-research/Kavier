@@ -1,4 +1,4 @@
-"""Public contract of ``schedule``: input formats, oversized handling, capacity resolution, errors."""
+"""Public API of ``schedule``: input formats, oversized handling, capacity resolution, errors."""
 
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ def test_dataframe_and_dict_inputs_agree() -> None:
 
 
 def test_oversized_drop_excludes_the_job_and_reports_it() -> None:
-    # simulate_fifo parity: a job wanting more GPUs than the whole cluster is dropped (would block
-    # FIFO forever), the other survives.
+    # As in simulate_fifo, a job wanting more GPUs than the cluster has is dropped, since it would block
+    # FIFO forever. The other job runs.
     jobs = [
         {"job_id": "big", "submit_s": 0, "gpus": 999, "duration_s": 10},
         {"job_id": "ok", "submit_s": 0, "gpus": 2, "duration_s": 10},
@@ -48,7 +48,7 @@ def test_oversized_cap_clamps_to_capacity() -> None:
 
 
 def test_backfill_tight_packs_across_nodes_no_gpu_dropped() -> None:
-    # A 16-GPU job on a 2x8 cluster now fills both nodes (8+8) instead of being capped to one node's 8.
+    # A 16-GPU job on a 2x8 cluster fills both nodes as 8+8.
     job = {"submit_s": 0, "gpus": 16, "duration_s": 10}
     res = schedule([job], policy="distributed-backfill", num_nodes=2, node_gpus=8)
     assert res.jobs[0].gpus == 16
@@ -74,8 +74,8 @@ def test_empty_jobs_returns_zeroed_result() -> None:
 
 
 def test_nan_power_is_treated_as_missing_not_poisoned() -> None:
-    # A blank/NaN per-GPU power is UNKNOWN, not zero and not NaN: that job's energy is None and it
-    # must not poison the cluster total (a NaN total also serialises to invalid JSON via the CLI).
+    # A blank or NaN per-GPU power means unknown: that job's energy is None and the cluster total stays
+    # finite. A NaN total would also serialise to invalid JSON in the CLI.
     jobs = [
         {"job_id": "known", "submit_s": 0, "gpus": 2, "duration_s": 10, "power_w_per_gpu": 350},
         {"job_id": "blank", "submit_s": 0, "gpus": 2, "duration_s": 10, "power_w_per_gpu": float("nan")},
@@ -84,7 +84,7 @@ def test_nan_power_is_treated_as_missing_not_poisoned() -> None:
     by_id = {j.job_id: j for j in res.jobs}
     assert by_id["blank"].energy_kwh is None
     assert by_id["known"].energy_kwh == pytest.approx(350 * 2 * 10 / 3.6e6)
-    # total sums only the known job — a finite number, never NaN.
+    # The total covers only the known job.
     assert res.cluster.total_energy_kwh == pytest.approx(350 * 2 * 10 / 3.6e6)
 
 
@@ -102,3 +102,70 @@ def test_nan_power_is_treated_as_missing_not_poisoned() -> None:
 def test_invalid_arguments_raise_value_error(kwargs: dict[str, object]) -> None:
     with pytest.raises(ValueError):
         schedule([{"submit_s": 0, "gpus": 1, "duration_s": 1}], **kwargs)  # type: ignore[arg-type]
+
+
+def test_distributed_fcfs_zero_duration_job_tied_with_a_later_job() -> None:
+    # B runs [0, 5]. Z (0 s long) waits for B and starts at 5; W is listed first but submitted at 1 s,
+    # so it runs after Z and also starts at 5 on the GPUs Z frees. Node assignment used to replay W
+    # before Z and raise RuntimeError.
+    jobs = [
+        {"job_id": "W", "submit_s": 1, "gpus": 8, "duration_s": 10},
+        {"job_id": "B", "submit_s": 0, "gpus": 8, "duration_s": 5},
+        {"job_id": "Z", "submit_s": 0, "gpus": 8, "duration_s": 0},
+    ]
+    res = schedule(jobs, policy="distributed-fcfs", num_nodes=1, node_gpus=8)
+    by_id = {j.job_id: j for j in res.jobs}
+    assert [by_id[k].start_s for k in ("B", "Z", "W")] == [0.0, 5.0, 5.0]
+    assert [by_id[k].nodes for k in ("B", "Z", "W")] == [((0, 8),)] * 3
+
+
+def test_dataframe_blank_nodes_cell_defaults_to_one_node() -> None:
+    # A missing value in an optional nodes column reaches the facade as NaN and means one node.
+    pd = pytest.importorskip("pandas")
+    df = pd.DataFrame(
+        [
+            {"job_id": "a", "submit_s": 0, "gpus": 8, "duration_s": 10, "nodes": 2},
+            {"job_id": "b", "submit_s": 0, "gpus": 8, "duration_s": 10, "nodes": None},
+        ]
+    )
+    res = schedule(df, policy="consolidated-fcfs", num_nodes=4, node_gpus=8)
+    by_id = {j.job_id: j for j in res.jobs}
+    assert by_id["a"].nodes == ((0, 4), (1, 4))
+    assert by_id["b"].nodes == ((2, 8),)
+
+
+@pytest.mark.parametrize(
+    "bad_job",
+    [
+        {"submit_s": float("inf"), "gpus": 1, "duration_s": 1},
+        {"submit_s": 0, "gpus": 1, "duration_s": float("inf")},
+        {"submit_s": 0, "gpus": 1, "duration_s": float("-inf")},
+        {"submit_s": 0, "gpus": 1, "duration_s": -5},
+        {"submit_s": 0, "gpus": -2, "duration_s": 5},
+    ],
+)
+def test_infinite_or_negative_job_values_raise_value_error(bad_job: dict[str, float]) -> None:
+    jobs = [{"submit_s": 0, "gpus": 1, "duration_s": 1}, bad_job]
+    with pytest.raises(ValueError, match="job 1"):
+        schedule(jobs, policy="distributed-fcfs", num_nodes=1, node_gpus=8)
+
+
+def test_zero_gpus_and_zero_duration_are_still_accepted() -> None:
+    res = schedule([(0, 0, 10), (0, 2, 0)], policy="distributed-fcfs", num_nodes=1, node_gpus=8)
+    assert res.cluster.n_jobs == 2
+
+
+def test_tuple_rows_read_power_and_job_id() -> None:
+    # (submit_s, gpus, duration_s, nodes, power_w_per_gpu, job_id): 500 W x 2 GPUs x 1 h = 1 kWh.
+    res = schedule([(0, 2, 3600, 1, 500, "a")], policy="distributed-fcfs", num_nodes=1, node_gpus=8)
+    assert res.jobs[0].job_id == "a"
+    assert res.jobs[0].energy_kwh == pytest.approx(1.0)
+
+
+def test_tuple_rows_without_job_id_use_the_row_index_and_nan_power_is_unknown() -> None:
+    res = schedule(
+        [(0, 2, 3600, 1, 500), (0, 2, 3600, 1, float("nan"))], policy="distributed-fcfs", num_nodes=1, node_gpus=8
+    )
+    assert [j.job_id for j in res.jobs] == [0, 1]
+    assert res.jobs[0].energy_kwh == pytest.approx(1.0)
+    assert res.jobs[1].energy_kwh is None

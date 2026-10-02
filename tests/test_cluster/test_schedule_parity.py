@@ -1,16 +1,14 @@
-"""Parity: kavier.sdk.cluster.schedule must reproduce the frozen thesis schedulers.
+"""Parity of kavier.sdk.cluster.schedule with the frozen thesis schedulers.
 
-The oracle is NOT a captured engine output. It is the two frozen capsule schedulers
-(reproducibility-capsule gen_exp2.py::schedule = flat-pool strict FCFS, and
-gen_exp4.py::schedule_backfill = node-aware backfill) run by hand on a small fixture; the
-expected per-job wait/start/end below were derived from those functions' semantics and
-cross-checked by executing the exact frozen code on this fixture. Any drift in the ported
-kernel (wrong discipline, lost head-of-line blocking, broken backfill, wrong oversized
-handling) flips at least one asserted cell.
+Expected values come from the two frozen capsule schedulers in reproducibility-capsule:
+gen_exp2.py::schedule (flat-pool strict FCFS) and gen_exp4.py::schedule_backfill (node-aware
+backfill). The per-job wait/start/end below were traced by hand from those functions on a small
+fixture and cross-checked by running the frozen code on it. A change in the ported kernel's queue
+discipline, head-of-line blocking, backfill or oversized handling changes at least one asserted value.
 
 Fixture (16 GPUs = 2 nodes x 8; durations in whole hours):
     J0 (0s,  8gpu, 2h, 1 node)   J1 (0s, 12gpu, 1h, 2 nodes)   J2 (0s, 8gpu, 1h, 1 node)
-    J3 (0s, 32gpu, 1h, 2 nodes; OVERSIZED)   J4 (3600s, 4gpu, 1h, 1 node; late arrival)
+    J3 (0s, 32gpu, 1h, 2 nodes; oversized)   J4 (3600s, 4gpu, 1h, 1 node; late arrival)
 """
 
 from __future__ import annotations
@@ -33,9 +31,9 @@ def _by_id(result: object) -> dict[str, object]:
 
 
 # --- FCFS: flat-pool strict First-Come-First-Served, head-of-line blocking, cap oversized ---
-# Expected (from gen_exp2.schedule on this fixture): head-of-line serialization pins each job
-# behind the previous one's start; J3's 32 GPUs are capped to the 16-GPU cluster; J4's late
-# arrival still waits behind the blocked queue.
+# Expected (from gen_exp2.schedule on this fixture): head-of-line blocking holds each job behind
+# the previous one's start; J3's 32 GPUs are capped to the 16-GPU cluster; J4 arrives late and
+# still waits behind the blocked queue.
 _FCFS_EXPECTED = {
     #        wait_h, start_h, end_h
     "J0": (0.0, 0.0, 2.0),
@@ -97,15 +95,14 @@ def test_backfill_cluster_metrics_match_frozen_capsule() -> None:
 
 
 def test_fcfs_and_backfill_diverge_on_the_blocked_small_job() -> None:
-    # The discipline difference, pinned as a property: strict FCFS pins J2 behind the
-    # head-of-line-blocked J1 (starts 3h); backfill lets J2 jump ahead (starts 0h).
+    # Strict FCFS holds J2 behind the head-of-line-blocked J1 (start 3h); backfill starts J2 at 0h.
     fcfs = _by_id(schedule(_JOBS, policy="distributed-fcfs", num_nodes=2, node_gpus=8))
     backfill = _by_id(schedule(_JOBS, policy="distributed-backfill", num_nodes=2, node_gpus=8))
     assert fcfs["J2"].start_h == pytest.approx(3.0)
     assert backfill["J2"].start_h == pytest.approx(0.0)
 
 
-# Tight-pack node placements on the 2x8 datacenter (hand-derived, most-free-first, id tiebreak):
+# Tight-pack node placements on the 2x8 cluster, worked out by hand (least-free-first, id tiebreak):
 _FCFS_NODES = {
     "J0": ((0, 8),),
     "J1": ((0, 8), (1, 4)),

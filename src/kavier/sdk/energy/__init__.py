@@ -1,1 +1,1 @@
-"""Energy/cost efficiency metrics (``kavier energy``): joins Kavier performance with OpenDC power, per Mtoken."""
+"""Energy and cost efficiency per Mtoken (``kavier energy``) from OpenDC power and Kavier tasks."""

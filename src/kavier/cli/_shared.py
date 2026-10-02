@@ -1,7 +1,8 @@
-"""Shared argparse plumbing for the Kavier subcommands: a ``FriendlyParser`` that appends a worked
-example to error messages, and the ``--config`` YAML peek/fold (an explicit flag still overrides a
-config value). The fold logic itself lives in ``kavier.sdk.io.config`` so both the engine CLIs and the
-unified ``kavier`` CLI can import it without a layering inversion.
+"""Argparse helpers for the Kavier subcommands.
+
+``FriendlyParser`` adds a worked example to error messages. ``parse_args_with_config`` reads
+``--config`` and puts the YAML values in front of the typed arguments as flags, so argparse checks them
+and typed flags win. The fold itself is in ``kavier.sdk.io.config``.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ import sys
 from collections.abc import Sequence
 from typing import NoReturn
 
-from kavier.sdk.io.config import apply_config_defaults
+from kavier.sdk.io.config import config_argv
 
 
 class FriendlyParser(argparse.ArgumentParser):
@@ -25,7 +26,7 @@ class FriendlyParser(argparse.ArgumentParser):
         self.print_usage(sys.stderr)
         print(f"{self.prog}: error: {message}", file=sys.stderr)
         if self.example:
-            print(f"\nYou may have mistaken the input — try this example instead:\n  {self.example}", file=sys.stderr)
+            print(f"\nExample:\n  {self.example}", file=sys.stderr)
         sys.exit(2)
 
 
@@ -38,8 +39,10 @@ def peek_config(argv: Sequence[str] | None = None) -> str | None:
     return config
 
 
-def apply_config(parser: argparse.ArgumentParser, argv: Sequence[str] | None = None) -> None:
-    """Fold a ``--config`` YAML file into ``parser`` defaults (call BEFORE ``parse_args``); no-op if absent."""
-    path = peek_config(argv)
+def parse_args_with_config(parser: argparse.ArgumentParser, argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse ``argv`` (default ``sys.argv[1:]``) with the values of its ``--config`` file, if any, as flags."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    path = peek_config(args)
     if path is not None:
-        apply_config_defaults(parser, path)
+        args = config_argv(parser, path, args)
+    return parser.parse_args(args)

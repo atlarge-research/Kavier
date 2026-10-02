@@ -1,4 +1,4 @@
-"""Carbon model: power ``Fragment``s integrated over a ``CarbonTrace`` (gCO2/kWh) -> ``EmissionResult`` (kWh, gCO2)."""
+"""Integrate power ``Fragment``s over a ``CarbonTrace`` (gCO2/kWh) into an ``EmissionResult`` (kWh, gCO2)."""
 
 from __future__ import annotations
 
@@ -11,8 +11,7 @@ import pandas as pd
 from kavier.sdk.io.parquet import read_parquet
 from kavier.sdk.units import G_PER_KG, WS_PER_KWH
 
-# Column names of a carbon-intensity trace frame; shared by the CarbonTrace validator and the
-# inference facade's synthetic ``_flat_trace`` producer so the two never drift.
+# Carbon-trace column names, also used by the inference facade's synthetic ``_flat_trace``.
 TRACE_TS_COL = "timestamp"
 TRACE_INTENSITY_COL = "carbon_intensity"
 
@@ -104,7 +103,10 @@ def _window_index_for(ts: pd.Timestamp, trace: CarbonTrace) -> int:
 
 
 def compute_emissions(fragments: Iterable[Fragment], trace: CarbonTrace) -> EmissionResult:
-    """Integrate each fragment's energy over the trace (down-estimated intensity); raises if outside coverage."""
+    """Integrate each fragment's energy over the trace at down-estimated intensity.
+
+    Raises ``ValueError`` if a fragment lies outside the trace coverage.
+    """
     acc: dict[pd.Timestamp, dict[str, float]] = {}
     total_energy_kwh = 0.0
     total_co2_g = 0.0
@@ -136,16 +138,13 @@ def compute_emissions(fragments: Iterable[Fragment], trace: CarbonTrace) -> Emis
         while cursor < end:
             wi = _window_index_for(cursor, trace)
             window_start = trace.timestamps[wi]
-            # Window boundaries are the trace's own timestamps: a non-final window runs to the NEXT
-            # timestamp, absorbing any gap wider than the step inferred from the first interval. Using
-            # window_start + step here would place window_end at/behind the cursor inside such a gap
-            # (seg_end <= cursor), stalling the loop forever. Only the final window has no successor,
-            # so it spans exactly one step (which also defines coverage_end).
+            # A non-final window ends at the next timestamp; window_start + step would stall the cursor
+            # in a gap wider than step. The final window spans one step, as in coverage_end.
             window_end = trace.timestamps[wi + 1] if wi < last_wi else window_start + trace.step
             seg_end = min(end, window_end)
             seg_seconds = (seg_end - cursor).total_seconds()
             energy_kwh = frag.power_w * seg_seconds / WS_PER_KWH
-            # DOWN-ESTIMATION: bill at min(own window, next window) intensity; the final window has no successor.
+            # Down-estimate: bill at min(own, next window) intensity; the final window has no successor.
             own = float(trace.intensities.iloc[wi])
             if wi < last_wi:
                 intensity = min(own, float(trace.intensities.iloc[wi + 1]))

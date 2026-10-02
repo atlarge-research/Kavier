@@ -1,12 +1,10 @@
-"""Kavier SDK: the simulation engines behind the public ``kavier.inference`` / ``kavier.training`` verbs.
+"""Simulation engines behind ``kavier.inference`` and ``kavier.training``.
 
-Submodules: ``inference`` (per-request inference sim), ``training`` (analytical training model +
-calibration), ``energy`` (GPU power/efficiency), ``co2`` (carbon), ``io`` (trace/OpenDC I/O), and
-``library`` (static GPU/LLM specs).
+Submodules: ``inference`` (per-request inference simulator), ``training`` (analytical training
+model and calibration), ``energy`` (GPU power and efficiency), ``co2`` (carbon), ``io`` (trace and
+OpenDC I/O), and ``library`` (static GPU and LLM specs).
 
-Import-light by contract: keep this module (and ``kavier.sdk.training``) free of eager engine/facade
-imports. The calibration accessor ``kavier.sdk.training.calibration`` MUST stay importable without
-pulling scipy/sklearn/numpy/pandas (guarded by
-``test_calibration_versions.py::test_accessor_import_is_stdlib_only``); importing it executes this
-package's ``__init__``, so any heavy import added here would silently break that contract.
+Keep this module and ``kavier.sdk.training`` free of engine imports. Importing
+``kavier.sdk.training.calibration`` runs this file, and that import must not load scipy, sklearn,
+numpy or pandas (tested by ``test_calibration_versions.py::test_accessor_import_is_stdlib_only``).
 """

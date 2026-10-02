@@ -7,7 +7,13 @@ Every subcommand documents its own flags.
 ```bash
 kavier --help           # inference, training, cluster, energy, carbon
 kavier training --help
-kavier-ui               # interactive UI (POSIX only)
+```
+
+An example inference trace ships with the package:
+
+```bash
+TRACE=$(python -c "from importlib.resources import files; print(files('kavier.sdk.inference') / 'data/input/input_example.csv')")
+kavier inference --trace "$TRACE"
 ```
 
 ## Python API

@@ -18,7 +18,7 @@ $$T_f = \frac{2 \times P \times B \times S}{F \times E} + O_t
 \qquad
 E = E_b \times E_g \times \min\bigl(1,\; a_1 \log_2 B + a_2\bigr)$$
 
-$P$ is the number of model parameters used in the forward pass, $B$ the micro-batch size, $S$ the sequence
+$P$ is the number of model parameters used in the forward pass (the active parameters of an MoE model), $B$ the micro-batch size, $S$ the sequence
 length in tokens, $F$ the GPU's peak FP16 Tensor Core throughput, $E$ the effective MFU, and $O_t$ the
 calibrated training overhead. $E_b$ is the GPU's nominal MFU factor, $E_g$ a per-GPU calibration factor,
 and $a_1, a_2$ are calibration factors.
@@ -33,10 +33,10 @@ AdamW, dominated by memory traffic: 20 bytes moved per trainable parameter, each
 
 $$T_o = \frac{20 \times P_t}{B_m}
 \qquad
-P_t = \begin{cases} P & \text{full fine-tuning} \\ 2 \times r \times d \times k \times L & \text{LoRA / GPTQ-LoRA} \end{cases}$$
+P_t = \begin{cases} P_{all} & \text{full fine-tuning} \\ 2 \times r \times d \times k \times L & \text{LoRA / GPTQ-LoRA} \end{cases}$$
 
-$B_m$ is the GPU memory bandwidth, $r$ the LoRA rank, $d$ the hidden size, $k$ the number of target
-modules per layer, and $L$ the number of transformer layers.
+$B_m$ is the GPU memory bandwidth, $P_{all}$ the total number of model parameters, $r = 8$ the LoRA rank,
+$d$ the hidden size, $k = 4$ the number of target modules per layer, and $L$ the number of transformer layers.
 
 ## Gradient communication
 
@@ -47,8 +47,9 @@ $$T_c = \begin{cases} 0 & G = 1 \\ c_c \times T_r(G, W_n) & N = 1 \\ c_c \times 
 \qquad
 T_r(p, W) = \ell \log_2 p + o\,(p - 1) + \frac{D\,(p - 1)}{p \times W / 8}$$
 
-$D = 4 \times P_t$ is the gradient size in bytes, $\ell$ the per-hop latency, $o$ the per-message overhead,
-and $c_c$ a calibrated communication scale.
+$G$ is the total number of GPUs, $N$ the number of nodes, and $G_n = G / N$ the GPUs per node. $W_n$ is the
+GPU interconnect rate and $W_i = 200$ Gbit/s the InfiniBand rate. $D = 4 \times P_t$ is the gradient size in
+bytes, $\ell$ the per-hop latency, $o$ the per-message overhead, and $c_c$ a calibrated communication scale.
 
 ## Throughput
 
@@ -62,12 +63,12 @@ GPU, $G$) interaction; $m_g$ is a multi-GPU correction.
 Pure physics-driven modeling is not enough when simulating real-world large-scale systems, so Kavier is
 calibrated in two tiers on `LLMFineTuningBench`:
 
-1. **Global:** one correction factor per GPU model, fine-tuning method, LLM, GPU count, and one for
+1. Global: one correction factor per GPU model, fine-tuning method, LLM, GPU count, and one for
    communication, fitted together on the training split (70%) with Powell's method.
-2. **Four-way:** for each (LLM, method, GPU type, GPU count) group, the median ratio of measurement to
+2. Four-way: for each (LLM, method, GPU type, GPU count) group, the median ratio of measurement to
    the tier-1 prediction.
 
-Calibration reduces the MdAPE on the held-out test split from 12.5% to 5.4%.
+On the held-out test split, calibration reduces the MdAPE, averaged over the four dense models, from 12.5% to 5.4%
+(MSc thesis, E1).
 
-!!! note
-    Calibration is keyed on exact catalog names; an uncalibrated name falls back to a neutral 1.0.
+Calibration is keyed on exact catalog names. An uncalibrated name falls back to a neutral 1.0.

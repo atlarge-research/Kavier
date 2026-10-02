@@ -19,18 +19,17 @@ _CFG = dict(
 
 
 def test_explicit_total_tokens_beats_epochs_times_dataset():
-    # total_tokens=5000 is returned even though epochs*dataset=3*1000=3000 differs.
-    # 5000 != 3000 so a "return the product" mutation is caught.
+    # total_tokens=5000 wins over epochs*dataset = 3*1000 = 3000.
     assert _resolve_total_tokens(5_000, 3, 1_000) == 5_000
 
 
 def test_epochs_times_dataset_is_a_product():
-    # 2 * 1_000_000 = 2_000_000 (product, not sum which would be 1_000_002).
+    # 2 * 1_000_000 = 2_000_000; a sum would give 1_000_002.
     assert _resolve_total_tokens(None, 2, 1_000_000) == 2_000_000
 
 
 def test_fractional_product_is_rounded_not_truncated():
-    # 0.15 * 10 = 1.5 -> round() -> 2; plain int() truncation would give 1.
+    # 0.15 * 10 = 1.5 -> round() -> 2; int() truncation would give 1.
     assert _resolve_total_tokens(None, 0.15, 10) == 2
 
 
@@ -46,7 +45,7 @@ def test_none_when_neither_epochs_nor_dataset_given():
     ],
 )
 def test_epochs_and_dataset_must_be_supplied_together(epochs, dataset):
-    # Exactly one of the pair is under-specified: cannot form a product.
+    # only one of the pair given, so no product
     with pytest.raises(ValueError):
         _resolve_total_tokens(None, epochs, dataset)
 
@@ -67,18 +66,16 @@ def test_negative_epochs_or_dataset_rejected(epochs, dataset):
 
 
 def test_epochs_over_dataset_equals_equivalent_total_tokens():
-    # 2 epochs over 5M tokens describes the SAME 10M-token job as total_tokens=10M,
-    # so both entry points must yield an identical runtime.
+    # 2 epochs over 5M tokens is the same 10M-token job as total_tokens=10M, so the runtimes match.
     by_epochs = simulate_full_training(**_CFG, epochs=2, dataset_tokens=5_000_000)
     by_tokens = simulate_full_training(**_CFG, total_tokens=10_000_000)
-    assert by_epochs["total_tokens"] == 10_000_000  # product actually resolved
+    assert by_epochs["total_tokens"] == 10_000_000
     assert by_epochs["train_runtime"] == pytest.approx(by_tokens["train_runtime"])
     assert by_epochs["train_runtime"] > 0
 
 
 def test_runtime_is_total_tokens_divided_by_throughput():
-    # Cross-check the two independently-returned fields: runtime = total_tokens / tps.
-    # Catches a wrong divisor (e.g. an accidental *1000 / seconds<->ms mixup).
+    # runtime = total_tokens / tps; catches a wrong divisor such as a seconds/ms mix-up.
     out = simulate_full_training(**_CFG, epochs=2, dataset_tokens=5_000_000)
     expected = out["total_tokens"] / out["train_tokens_per_second"]
     assert out["train_runtime"] == pytest.approx(expected)
@@ -92,7 +89,7 @@ def test_runtime_scales_linearly_with_epochs():
 
 
 def test_no_job_size_yields_zero_runtime():
-    # Neither total_tokens nor epochs/dataset -> total_tokens None -> runtime 0.0 (not an error).
+    # Neither total_tokens nor epochs/dataset -> total_tokens None -> runtime 0.0, no error.
     out = simulate_full_training(**_CFG)
     assert out["total_tokens"] is None
     assert out["train_runtime"] == 0.0

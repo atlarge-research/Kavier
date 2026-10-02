@@ -19,15 +19,14 @@ def add_efficiency_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPar
         "--price",
         type=float,
         default=None,
-        help="GPU-hour price for the $/token metric. No default -- financial efficiency "
-        "is reported only when you set it (the GPU cost is yours to specify).",
+        help="GPU-hour price for the $/token metric. If unset, no cost metrics are reported.",
     )
     parser.add_argument("--out", help="Optional path to save JSON summary")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """Compute and print per-Mtoken efficiency from Kavier + OpenDC output."""
+    """Compute and print per-Mtoken efficiency from Kavier and OpenDC output."""
     args = add_efficiency_args(argparse.ArgumentParser(prog="kavier energy")).parse_args(argv)
 
     kavier_performance_path = Path(args.kavier).expanduser()
@@ -62,7 +61,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with out_path.open("w") as f:
             json.dump(summary, f, indent=4)
-        print(f"\nSaved → {out_path}")
+        print(f"\nSaved to {out_path}")
 
 
 if __name__ == "__main__":

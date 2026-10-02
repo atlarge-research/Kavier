@@ -1,29 +1,25 @@
-"""Kavier public API — usage examples.
+"""Show the Kavier Python API on inference and training batches.
 
-`import kavier` exposes two workload namespaces — `inference` and `training` —
-each with the same four predictors:
+`import kavier` has two workload namespaces, `inference` and `training`, each with
+four predictors:
 
     kavier.inference.performance / energy / efficiency / carbon
-    kavier.training .performance / energy / efficiency / carbon
+    kavier.training.performance / energy / efficiency / carbon
 
-Every predictor takes a *batch* (a pandas DataFrame, a list of dicts, or a single
-dict — one row per workload) and returns a DataFrame: your input rows plus the
-predicted columns. The numbers match the `kavier` CLIs and UI, because all three
-call this same API.
+A predictor takes a batch, one row per workload, as a pandas DataFrame, a list of
+dicts, or a single dict. It returns the input rows plus the predicted columns.
+The `kavier` CLI and UI call the same API and give the same numbers.
 
-Run with:  python docs/usage.py
+Run with: python docs/usage.py
 """
 
 import pandas as pd
 
 import kavier
 
-# --------------------------------------------------------------------------- #
-# 1) Inference — a batch of serving workloads
-# --------------------------------------------------------------------------- #
-# Each row: which model on which GPU, and the request shape.
-# NB: in the API, `input_tokens` / `output_tokens` are scalar *counts* — unlike trace CSVs,
-# where `input_tokens` is the token-id *list* and `num_input_tokens` is the count.
+# 1) Inference: a batch of serving workloads.
+# `input_tokens` and `output_tokens` are counts here. In trace CSVs, `input_tokens` is the
+# token-id list and `num_input_tokens` the count.
 inference_batch = pd.DataFrame(
     [
         {"model": "Llama-3-8B", "gpu": "A10", "num_requests": 128, "input_tokens": 512, "output_tokens": 128},
@@ -44,10 +40,8 @@ carbon = kavier.inference.carbon(inference_batch)  # + carbon_per_mtoken_g (gCO2
 
 print(performance)
 
-# --------------------------------------------------------------------------- #
-# 2) Training — a batch of fine-tuning jobs
-# --------------------------------------------------------------------------- #
-# Size each job by total_tokens, OR by epochs x dataset_tokens.
+# 2) Training: a batch of fine-tuning jobs.
+# Size each job by total_tokens, or by epochs x dataset_tokens.
 training_batch = pd.DataFrame(
     [
         {
@@ -81,9 +75,7 @@ train_carbon = kavier.training.carbon(training_batch)
 
 print(train_performance)
 
-# --------------------------------------------------------------------------- #
-# 3) Inputs are flexible — a single dict or a list of dicts works too
-# --------------------------------------------------------------------------- #
+# 3) A single dict or a list of dicts also works.
 one = kavier.inference.performance(
     {"model": "Llama-3-8B", "gpu": "A10", "num_requests": 64, "input_tokens": 256, "output_tokens": 64}
 )

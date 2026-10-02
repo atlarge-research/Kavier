@@ -1,11 +1,8 @@
-"""``kavier.training`` batch API.
+"""Tests for the ``kavier.training`` batch API.
 
-Every numeric assertion here is anchored to an oracle that is *independent* of the batch
-facade under test: a scaling law (runtime linear in tokens), a cross-column algebraic
-relation the facade never asserts itself (samples/s = tokens/s ÷ seq_len), a cross-method
-energy identity (E = P·t vs. the carbon-integration path), a physical bound read from the
-GPU spec (power ∈ [idle, max]), or a hand-evaluated edge case (unsized job → runtime 0).
-None of them paste an engine output back into ``assert ==``.
+Numeric checks use scaling laws (runtime linear in tokens), relations between columns
+(samples/s = tokens/s / seq_len), an energy identity (E = P*t against the carbon integration),
+bounds from the GPU spec (idle <= power <= max), and edge cases (unsized job -> runtime 0).
 """
 
 from __future__ import annotations
@@ -50,7 +47,7 @@ def _batch() -> pd.DataFrame:
     return pd.DataFrame([ROW_A, ROW_B])
 
 
-# --------------------------------------------------------------------------- shape contract
+# --------------------------------------------------------------------------- output shape
 
 
 @pytest.mark.parametrize(
@@ -66,9 +63,7 @@ def _batch() -> pd.DataFrame:
     ],
 )
 def test_verb_emits_predicted_columns_and_preserves_every_input_row(verb, expected_cols) -> None:
-    # Contract: one output row per input row, input columns carried through unchanged, and
-    # each verb's documented predicted columns present. Falsifies if a verb drops/reorders
-    # rows, silently swallows an input column, or stops emitting a documented output column.
+    # One row per input row in order, input columns kept, documented columns present.
     batch = _batch()
     out = verb(batch)
     assert isinstance(out, pd.DataFrame)
@@ -84,9 +79,7 @@ def test_verb_emits_predicted_columns_and_preserves_every_input_row(verb, expect
     [kavier.training.performance, kavier.training.energy, kavier.training.efficiency, kavier.training.carbon],
 )
 def test_single_dict_list_and_dataframe_produce_identical_rows(verb) -> None:
-    # Invariant: the three accepted input forms are just different containers for the same
-    # workload, so they must yield bit-identical predictions. Falsifies if _normalise treats
-    # a dict/list/DataFrame row differently (e.g. dtype coercion or a dropped key).
+    # A dict, a list and a DataFrame of the same workload give identical rows.
     from_df = verb(pd.DataFrame([ROW_A])).iloc[0]
     from_list = verb([ROW_A]).iloc[0]
     from_dict = verb(ROW_A).iloc[0]
@@ -98,10 +91,8 @@ def test_single_dict_list_and_dataframe_produce_identical_rows(verb) -> None:
 
 
 def test_runtime_is_linear_in_total_tokens_at_fixed_throughput() -> None:
-    # Scaling law: throughput is a per-step property independent of job size, and
-    # runtime = total_tokens / throughput. So doubling the token budget must double the
-    # runtime while leaving tokens/s untouched. Falsifies if runtime stops scaling with
-    # tokens or throughput leaks a dependence on total_tokens.
+    # Throughput does not depend on job size and runtime = total_tokens / throughput, so
+    # doubling tokens doubles runtime at equal tokens/s.
     small = _one(kavier.training.performance, {**ROW_A, "total_tokens": 10_000_000})
     large = _one(kavier.training.performance, {**ROW_A, "total_tokens": 20_000_000})
     assert large["train_tokens_per_second"] == pytest.approx(small["train_tokens_per_second"])
@@ -109,17 +100,13 @@ def test_runtime_is_linear_in_total_tokens_at_fixed_throughput() -> None:
 
 
 def test_samples_per_second_is_tokens_per_second_over_seq_len() -> None:
-    # Cross-column identity the facade never asserts itself: one sample = seq_len tokens,
-    # so samples/s = (tokens/s) / seq_len. Falsifies if samples/s is derived from
-    # batch_size or a different token count.
+    # One sample = seq_len tokens, so samples/s = (tokens/s) / seq_len.
     perf = _one(kavier.training.performance, ROW_A)
     assert perf["train_samples_per_second"] == pytest.approx(perf["train_tokens_per_second"] / ROW_A["seq_len"])
 
 
 def test_gpu_power_within_idle_max_and_utilizations_are_percentages() -> None:
-    # Physical bounds from the GPU spec (not hard-coded): mse_power is confined to
-    # [idle, max], and both utilizations are clamped fractions reported as percent [0, 100].
-    # Falsifies if the power model returns an out-of-envelope watt figure or a util > 100.
+    # mse_power lies in [idle, max] of the GPU spec; utilizations are percentages in [0, 100].
     gpu = get_gpu(ROW_A["gpu"])
     perf = _one(kavier.training.performance, ROW_A)
     assert gpu.idle_power_w <= perf["gpu_power_watts"] <= gpu.max_power_w
@@ -131,11 +118,9 @@ def test_gpu_power_within_idle_max_and_utilizations_are_percentages() -> None:
 
 
 def test_energy_wh_equals_aggregate_power_times_runtime() -> None:
-    # Cross-method check: the reported energy comes from integrating one power fragment over a
-    # flat carbon trace; an *independent* route is E = P·t. With aggregate_power_w watts held
-    # for train_runtime seconds, Wh = W · s / 3600. This catches the classic /1000 vs /3600
-    # unit bug in the kWh<->Wh conversion. Also pins the aggregation: fleet power = per-GPU
-    # power × total_gpus (8), which performance and energy compute on separate paths.
+    # Energy comes from integrating one power fragment over a flat carbon trace; check it
+    # against E = P*t: Wh = aggregate_power_w * train_runtime / 3600. Fleet power = per-GPU
+    # power x total_gpus (8); performance and energy compute these separately.
     perf = _one(kavier.training.performance, ROW_A)
     en = _one(kavier.training.energy, ROW_A)
     assert en["aggregate_power_w"] == pytest.approx(perf["gpu_power_watts"] * TOTAL_GPUS_A)
@@ -144,9 +129,8 @@ def test_energy_wh_equals_aggregate_power_times_runtime() -> None:
 
 
 def test_carbon_and_energy_verbs_share_energy_and_default_intensity() -> None:
-    # The carbon and energy verbs must report the SAME energy for the same run (they share
-    # the billing path), and carbon's default intensity must be the exported constant, not a
-    # private literal. Falsifies if the two verbs diverge on energy or the default drifts.
+    # carbon and energy report equal energy for the same run, and carbon's default intensity
+    # equals the exported DEFAULT_INTENSITY_G_KWH.
     en = _one(kavier.training.energy, ROW_A)
     ca_default = _one(kavier.training.carbon, ROW_A)
     ca_explicit = _one(kavier.training.carbon, {**ROW_A, "intensity": DEFAULT_INTENSITY_G_KWH})
@@ -155,21 +139,18 @@ def test_carbon_and_energy_verbs_share_energy_and_default_intensity() -> None:
 
 
 def test_co2_is_energy_times_intensity_and_scales_linearly() -> None:
-    # Flat-trace carbon = energy(kWh) · intensity(g/kWh), and energy is independent of
-    # intensity. So (a) at an explicit intensity, co2_g = energy_kwh · intensity exactly, and
-    # (b) doubling intensity doubles co2 while energy is unchanged. Falsifies if intensity is
-    # mis-applied (e.g. multiplied into energy) or the flat trace down-estimates unequally.
+    # Flat-trace carbon = energy [kWh] * intensity [g/kWh]; energy does not depend on intensity.
+    # Doubling intensity doubles co2 and leaves energy unchanged.
     lo = _one(kavier.training.carbon, {**ROW_A, "intensity": 300.0})
     hi = _one(kavier.training.carbon, {**ROW_A, "intensity": 600.0})
-    # 300 g/kWh · energy_kwh  ==  co2_g  (all trace windows carry the same intensity).
+    # Every trace window has the same intensity.
     assert lo["total_co2_g"] == pytest.approx(lo["total_energy_kwh"] * 300.0)
     assert hi["total_energy_kwh"] == pytest.approx(lo["total_energy_kwh"])
     assert hi["total_co2_g"] == pytest.approx(2.0 * lo["total_co2_g"])
 
 
 def test_carbon_per_mtoken_is_total_over_million_tokens() -> None:
-    # Per-Mtoken = total · 1e6 / total_tokens. With a 10 M-token job the factor is 0.1.
-    # Falsifies if the intensive metric uses the wrong divisor (e.g. /1000 instead of /1e6).
+    # Per-Mtoken = total * 1e6 / total_tokens. For a 10 M-token job the factor is 0.1.
     ca = _one(kavier.training.carbon, ROW_A)
     assert ca["total_tokens"] == ROW_A["total_tokens"]
     per_m = 1_000_000.0 / ROW_A["total_tokens"]  # = 0.1
@@ -180,9 +161,7 @@ def test_carbon_per_mtoken_is_total_over_million_tokens() -> None:
 
 
 def test_financial_per_mtoken_from_gpu_hours_and_price() -> None:
-    # $/Mtoken = gpu_hours · $/hour · 1e6 / total_tokens, where gpu_hours = runtime_h ·
-    # total_gpus. Cross-checked against performance's runtime and an EXPLICIT price so the
-    # oracle owns every factor. Falsifies if cost forgets total_gpus or mis-bills the rate.
+    # $/Mtoken = gpu_hours * $/hour * 1e6 / total_tokens, gpu_hours = runtime_h * total_gpus.
     price = 4.0
     perf = _one(kavier.training.performance, ROW_A)
     ef = _one(kavier.training.efficiency, {**ROW_A, "gpu_hour_price": price})
@@ -193,8 +172,7 @@ def test_financial_per_mtoken_from_gpu_hours_and_price() -> None:
 
 
 def test_cost_scales_linearly_with_price_and_default_is_the_constant() -> None:
-    # $/Mtoken is linear in the GPU hourly rate, and omitting the price uses the exported
-    # default. Falsifies if the rate enters non-linearly or the default literal drifts.
+    # $/Mtoken is linear in the hourly rate; no price means DEFAULT_GPU_HOUR_PRICE.
     base = _one(kavier.training.efficiency, {**ROW_A, "gpu_hour_price": 1.0})
     triple = _one(kavier.training.efficiency, {**ROW_A, "gpu_hour_price": 3.0})
     default = _one(kavier.training.efficiency, ROW_A)
@@ -206,9 +184,7 @@ def test_cost_scales_linearly_with_price_and_default_is_the_constant() -> None:
 
 
 def test_epochs_times_dataset_tokens_sets_total_tokens() -> None:
-    # Job size may be given as epochs × dataset_tokens instead of total_tokens:
-    # 2 epochs · 5 M tokens = 10 M, which must then drive the same runtime as an explicit
-    # 10 M budget. Falsifies if the epochs->tokens resolution is wrong or ignored.
+    # Job size as epochs x dataset_tokens: 2 * 5 M = 10 M, same runtime as total_tokens = 10 M.
     epoched = _one(
         kavier.training.performance,
         {
@@ -229,9 +205,7 @@ def test_epochs_times_dataset_tokens_sets_total_tokens() -> None:
 
 
 def test_num_nodes_defaults_to_one() -> None:
-    # A batch commonly omits num_nodes; the default must be 1, so an omitted row equals an
-    # explicit num_nodes=1 row. Falsifies if DEFAULT_NUM_NODES changes or the default is
-    # applied inconsistently across the total_gpus math.
+    # An omitted num_nodes equals num_nodes=1.
     no_nodes = {k: v for k, v in ROW_A.items() if k != "num_nodes"}
     omitted = _one(kavier.training.performance, no_nodes)
     explicit = _one(kavier.training.performance, {**no_nodes, "num_nodes": 1})
@@ -240,9 +214,7 @@ def test_num_nodes_defaults_to_one() -> None:
 
 
 def test_unsized_job_has_zero_runtime_and_undefined_cost() -> None:
-    # With no total_tokens / epochs the job has no size: runtime is 0, total_tokens is None,
-    # and $/Mtoken is undefined (None), not a divide-by-zero. Falsifies if an unsized job
-    # fabricates a runtime or emits a bogus finite cost.
+    # Without total_tokens or epochs: runtime 0, total_tokens None, $/Mtoken None.
     unsized = {k: v for k, v in ROW_A.items() if k != "total_tokens"}
     perf = _one(kavier.training.performance, unsized)
     assert perf["train_runtime"] == 0.0
@@ -252,9 +224,35 @@ def test_unsized_job_has_zero_runtime_and_undefined_cost() -> None:
 
 @pytest.mark.parametrize("verb", [kavier.training.carbon, kavier.training.energy])
 def test_billing_an_unsized_job_is_rejected(verb) -> None:
-    # Carbon/energy bill power over runtime; a zero-runtime (unsized) job cannot be billed and
-    # must raise rather than silently report zero emissions. Falsifies if the guard is removed
-    # and an unsized job returns 0 gCO2 / 0 Wh.
+    # carbon and energy bill power over runtime; an unsized job has runtime 0 and raises.
     unsized = {k: v for k, v in ROW_A.items() if k != "total_tokens"}
     with pytest.raises(ValueError, match="runtime is 0"):
         verb(unsized)
+
+
+@pytest.mark.parametrize(
+    "size",
+    [{"total_tokens": 0}, {"epochs": 0, "dataset_tokens": 500_000}, {"epochs": 2, "dataset_tokens": 0}],
+)
+def test_zero_job_size_is_kept_as_zero_tokens(size) -> None:
+    # A zero cell used to read as missing: total_tokens came back None, and a zero epochs or
+    # dataset_tokens raised "pass epochs and dataset_tokens together".
+    row = {k: v for k, v in ROW_A.items() if k != "total_tokens"}
+    perf = _one(kavier.training.performance, {**row, **size})
+    assert perf["total_tokens"] == 0
+    assert perf["train_runtime"] == 0.0
+
+
+def test_billing_a_zero_token_job_names_the_job_size() -> None:
+    with pytest.raises(ValueError, match="training runtime is 0; set a job size"):
+        kavier.training.carbon({**ROW_A, "total_tokens": 0})
+
+
+@pytest.mark.parametrize(
+    "verb",
+    [kavier.training.performance, kavier.training.energy, kavier.training.efficiency, kavier.training.carbon],
+)
+def test_dataframe_index_is_kept_in_the_output(verb) -> None:
+    batch = pd.DataFrame([ROW_A, ROW_B], index=["a", "b"])
+    out = verb(batch)
+    assert list(out.index) == ["a", "b"]

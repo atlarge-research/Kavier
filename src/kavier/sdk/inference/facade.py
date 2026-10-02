@@ -1,13 +1,12 @@
-"""Inference predictors: ``performance / energy / efficiency / carbon`` over a batch of serving workloads.
+"""Batch inference predictors for serving workloads: performance, energy, efficiency and carbon.
 
-Each verb accepts a batch (DataFrame, list[dict], or single dict) and returns the input rows plus
+Each predictor takes a DataFrame, a list of dicts, or one dict, and returns the input rows plus
 predicted columns as a DataFrame.
 """
 
 from __future__ import annotations
 
 import datetime as dt
-import time
 from pathlib import Path
 from typing import Any
 
@@ -33,13 +32,12 @@ from kavier.sdk.domain import RESULT_SOURCE_KEY, Domain
 from kavier.sdk.inference.core.cache import PrefixCache
 from kavier.sdk.inference.core.config import CacheAction, CacheCfg, SimConfig
 from kavier.sdk.inference.core.metrics import Metrics
-from kavier.sdk.inference.core.runner import RequestInput, run_request_loop
+from kavier.sdk.inference.core.runner import TASK_ORIGIN_MS, RequestInput, run_request_loop
 from kavier.sdk.library import get_gpu, get_llm
 from kavier.sdk.units import MS_PER_SECOND, SECONDS_PER_HOUR, WH_PER_KWH, per_mtoken
 
-# Workload-key defaults a batch may omit; the shared homes live in kavier.sdk.defaults. kv_cache keeps
-# its own single home here (no other caller); DEFAULT_PREFIX_POLICY re-exports the facade default, which
-# is "none" ON PURPOSE — the synthetic workload shares no prompt content, so the cache stays inert.
+# Defaults for workload keys a batch may omit. The prefix policy defaults to "none" because the
+# synthetic workload shares no prompt content, so the prefix cache has nothing to reuse.
 DEFAULT_KV_CACHE = True
 DEFAULT_PREFIX_POLICY = DEFAULT_FACADE_PREFIX_POLICY
 
@@ -47,7 +45,7 @@ Batch = "pd.DataFrame | list[dict[str, Any]] | dict[str, Any]"
 
 
 def _drop_missing(row: dict[str, Any]) -> dict[str, Any]:
-    """Drop NaN/None cells so ``.get(key)`` means 'absent' — a heterogeneous DataFrame fills gaps with NaN."""
+    """Drop NaN and None cells so ``.get(key)`` treats them as absent; a mixed DataFrame fills gaps with NaN."""
     out: dict[str, Any] = {}
     for k, v in row.items():
         if v is None:
@@ -59,7 +57,7 @@ def _drop_missing(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normalise(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> list[dict[str, Any]]:
-    """Coerce a DataFrame | list[dict] | single dict into a list of plain row dicts (NaN cells dropped)."""
+    """Return the batch as a list of row dicts with NaN and None cells dropped."""
     if isinstance(batch, pd.DataFrame):
         records: list[dict[str, Any]] = [{str(k): v for k, v in rec.items()} for rec in batch.to_dict(orient="records")]
     elif isinstance(batch, dict):
@@ -70,8 +68,10 @@ def _normalise(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> l
 
 
 def _infer_params(row: dict[str, Any]) -> dict[str, Any]:
-    """Fill the inference-engine keys, defaulting cache settings the caller may omit; reject
-    unsimulatable workloads (num_requests < 1, negative token counts) with a ValueError."""
+    """Return the row with default cache settings filled in.
+
+    Raises ValueError if num_requests < 1 or a token count is negative.
+    """
     if int(row["num_requests"]) < 1:
         raise ValueError(f"num_requests must be >= 1, got {row['num_requests']}")
     for key in ("input_tokens", "output_tokens"):
@@ -85,32 +85,56 @@ def _infer_params(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_KV_CACHE_STRINGS = {"on": True, "true": True, "off": False, "false": False}
+
+
+def _kv_cache_flag(value: Any) -> bool:
+    """Return ``value`` as a bool; accepts bools and the strings on, off, true and false in any case."""
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, str) and value.lower() in _KV_CACHE_STRINGS:
+        return _KV_CACHE_STRINGS[value.lower()]
+    raise ValueError(f"kv_cache must be a bool or one of on, off, true, false; got {value!r}")
+
+
+def _prefix_policy(value: Any) -> CacheAction:
+    try:
+        return CacheAction(value)
+    except ValueError:
+        choices = ", ".join(a.value for a in CacheAction)
+        raise ValueError(f"prefix_policy must be one of {choices}; got {value!r}") from None
+
+
 def run_inference(p: dict[str, Any]) -> dict[str, Any]:
-    """Loop ``simulate_one`` over a homogeneous workload (same engine as the CLI, no disk I/O)."""
+    """Simulate ``num_requests`` identical requests in memory with the CLI's engine.
+
+    Raises ValueError for an unknown ``prefix_policy`` or ``kv_cache`` value.
+    """
     llm = get_llm(p["model"])
     gpu = get_gpu(p["gpu"])
     cfg = SimConfig(
         export_rate=DEFAULT_EXPORT_RATE,
-        kv_cache=bool(p["kv_cache"]),
+        kv_cache=_kv_cache_flag(p["kv_cache"]),
         cache=CacheCfg(
-            min_len=int(p["prefix_min_tokens"]), action=p["prefix_policy"], scope=DEFAULT_CACHE_SCOPE, max_entries=10
+            min_len=int(p["prefix_min_tokens"]),
+            action=_prefix_policy(p["prefix_policy"]),
+            scope=DEFAULT_CACHE_SCOPE,
+            max_entries=10,
         ),
     )
 
     n = int(p["num_requests"])
     n_in, n_out = int(p["input_tokens"]), int(p["output_tokens"])
     cache = PrefixCache(cfg.cache)
-    # The workload is n IDENTICAL requests: under an active prefix policy, model them as sharing one
-    # prompt (a synthetic token list, one session) so the cache can act — request 0 seeds it and the
-    # rest hit. Policy "none" (the default) passes no tokens, keeping the cache inert as before.
+    # Under an active prefix policy the n requests share one synthetic prompt and session: request 0
+    # fills the cache and the rest hit. Policy "none" passes no tokens, so the cache is not consulted.
     shared_tokens = list(range(n_in)) if cfg.cache.action != CacheAction.NONE else None
     metrics = Metrics()
-    t0 = int(time.time_ns() / 1e6)
     ttfts: list[float] = []
     tasks: list[dict[str, Any]] = []
     requests = (RequestInput(None, n_in, n_out, shared_tokens) for _ in range(n))
     for _i, task, _frags, t_p, _t_d in run_request_loop(
-        requests, llm=llm, gpu=gpu, cache=cache, cfg=cfg, metrics=metrics, t0_ms=t0
+        requests, llm=llm, gpu=gpu, cache=cache, cfg=cfg, metrics=metrics, t0_ms=TASK_ORIGIN_MS
     ):
         ttfts.append(t_p * MS_PER_SECOND)
         tasks.append(task)
@@ -140,12 +164,12 @@ def run_inference(p: dict[str, Any]) -> dict[str, Any]:
         "cache_hits": cache.hits,
         "cache_hit_ratio": cache.hits / n if n else 0.0,
         "evictions": cache.evictions,
-        "_tasks": tasks,  # reused by the energy chain
+        "_tasks": tasks,  # read by export_opendc
     }
 
 
 def _flat_trace(start: pd.Timestamp, hours: float, intensity_g_kwh: float) -> CarbonTrace:
-    """Constant-intensity trace so ``compute_emissions`` runs without an external grid trace."""
+    """Return a constant-intensity trace, so ``compute_emissions`` needs no external grid trace."""
     rows = max(2, int(hours) + 2)
     df = pd.DataFrame(
         {
@@ -157,7 +181,7 @@ def _flat_trace(start: pd.Timestamp, hours: float, intensity_g_kwh: float) -> Ca
 
 
 def run_carbon_from_inference(infer: dict[str, Any], intensity_g_kwh: float) -> dict[str, Any]:
-    """Bill the GPU's max power over the summed busy time against a flat intensity."""
+    """Compute emissions from GPU max power over the summed busy time at a flat intensity (gCO2/kWh)."""
     gpu = get_gpu(infer["gpu"])
     runtime_s = float(infer["total_s"])
     power_w = float(gpu.max_power_w)
@@ -180,7 +204,11 @@ def run_carbon_from_inference(infer: dict[str, Any], intensity_g_kwh: float) -> 
 
 
 def energy_from_inference(infer: dict[str, Any], gpu_hour_price: float | None) -> dict[str, Any]:
-    """$/Mtoken from GPU-hours, matching kavier.sdk.energy.metrics.financial_efficiency."""
+    """Return energy, carbon and cost per Mtoken for an inference result.
+
+    Cost ($/Mtoken) is GPU-hours x ``gpu_hour_price``, as in kavier.sdk.energy.metrics.financial_efficiency;
+    None when no price is given.
+    """
     carbon = run_carbon_from_inference(infer, intensity_g_kwh=DEFAULT_INTENSITY_G_KWH)
     total_tokens = infer["total_tokens"]
     energy_wh = carbon["total_energy_kwh"] * WH_PER_KWH
@@ -194,17 +222,19 @@ def energy_from_inference(infer: dict[str, Any], gpu_hour_price: float | None) -
         "energy_per_mtoken_wh": per_mtoken(energy_wh, total_tokens),
         "carbon_per_mtoken_g": per_mtoken(carbon["total_co2_g"], total_tokens),
         "gpu_hours": gpu_hours,
-        "financial_per_mtoken": per_mtoken(gpu_hours * gpu_hour_price, total_tokens) if gpu_hour_price else None,
+        "financial_per_mtoken": (
+            per_mtoken(gpu_hours * gpu_hour_price, total_tokens) if gpu_hour_price is not None else None
+        ),
         "tokens_per_wh": total_tokens / energy_wh if energy_wh else 0.0,
     }
 
 
 def export_opendc(infer: dict[str, Any], dst: Path) -> Path:
-    """Write the inference run's tasks/fragments as OpenDC input via the real adapter."""
+    """Write the run's tasks and fragments to ``dst`` as OpenDC input and return ``dst``."""
     from kavier.sdk.io.opendc.adapter import prepare_opendc_input
 
     tasks = pd.DataFrame(infer["_tasks"])
-    # 1 fragment per task suffices for OpenDC's power model; adapter coerces the schema.
+    # One fragment per task is enough for OpenDC's power model; the adapter coerces the schema.
     frags = pd.DataFrame(
         [
             {
@@ -223,47 +253,70 @@ def export_opendc(infer: dict[str, Any], dst: Path) -> Path:
     return dst
 
 
-def _with_columns(rows: list[dict[str, Any]], predicted: list[dict[str, Any]]) -> pd.DataFrame:
-    """Input rows + predicted columns, one output row per input row."""
+def _with_columns(
+    rows: list[dict[str, Any]], predicted: list[dict[str, Any]], index: pd.Index | None = None
+) -> pd.DataFrame:
+    """Return the input rows merged with their predicted columns, one output row per input row.
+
+    ``index`` is the input DataFrame's index, so results can be assigned back to it.
+    """
     merged = [{**row, **pred} for row, pred in zip(rows, predicted)]
-    return pd.DataFrame(merged)
+    return pd.DataFrame(merged, index=index)
+
+
+def _index_of(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.Index | None:
+    return batch.index if isinstance(batch, pd.DataFrame) else None
 
 
 def performance(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.DataFrame:
-    """Per-workload latency/throughput: + p50_ms, p95_ms, mean_ttft_ms, throughput_tok_s, total_s."""
+    """Predict latency and throughput per workload.
+
+    Adds p50_ms, p95_ms, mean_ttft_ms, throughput_tok_s, throughput_req_s, total_s and total_tokens.
+    """
     rows = _normalise(batch)
     cols = ("p50_ms", "p95_ms", "mean_ttft_ms", "throughput_tok_s", "throughput_req_s", "total_s", "total_tokens")
     predicted: list[dict[str, Any]] = []
     for row in rows:
         r = run_inference(_infer_params(row))
         predicted.append({k: r[k] for k in cols})
-    return _with_columns(rows, predicted)
+    return _with_columns(rows, predicted, _index_of(batch))
 
 
 def energy(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.DataFrame:
-    """Per-workload energy (self-contained GPU-power estimate): + energy_wh, energy_per_mtoken_wh, tokens_per_wh."""
+    """Predict energy per workload from the GPU's max power.
+
+    Adds energy_wh, energy_kwh, energy_per_mtoken_wh, tokens_per_wh and total_tokens.
+    """
     rows = _normalise(batch)
     cols = ("energy_wh", "energy_kwh", "energy_per_mtoken_wh", "tokens_per_wh", "total_tokens")
     predicted: list[dict[str, Any]] = []
     for row in rows:
         e = energy_from_inference(run_inference(_infer_params(row)), gpu_hour_price=None)
         predicted.append({k: e[k] for k in cols})
-    return _with_columns(rows, predicted)
+    return _with_columns(rows, predicted, _index_of(batch))
 
 
 def efficiency(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.DataFrame:
-    """Per-workload cost: + financial_per_mtoken ($/Mtoken). GPU $/hour from a ``gpu_hour_price`` column else 2.5."""
+    """Predict cost per workload.
+
+    Adds financial_per_mtoken ($/Mtoken) and gpu_hours. The GPU price ($/hour) comes from a
+    ``gpu_hour_price`` column, else 2.5.
+    """
     rows = _normalise(batch)
     predicted: list[dict[str, Any]] = []
     for row in rows:
         price = float(row.get("gpu_hour_price", DEFAULT_GPU_HOUR_PRICE))
         e = energy_from_inference(run_inference(_infer_params(row)), gpu_hour_price=price)
         predicted.append({"financial_per_mtoken": e["financial_per_mtoken"], "gpu_hours": e["gpu_hours"]})
-    return _with_columns(rows, predicted)
+    return _with_columns(rows, predicted, _index_of(batch))
 
 
 def carbon(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.DataFrame:
-    """Per-workload emissions: + total_co2_g, carbon_per_mtoken_g. Intensity from an ``intensity`` column else 400."""
+    """Predict emissions per workload.
+
+    Adds total_co2_g, total_co2_kg, carbon_per_mtoken_g and total_energy_kwh. Carbon intensity
+    (gCO2/kWh) comes from an ``intensity`` column, else 400.
+    """
     rows = _normalise(batch)
     predicted: list[dict[str, Any]] = []
     for row in rows:
@@ -279,4 +332,4 @@ def carbon(batch: pd.DataFrame | list[dict[str, Any]] | dict[str, Any]) -> pd.Da
                 "total_energy_kwh": c["total_energy_kwh"],
             }
         )
-    return _with_columns(rows, predicted)
+    return _with_columns(rows, predicted, _index_of(batch))

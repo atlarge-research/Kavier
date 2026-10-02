@@ -1,9 +1,9 @@
-"""The public ``kavier`` namespace: ``import kavier`` lazily re-exports the predictor verbs and the
-top-level spec/engine symbols (PEP-562 ``__getattr__`` in ``kavier/__init__.py``), and the engines live
-under ``kavier.sdk.*``. The load-bearing contracts here are IDENTITY, not mere importability: a lazy
-re-export must hand back the *same* object as its sdk source (never a copy/wrapper), and the calibration
-accessor must remain ONE module object across its two spellings so the live ``calibration._CAL`` swap is
-visible through either — a copy would silently split the table.
+"""The public ``kavier`` namespace.
+
+``import kavier`` lazily re-exports the predictor verbs and the top-level spec and engine symbols
+(PEP 562 ``__getattr__`` in ``kavier/__init__.py``); the engines live under ``kavier.sdk.*``. The tests
+check identity: a lazy re-export returns the same object as its sdk source, and the calibration accessor
+is one module object under both spellings, so a live ``calibration._CAL`` swap is visible through either.
 """
 
 from __future__ import annotations
@@ -16,9 +16,7 @@ import pytest
 
 
 def test_top_level_symbols_are_the_same_objects_as_their_sdk_sources():
-    # Contract: the lazy re-export delegates to the sdk object; it must NOT clone or wrap it.
-    # Falsification: if ``kavier/__init__.py`` re-exported a copy (e.g. wrapped the fn or rebuilt the
-    # dict), or pointed a name at the wrong module, ``is`` goes False. Identity, not just callable.
+    # A re-exported copy, a wrapper, or a name bound to the wrong module fails the ``is`` checks.
     from kavier import (
         GPU_SPEC_LIBRARY,
         LLM_SPEC_LIBRARY,
@@ -41,10 +39,9 @@ def test_top_level_symbols_are_the_same_objects_as_their_sdk_sources():
 
 
 def test_inference_and_training_aliases_are_the_sdk_verb_packages():
-    # ``kavier.inference`` / ``kavier.training`` are aliases (same module object), not fresh imports;
-    # and the four batch predictors resolve via the package lazy ``__getattr__`` on both spellings.
-    # Falsification: a typo in ``_LAZY_ALIASES`` pointing elsewhere breaks ``is``; a verb dropped from
-    # a package's ``_FACADE_EXPORTS`` makes ``getattr`` raise AttributeError below.
+    # ``kavier.inference`` and ``kavier.training`` are the sdk package objects, and the four batch
+    # predictors resolve through the package's lazy ``__getattr__``. A wrong ``_LAZY_ALIASES`` entry
+    # breaks ``is``; a verb missing from ``_FACADE_EXPORTS`` makes ``getattr`` raise AttributeError.
     import kavier
     import kavier.sdk.inference
     import kavier.sdk.training
@@ -57,9 +54,8 @@ def test_inference_and_training_aliases_are_the_sdk_verb_packages():
 
 
 def test_documented_sdk_engine_packages_are_importable():
-    # Surface lock: every engine package named in the ``kavier.sdk`` docstring must exist and import
-    # to the module of that exact name. Falsification: rename/remove any (e.g. ``kavier.sdk.co2``)
-    # -> ImportError; a mis-alias returning a differently-named module -> ``__name__`` mismatch.
+    # Every engine package named in the ``kavier.sdk`` docstring imports under that name. A removed or
+    # renamed package raises ImportError; a wrong alias fails the ``__name__`` check.
     for name in (
         "kavier.sdk.inference",
         "kavier.sdk.training",
@@ -74,9 +70,8 @@ def test_documented_sdk_engine_packages_are_importable():
 
 
 def test_version_matches_pyproject_single_source_of_truth():
-    # Oracle independent of the runtime attribute: pyproject's static ``version`` (declared the single
-    # source of truth in ``kavier/__init__.py``). Falsification: bump pyproject without rebuilding the
-    # installed metadata, or hardcode a wrong ``__version__`` -> mismatch.
+    # Compares with pyproject's static ``version``, which ``kavier/__init__.py`` names as the version
+    # source. Fails if pyproject is bumped without reinstalling, or if ``__version__`` is hardcoded wrong.
     import kavier
 
     if kavier.__version__.endswith("+unknown"):
@@ -88,8 +83,7 @@ def test_version_matches_pyproject_single_source_of_truth():
 
 
 def test_unknown_top_level_attribute_raises_attributeerror():
-    # Error path of the PEP-562 ``__getattr__``: an unknown name is a hard AttributeError, not a
-    # silent None or a swallowed miss. Falsification: a bare ``return None`` fallthrough -> no raise.
+    # The PEP 562 ``__getattr__`` raises AttributeError for an unknown name.
     import kavier
 
     with pytest.raises(AttributeError):
@@ -97,18 +91,15 @@ def test_unknown_top_level_attribute_raises_attributeerror():
 
 
 def test_calibration_accessor_is_one_object_across_both_spellings():
-    # The load-bearing contract: ``kavier.sdk.training.calibration`` and the aliased
-    # ``kavier.training.calibration`` must be ONE module object, so a live ``_CAL`` swap is seen through
-    # either. Falsification: if the alias produced a distinct module, the swap below would be invisible
-    # via the other spelling and the ``is`` check would fail.
+    # ``kavier.sdk.training.calibration`` and the aliased ``kavier.training.calibration`` are one module
+    # object, so a live ``_CAL`` swap is seen through either spelling.
     import kavier
     import kavier.sdk.training.calibration as direct
 
     aliased = kavier.training.calibration
     assert aliased is direct
 
-    # Materialise the lazily-loaded table, then swap it and confirm the change is visible through the
-    # OTHER spelling — proving a single shared module global, not two copies.
+    # Load the lazy table, swap it, and read the change back through the other spelling.
     direct.get_comm_scale()
     saved = direct._CAL
     try:

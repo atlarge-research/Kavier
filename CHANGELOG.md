@@ -8,6 +8,10 @@ release tags mirror it as `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- The Zenodo DOI (10.5281/zenodo.23110996, all versions) in the README, `CITATION.cff` and the docs.
+
 ## [0.5.3] - 2026-10-02
 
 Training and calibration predictions for the four calibrated GPUs are unchanged from 0.5.2.

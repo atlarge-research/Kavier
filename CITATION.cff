@@ -9,6 +9,7 @@ abstract: >-
   simulator that predicts the performance, sustainability, and efficiency of
   LLM ecosystems under inference and fine-tuning workloads.
 type: software
+doi: 10.5281/zenodo.23110996
 version: 0.5.3
 date-released: "2026-10-02"
 license: MIT
